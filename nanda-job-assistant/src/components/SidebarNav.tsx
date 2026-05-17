@@ -1,0 +1,150 @@
+"use client";
+
+// ============================================================
+// Sidebar navigation — client component for active link highlight
+// ============================================================
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import {
+  LayoutDashboard,
+  Briefcase,
+  BarChart2,
+  Settings,
+  Cpu,
+  LucideIcon,
+  ChevronDown,
+  Plus
+} from "lucide-react";
+import { useState, useEffect } from "react";
+
+interface NavItem {
+  icon: LucideIcon;
+  label: string;
+  href: string;
+}
+
+const NAV_ITEMS: NavItem[] = [
+  { icon: LayoutDashboard, label: "Overview", href: "/dashboard" },
+  { icon: Briefcase, label: "Vacancies", href: "/dashboard/vacancies" },
+  { icon: BarChart2, label: "Analytics", href: "/dashboard/analytics" },
+  { icon: Settings, label: "Settings", href: "/dashboard/settings" },
+];
+
+export default function SidebarNav() {
+  const pathname = usePathname();
+  const [profiles, setProfiles] = useState<{id: string; name: string; isActive: boolean}[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetch("/api/profiles")
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          setProfiles(data.data);
+        }
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  const handleSwitchProfile = async (id: string) => {
+    await fetch("/api/profiles", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "switch", id })
+    });
+    window.location.reload();
+  };
+
+  const handleCreateProfile = async () => {
+    const name = prompt("Enter new profile name:");
+    if (!name) return;
+    await fetch("/api/profiles", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "create", name })
+    });
+    window.location.reload();
+  };
+
+  const activeProfile = profiles.find(p => p.isActive);
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Logo / Profile Switcher */}
+      <div className="px-5 py-5 border-b border-gray-800">
+        <div className="flex items-center gap-2.5 mb-3">
+          <div className="w-7 h-7 rounded-lg bg-green-600 flex items-center justify-center shrink-0">
+            <Cpu size={14} className="text-white" />
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-white leading-tight">
+              Nanda Job AI
+            </p>
+            <p className="text-xs text-gray-500 leading-tight">
+              HH.ru Assistant
+            </p>
+          </div>
+        </div>
+
+        {/* Profile Dropdown */}
+        {!loading && profiles.length > 0 && (
+          <div className="relative group">
+            <select
+              value={activeProfile?.id || ""}
+              onChange={(e) => {
+                if (e.target.value === "new") handleCreateProfile();
+                else handleSwitchProfile(e.target.value);
+              }}
+              className="w-full appearance-none bg-gray-900 border border-gray-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-green-400/60 cursor-pointer"
+            >
+              {profiles.map(p => (
+                <option key={p.id} value={p.id}>
+                  {p.name} {p.isActive ? "(Active)" : ""}
+                </option>
+              ))}
+              <option value="new">+ Create New Profile</option>
+            </select>
+            <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none">
+              <ChevronDown size={14} className="text-gray-500" />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Nav links */}
+      <nav className="flex-1 p-3 space-y-0.5">
+        {NAV_ITEMS.map(({ icon: Icon, label, href }) => {
+          const isActive =
+            href === "/dashboard"
+              ? pathname === "/dashboard"
+              : pathname.startsWith(href);
+
+          return (
+            <Link
+              key={href}
+              href={href}
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 ${
+                isActive
+                  ? "bg-green-500/10 text-green-400"
+                  : "text-gray-400 hover:text-gray-200 hover:bg-gray-800/60"
+              }`}
+            >
+              <Icon
+                size={16}
+                strokeWidth={isActive ? 2.2 : 1.8}
+                className={isActive ? "text-green-400" : "text-gray-500"}
+              />
+              <span>{label}</span>
+            </Link>
+          );
+        })}
+      </nav>
+
+      {/* Footer */}
+      <div className="p-4 border-t border-gray-800">
+        <p className="text-xs text-gray-700 text-center select-none">v0.1.0</p>
+      </div>
+    </div>
+  );
+}

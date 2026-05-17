@@ -1,0 +1,606 @@
+"use client";
+
+// ============================================================
+// Nanda AI Job Assistant — Settings Page
+// Client component — loads settings on mount, saves via POST
+// ============================================================
+
+import { useState, useEffect } from "react";
+import { 
+  Save, 
+  RefreshCw,
+  Target,
+  Search,
+  Wrench,
+  Calendar,
+  Building2,
+  Bell,
+  DollarSign,
+  Ban,
+  Bot,
+  FileText
+} from "lucide-react";
+
+// ── Types ─────────────────────────────────────────────────────
+
+interface FormState {
+  name:                  string;
+  targetRoles:           string;
+  searchKeywordsEn:      string;
+  searchKeywordsRu:      string;
+  requiredSkills:        string;
+  niceToHaveSkills:      string;
+  experience:            string[];
+  workFormat:            string[];
+  minimumScoreToNotify:  number;
+  maxNotificationsPerDay: string;
+  excludeKeywords:       string;
+  redFlagKeywords:       string;
+  salaryMinimum:         string;
+  salaryCurrency:         string;
+  aiProviderOrder:       string;
+  coverLetterLanguage:   string;
+  resumeText:            string;
+}
+
+interface Msg {
+  text: string;
+  type: "success" | "error" | "warn";
+}
+
+// ── Constants ─────────────────────────────────────────────────
+
+const DEFAULT_FORM: FormState = {
+  name:                   "Default",
+  targetRoles:            "",
+  searchKeywordsEn:       "",
+  searchKeywordsRu:       "",
+  requiredSkills:         "",
+  niceToHaveSkills:       "",
+  experience:             [],
+  workFormat:             [],
+  minimumScoreToNotify:   70,
+  maxNotificationsPerDay: "20",
+  excludeKeywords:        "",
+  redFlagKeywords:        "",
+  salaryMinimum:          "",
+  salaryCurrency:         "RUR",
+  aiProviderOrder:        "groq, gemini, openrouter",
+  coverLetterLanguage:    "English",
+  resumeText:             "",
+};
+
+const EXPERIENCE_OPTIONS = [
+  { label: "No Experience",  value: "noExperience"   },
+  { label: "1–3 Years",      value: "between1And3"   },
+  { label: "3–6 Years",      value: "between3And6"   },
+  { label: "6+ Years",       value: "moreThan6"       },
+];
+
+const WORK_FORMAT_OPTIONS = [
+  { label: "Remote",  value: "remote"  },
+  { label: "Hybrid",  value: "hybrid"  },
+  { label: "Office",  value: "office"  },
+];
+
+// ── Helpers ───────────────────────────────────────────────────
+
+function toComma(arr: string[]): string {
+  return arr.join(", ");
+}
+
+function fromComma(str: string): string[] {
+  return str.split(",").map((s) => s.trim()).filter(Boolean);
+}
+
+// ── Sub-components ────────────────────────────────────────────
+
+function FormCard({
+  title,
+  icon: Icon,
+  children,
+}: {
+  title:    string;
+  icon?:    React.ElementType;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 space-y-4">
+      <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
+        {Icon && <Icon size={16} className="text-gray-400" />}
+        {title}
+      </h2>
+      {children}
+    </div>
+  );
+}
+
+function TextField({
+  label,
+  hint,
+  value,
+  onChange,
+  placeholder,
+}: {
+  label:        string;
+  hint?:        string;
+  value:        string;
+  onChange:     (v: string) => void;
+  placeholder?: string;
+}) {
+  return (
+    <div>
+      <label className="block text-xs text-gray-400 mb-1.5 font-medium">
+        {label}
+      </label>
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder ?? hint}
+        className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:border-green-400/60 focus:outline-none transition-colors"
+      />
+      {hint && (
+        <p className="text-xs text-gray-600 mt-1">{hint}</p>
+      )}
+    </div>
+  );
+}
+
+function NumberField({
+  label,
+  hint,
+  value,
+  min,
+  max,
+  onChange,
+}: {
+  label:    string;
+  hint?:    string;
+  value:    number;
+  min:      number;
+  max:      number;
+  onChange: (v: number) => void;
+}) {
+  return (
+    <div>
+      <label className="block text-xs text-gray-400 mb-1.5 font-medium">
+        {label}
+      </label>
+      <input
+        type="number"
+        min={min}
+        max={max}
+        value={value}
+        onChange={(e) =>
+          onChange(parseInt(e.target.value, 10) || min)
+        }
+        className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-green-400/60 focus:outline-none transition-colors"
+      />
+      {hint && <p className="text-xs text-gray-600 mt-1">{hint}</p>}
+    </div>
+  );
+}
+
+// ── Page ──────────────────────────────────────────────────────
+
+export default function SettingsPage() {
+  const [form,    setForm]    = useState<FormState>(DEFAULT_FORM);
+  const [loading, setLoading] = useState(true);
+  const [saving,  setSaving]  = useState(false);
+  const [msg,     setMsg]     = useState<Msg | null>(null);
+
+  // ── Load current settings ────────────────────────────────
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const res = await fetch("/api/settings");
+        if (res.ok) {
+          const json = await res.json();
+          if (json.success && json.data) {
+            const d = json.data;
+            setForm({
+              name:                   d.name                           ?? "Default",
+              targetRoles:            toComma(d.targetRoles            ?? []),
+              searchKeywordsEn:       toComma(d.searchKeywordsEn       ?? []),
+              searchKeywordsRu:       toComma(d.searchKeywordsRu       ?? []),
+              requiredSkills:         toComma(d.requiredSkills         ?? []),
+              niceToHaveSkills:       toComma(d.niceToHaveSkills       ?? []),
+              experience:             d.experience                     ?? [],
+              workFormat:             d.workFormat                     ?? [],
+              minimumScoreToNotify:   d.minimumScoreToNotify           ?? 70,
+              maxNotificationsPerDay: String(d.maxNotificationsPerDay ?? 20),
+              excludeKeywords:        toComma(d.excludeKeywords        ?? []),
+              redFlagKeywords:        toComma(d.redFlagKeywords        ?? []),
+              salaryMinimum:          d.salaryMinimum != null ? String(d.salaryMinimum) : "",
+              salaryCurrency:         d.salaryCurrency                 ?? "RUR",
+              aiProviderOrder:        toComma(d.aiProviderOrder        ?? []),
+              coverLetterLanguage:    d.coverLetterLanguage            ?? "English",
+              resumeText:             d.resumeText                     ?? "",
+            });
+          }
+        } else if (res.status === 404) {
+          setMsg({
+            text: "No saved settings found — defaults loaded. Save to create your profile.",
+            type: "warn",
+          });
+        } else {
+          setMsg({ text: "⚠️ Failed to load settings from server.", type: "warn" });
+        }
+      } catch {
+        setMsg({ text: "⚠️ Network error loading settings.", type: "warn" });
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, []);
+
+  // ── Toggle checkbox arrays ───────────────────────────────
+  const toggle = (field: "experience" | "workFormat", value: string) => {
+    setForm((prev) => ({
+      ...prev,
+      [field]: prev[field].includes(value)
+        ? prev[field].filter((v) => v !== value)
+        : [...prev[field], value],
+    }));
+  };
+
+  // ── Save ─────────────────────────────────────────────────
+  const handleSave = async () => {
+    setSaving(true);
+    setMsg(null);
+
+    try {
+      const payload = {
+        name:                   form.name,
+        targetRoles:            fromComma(form.targetRoles),
+        searchKeywordsEn:       fromComma(form.searchKeywordsEn),
+        searchKeywordsRu:       fromComma(form.searchKeywordsRu),
+        requiredSkills:         fromComma(form.requiredSkills),
+        niceToHaveSkills:       fromComma(form.niceToHaveSkills),
+        experience:             form.experience,
+        workFormat:             form.workFormat,
+        minimumScoreToNotify:   form.minimumScoreToNotify,
+        maxNotificationsPerDay: parseInt(form.maxNotificationsPerDay, 10) || 20,
+        excludeKeywords:        fromComma(form.excludeKeywords),
+        redFlagKeywords:        fromComma(form.redFlagKeywords),
+        salaryMinimum:
+          form.salaryMinimum.trim() !== ""
+            ? parseInt(form.salaryMinimum, 10) || null
+            : null,
+        salaryCurrency:         form.salaryCurrency,
+        aiProviderOrder:        fromComma(form.aiProviderOrder),
+        coverLetterLanguage:    form.coverLetterLanguage,
+        resumeText:             form.resumeText,
+      };
+
+      const res  = await fetch("/api/settings", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify(payload),
+      });
+      const json = await res.json();
+
+      if (res.ok && json.success) {
+        setMsg({ text: "✅ Settings saved successfully!", type: "success" });
+      } else {
+        setMsg({
+          text:  `❌ ${json.error ?? "Failed to save settings."}`,
+          type:  "error",
+        });
+      }
+    } catch {
+      setMsg({ text: "❌ Network error — please try again.", type: "error" });
+    } finally {
+      setSaving(false);
+      setTimeout(() => setMsg(null), 6000);
+    }
+  };
+
+  // ── Loading skeleton ─────────────────────────────────────
+  if (loading) {
+    return (
+      <div className="max-w-3xl space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold text-white">Settings</h1>
+          <p className="text-gray-400 text-sm mt-1">Configure your job search preferences</p>
+        </div>
+        <div className="flex items-center gap-3 p-10 text-gray-500 text-sm">
+          <RefreshCw size={16} className="animate-spin text-green-400" />
+          Loading preferences…
+        </div>
+      </div>
+    );
+  }
+
+  // ── Main form ────────────────────────────────────────────
+  return (
+    <div className="max-w-3xl space-y-6 pb-10">
+
+      {/* ── Header ── */}
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold text-white">Settings</h1>
+          <p className="text-gray-400 text-sm mt-1">
+            Configure your job search preferences
+          </p>
+        </div>
+        <SaveButton saving={saving} onClick={handleSave} />
+      </div>
+
+      {/* ── Feedback message ── */}
+      {msg && (
+        <div
+          className={`p-4 rounded-lg text-sm border ${
+            msg.type === "success"
+              ? "bg-green-400/10 border-green-400/30 text-green-400"
+              : msg.type === "warn"
+              ? "bg-yellow-400/10 border-yellow-400/30 text-yellow-400"
+              : "bg-red-400/10 border-red-400/30 text-red-400"
+          }`}
+        >
+          {msg.text}
+        </div>
+      )}
+
+      {/* ── Profile Name ── */}
+      <FormCard title="Profile Information" icon={Target}>
+        <TextField
+          label="Profile Name"
+          value={form.name}
+          onChange={(v) => setForm((p) => ({ ...p, name: v }))}
+          hint="Name of this profile (e.g. Nanda, Web Developer, Backend)"
+        />
+      </FormCard>
+
+      {/* ── Target Roles ── */}
+      <FormCard title="Target Roles" icon={Target}>
+        <TextField
+          label="Job Titles"
+          value={form.targetRoles}
+          onChange={(v) => setForm((p) => ({ ...p, targetRoles: v }))}
+          hint="Comma-separated. e.g. Frontend Developer, React Developer"
+        />
+      </FormCard>
+
+      {/* ── Search Keywords ── */}
+      <FormCard title="Search Keywords" icon={Search}>
+        <TextField
+          label="English Keywords"
+          value={form.searchKeywordsEn}
+          onChange={(v) => setForm((p) => ({ ...p, searchKeywordsEn: v }))}
+          hint="Used when searching HH.ru in English"
+        />
+        <TextField
+          label="Russian Keywords"
+          value={form.searchKeywordsRu}
+          onChange={(v) => setForm((p) => ({ ...p, searchKeywordsRu: v }))}
+          hint="Used when searching HH.ru in Russian (Кириллица)"
+        />
+      </FormCard>
+
+      {/* ── Skills ── */}
+      <FormCard title="Skills" icon={Wrench}>
+        <TextField
+          label="Required Skills"
+          value={form.requiredSkills}
+          onChange={(v) => setForm((p) => ({ ...p, requiredSkills: v }))}
+          hint="Must-have skills. e.g. React, TypeScript, JavaScript"
+        />
+        <TextField
+          label="Nice-to-Have Skills"
+          value={form.niceToHaveSkills}
+          onChange={(v) => setForm((p) => ({ ...p, niceToHaveSkills: v }))}
+          hint="Bonus skills that increase the match score"
+        />
+      </FormCard>
+
+      {/* ── Experience + Work Format (2-col) ── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+        <FormCard title="Experience Level" icon={Calendar}>
+          <div className="space-y-2.5">
+            {EXPERIENCE_OPTIONS.map((opt) => (
+              <label
+                key={opt.value}
+                className="flex items-center gap-3 cursor-pointer group"
+              >
+                <input
+                  type="checkbox"
+                  checked={form.experience.includes(opt.value)}
+                  onChange={() => toggle("experience", opt.value)}
+                  className="w-4 h-4 rounded accent-green-400 cursor-pointer"
+                />
+                <span className="text-sm text-gray-300 group-hover:text-white transition-colors">
+                  {opt.label}
+                </span>
+              </label>
+            ))}
+          </div>
+        </FormCard>
+
+        <FormCard title="Work Format" icon={Building2}>
+          <div className="space-y-2.5">
+            {WORK_FORMAT_OPTIONS.map((opt) => (
+              <label
+                key={opt.value}
+                className="flex items-center gap-3 cursor-pointer group"
+              >
+                <input
+                  type="checkbox"
+                  checked={form.workFormat.includes(opt.value)}
+                  onChange={() => toggle("workFormat", opt.value)}
+                  className="w-4 h-4 rounded accent-green-400 cursor-pointer"
+                />
+                <span className="text-sm text-gray-300 group-hover:text-white transition-colors">
+                  {opt.label}
+                </span>
+              </label>
+            ))}
+          </div>
+        </FormCard>
+
+      </div>
+
+      {/* ── Notifications ── */}
+      <FormCard title="Notifications" icon={Bell}>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <NumberField
+            label="Minimum Score to Notify"
+            value={form.minimumScoreToNotify}
+            min={0}
+            max={100}
+            hint="Vacancies below this score won't trigger a Telegram alert (0–100)"
+            onChange={(v) =>
+              setForm((p) => ({ ...p, minimumScoreToNotify: v }))
+            }
+          />
+          <NumberField
+            label="Max Notifications Per Day"
+            value={parseInt(form.maxNotificationsPerDay, 10) || 0}
+            min={1}
+            max={200}
+            hint="Cap on daily Telegram messages to avoid spam"
+            onChange={(v) =>
+              setForm((p) => ({ ...p, maxNotificationsPerDay: String(v) }))
+            }
+          />
+        </div>
+      </FormCard>
+
+      {/* ── Salary ── */}
+      <FormCard title="Salary" icon={DollarSign}>
+        <div>
+          <label className="block text-xs text-gray-400 mb-1.5 font-medium">
+            Minimum Salary
+          </label>
+          <div className="flex gap-3">
+            <input
+              type="number"
+              min={0}
+              placeholder="e.g. 50000 — leave empty for no minimum"
+              value={form.salaryMinimum}
+              onChange={(e) =>
+                setForm((p) => ({ ...p, salaryMinimum: e.target.value }))
+              }
+              className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:border-green-400/60 focus:outline-none transition-colors"
+            />
+            <select
+              value={form.salaryCurrency}
+              onChange={(e) =>
+                setForm((p) => ({ ...p, salaryCurrency: e.target.value }))
+              }
+              className="w-24 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-green-400/60 focus:outline-none transition-colors"
+            >
+              <option value="RUR">RUR</option>
+              <option value="KZT">KZT</option>
+              <option value="BYN">BYN</option>
+              <option value="USD">USD</option>
+              <option value="EUR">EUR</option>
+            </select>
+          </div>
+          <p className="text-xs text-gray-600 mt-1">
+            Vacancies in other currencies will be automatically converted for comparison.
+          </p>
+        </div>
+      </FormCard>
+
+      {/* ── Filters ── */}
+      <FormCard title="Exclusion Filters" icon={Ban}>
+        <TextField
+          label="Exclude Keywords"
+          value={form.excludeKeywords}
+          onChange={(v) => setForm((p) => ({ ...p, excludeKeywords: v }))}
+          hint="Vacancies matching these words are skipped. e.g. 1С, PHP, .NET"
+        />
+        <TextField
+          label="Red Flag Keywords"
+          value={form.redFlagKeywords}
+          onChange={(v) => setForm((p) => ({ ...p, redFlagKeywords: v }))}
+          hint="Triggers a red flag warning in AI analysis. e.g. паспорт, залог, OTP"
+        />
+      </FormCard>
+
+      {/* ── Cover Letter Context ── */}
+      <FormCard title="Cover Letter Context" icon={FileText}>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs text-gray-400 mb-1.5 font-medium">
+              Language
+            </label>
+            <select
+              value={form.coverLetterLanguage}
+              onChange={(e) => setForm((p) => ({ ...p, coverLetterLanguage: e.target.value }))}
+              className="w-full bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-green-400/50"
+            >
+              <option value="English">English</option>
+              <option value="Russian">Russian</option>
+              <option value="Auto (Match Vacancy)">Auto (Match Vacancy)</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-gray-400 mb-1.5 font-medium">
+              Resume / Background Text
+            </label>
+            <textarea
+              value={form.resumeText}
+              onChange={(e) => setForm((p) => ({ ...p, resumeText: e.target.value }))}
+              placeholder="Paste your resume or write a brief background so the AI knows your experience..."
+              className="w-full bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-green-400/50 min-h-32 custom-scrollbar"
+            />
+            <p className="mt-1.5 text-[10px] text-gray-500">
+              The AI will use this to generate highly personalized cover letters.
+            </p>
+          </div>
+        </div>
+      </FormCard>
+
+      {/* ── AI Providers ── */}
+      <FormCard title="AI Provider Order" icon={Bot}>
+        <TextField
+          label="Provider Priority"
+          value={form.aiProviderOrder}
+          onChange={(v) => setForm((p) => ({ ...p, aiProviderOrder: v }))}
+          placeholder="groq, gemini, openrouter"
+          hint="Comma-separated priority order. First available provider is used."
+        />
+      </FormCard>
+
+      {/* ── Bottom Save Button ── */}
+      <div className="flex justify-end">
+        <SaveButton saving={saving} onClick={handleSave} large />
+      </div>
+
+    </div>
+  );
+}
+
+// ── SaveButton ────────────────────────────────────────────────
+
+function SaveButton({
+  saving,
+  onClick,
+  large = false,
+}: {
+  saving:   boolean;
+  onClick:  () => void;
+  large?:   boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={saving}
+      className={`flex items-center gap-2 rounded-lg bg-green-600 hover:bg-green-700 text-white font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${
+        large ? "px-6 py-3 text-base" : "px-5 py-2.5 text-sm"
+      }`}
+    >
+      {saving ? (
+        <RefreshCw size={15} className="animate-spin" />
+      ) : (
+        <Save size={15} />
+      )}
+      {saving ? "Saving…" : "Save Settings"}
+    </button>
+  );
+}

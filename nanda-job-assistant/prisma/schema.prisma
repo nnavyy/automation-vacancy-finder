@@ -1,0 +1,173 @@
+// ============================================================
+// Nanda AI Job Assistant — Prisma Schema
+// Database: NeonDB (PostgreSQL)
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ============================================================
+// User Profile — Nanda's profile (single row)
+// ============================================================
+model UserProfile {
+  id          String   @id @default(cuid())
+  name        String
+  location    String?
+  portfolio   String?
+  skills      Json     // string[]
+  languages   Json     // { english: string, russian: string }
+  preferences Json     // misc preferences object
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("user_profiles")
+}
+
+// ============================================================
+// Search Preference — Configurable job search settings
+// ============================================================
+model SearchPreference {
+  id                     String   @id @default(cuid())
+  name                   String   @default("Default")
+  targetRoles            Json     // string[] — e.g. ["Frontend Developer", "UI/UX Designer"]
+  searchKeywordsEn       Json     // string[] — English search keywords
+  searchKeywordsRu       Json     // string[] — Russian search keywords
+  requiredSkills         Json     // string[] — must-have skills
+  niceToHaveSkills       Json     // string[] — nice-to-have skills
+  experience             Json     // string[] — e.g. ["noExperience", "between1And3"]
+  workFormat             Json     // string[] — e.g. ["remote", "hybrid"]
+  salaryMinimum          Int?     // minimum salary filter
+  salaryCurrency         String   @default("RUR") // preferred currency for the minimum salary filter
+  excludeKeywords        Json     // string[] — keywords to auto-skip
+  redFlagKeywords        Json     // string[] — keywords that mark as red flag
+  minimumScoreToNotify   Int      @default(70)  // only notify Telegram if score >= this
+  maxNotificationsPerDay Int      @default(20)  // daily Telegram notification cap
+  aiProviderOrder        Json     // string[] — fallback order: ["groq","gemini","openrouter"]
+  coverLetterLanguage    String   @default("English") // e.g. "English", "Russian", "Auto"
+  resumeText             String?  // user's background/resume to guide AI
+  isActive               Boolean  @default(true)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  @@map("search_preferences")
+}
+
+// ============================================================
+// Vacancy — Raw vacancy data from HH public endpoint
+// ============================================================
+model Vacancy {
+  id              String   @id @default(cuid())
+  hhId            String   @unique  // HH vacancy ID (prevents duplicates)
+  title           String
+  company         String?
+  area            String?
+  salary          Json?    // { from, to, currency, gross }
+  url             String?  // HH vacancy URL
+  applyUrl        String?  // direct apply URL if available
+  apiUrl          String?  // full API URL to fetch description
+  experience      String?  // e.g. "noExperience", "between1And3"
+  employment      String?  // e.g. "full", "part", "contract"
+  schedule        String?  // e.g. "remote", "fullDay", "flexible"
+  workFormat      Json?    // work format tags
+  snippet         Json?    // requirement/responsibility snippets from HH
+  description     String?  // full vacancy description (HTML stripped)
+  descriptionHash String?  // MD5 hash for change detection
+  rawData         Json?    // full raw HH API response
+  sourceKeyword   String?  // which search keyword found this vacancy
+  status          String   @default("new")
+  // status values: new | analyzed | notified | applied_manual | skipped | saved | ignored | low_priority
+
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  analysis  VacancyAnalysis?
+  feedbacks VacancyFeedback[]
+  logs      ApplicationLog[]
+
+  @@map("vacancies")
+}
+
+// ============================================================
+// Vacancy Analysis — AI analysis result
+// ============================================================
+model VacancyAnalysis {
+  id                  String   @id @default(cuid())
+  vacancyId           String   @unique
+  vacancy             Vacancy  @relation(fields: [vacancyId], references: [id], onDelete: Cascade)
+  providerUsed        String?  // which AI provider was used
+  modelUsed           String?  // which model was used
+  matchScore          Int      // 0–100
+  ruleScore           Int?     // rule-based pre-score (before AI)
+  recommendation      String   // "apply" | "maybe" | "skip"
+  bestLanguage        String   // "english" | "russian"
+  summary             String?  // short summary from AI
+  matchReasons        Json?    // string[] — why it matches
+  missingRequirements Json?    // string[] — what's missing
+  redFlags            Json?    // RedFlag[] — detected red flags
+  coverLetter         String?  // generated cover letter
+  questions           Json?    // string[] — questions to ask recruiter
+  confidence          Int?     // 0–100 AI confidence score
+  aiStatus            String   @default("completed")
+  // aiStatus: completed | pending_limit | failed | rule_based_only
+
+  createdAt DateTime @default(now())
+
+  @@map("vacancy_analyses")
+}
+
+// ============================================================
+// Vacancy Feedback — User action + outcome for learning
+// ============================================================
+model VacancyFeedback {
+  id             String   @id @default(cuid())
+  vacancyId      String
+  vacancy        Vacancy  @relation(fields: [vacancyId], references: [id], onDelete: Cascade)
+  userAction     String   // "apply" | "skip" | "save" | "interview" | "rejected"
+  outcome        String?  // "replied" | "no_reply" | "interview" | "rejected" | "offer"
+  userReason     String?  // why user skipped (optional)
+  recruiterReply Boolean?
+  interview      Boolean?
+  rejected       Boolean?
+  notes          String?
+  createdAt      DateTime @default(now())
+
+  @@map("vacancy_feedbacks")
+}
+
+// ============================================================
+// Application Log — Immutable action history
+// ============================================================
+model ApplicationLog {
+  id        String   @id @default(cuid())
+  vacancyId String
+  vacancy   Vacancy  @relation(fields: [vacancyId], references: [id], onDelete: Cascade)
+  action    String   // what happened
+  notes     String?
+  createdAt DateTime @default(now())
+
+  @@map("application_logs")
+}
+
+// ============================================================
+// AI Usage Log — Track API usage for rate limiting
+// ============================================================
+model AiUsageLog {
+  id           String   @id @default(cuid())
+  provider     String   // "groq" | "gemini" | "openrouter" | "openai" | "rule_based"
+  model        String
+  requestType  String   // "analyze" | "cover_letter" | "fallback"
+  status       String   // "success" | "rate_limited" | "error"
+  inputTokens  Int?
+  outputTokens Int?
+  errorMessage String?
+  createdAt    DateTime @default(now())
+
+  @@map("ai_usage_logs")
+}
