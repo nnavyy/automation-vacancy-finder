@@ -328,7 +328,7 @@ export async function POST(req: NextRequest) {
           );
         } else {
           await sendMessage(
-            `👋 <b>Welcome to Nanda AI Job Assistant!</b>\n\n` +
+            `👋 <b>Welcome to wingkiiy Job AI!</b>\n\n` +
             `To connect this bot with your dashboard:\n` +
             `1. Go to Settings in your dashboard\n` +
             `2. Click "Generate Telegram Token"\n` +
@@ -383,18 +383,22 @@ export async function POST(req: NextRequest) {
 
       // ── /profiles — List & switch profiles ────────────────
       if (text === "/profiles") {
+        const linkedUser = await prisma.telegramLink.findFirst({
+          where: { telegramChatId: chatId, isActive: true },
+        });
+        if (!linkedUser) {
+          await sendMessage("❌ Not linked. Send /start to get started.", undefined, chatId);
+          return NextResponse.json({ ok: true });
+        }
         const profiles = await prisma.searchPreference.findMany({
+          where:  { userId: linkedUser.userId },
           select: { id: true, name: true, isActive: true },
         });
-
         if (profiles.length === 0) {
           await sendMessage("No profiles found. Create one in the dashboard first.", undefined, chatId);
         } else {
           const inlineKeyboard = profiles.map((p) => [
-            {
-              text: `${p.isActive ? "✅" : "⚪"} ${p.name}`,
-              callback_data: `profile:${p.id}`,
-            },
+            { text: `${p.isActive ? "✅" : "⚪"} ${p.name}`, callback_data: `profile:${p.id}` },
           ]);
           await sendMessage("Select your active profile:", { inline_keyboard: inlineKeyboard }, chatId);
         }
@@ -403,13 +407,19 @@ export async function POST(req: NextRequest) {
 
       // ── /saved — List saved vacancies ─────────────────────
       if (text === "/saved") {
+        const linkedUser = await prisma.telegramLink.findFirst({
+          where: { telegramChatId: chatId, isActive: true },
+        });
+        if (!linkedUser) {
+          await sendMessage("❌ Not linked. Send /start to get started.", undefined, chatId);
+          return NextResponse.json({ ok: true });
+        }
         const saved = await prisma.vacancy.findMany({
-          where: { status: "saved" },
+          where: { userId: linkedUser.userId, status: "saved" },
           orderBy: { updatedAt: "desc" },
           take: 10,
           include: { analysis: { select: { matchScore: true, recommendation: true } } },
         });
-
         if (saved.length === 0) {
           await sendMessage("📌 No saved vacancies yet.", undefined, chatId);
         } else {
@@ -418,23 +428,26 @@ export async function POST(req: NextRequest) {
             const rec = v.analysis?.recommendation ?? "—";
             return `${i + 1}. <b>${v.title}</b>\n   ${v.company ?? "—"} • Score: ${score} • ${rec}\n   🔗 ${v.url ?? `https://hh.ru/vacancy/${v.hhId}`}`;
           });
-          await sendMessage(
-            `📌 <b>Saved Vacancies</b> (${saved.length})\n\n${lines.join("\n\n")}`,
-            undefined, chatId
-          );
+          await sendMessage(`📌 <b>Saved Vacancies</b> (${saved.length})\n\n${lines.join("\n\n")}`, undefined, chatId);
         }
         return NextResponse.json({ ok: true });
       }
 
       // ── /applied — List applied vacancies ─────────────────
       if (text === "/applied") {
+        const linkedUser = await prisma.telegramLink.findFirst({
+          where: { telegramChatId: chatId, isActive: true },
+        });
+        if (!linkedUser) {
+          await sendMessage("❌ Not linked. Send /start to get started.", undefined, chatId);
+          return NextResponse.json({ ok: true });
+        }
         const applied = await prisma.vacancy.findMany({
-          where: { status: "applied_manual" },
+          where: { userId: linkedUser.userId, status: "applied_manual" },
           orderBy: { updatedAt: "desc" },
           take: 10,
           include: { analysis: { select: { matchScore: true, recommendation: true } } },
         });
-
         if (applied.length === 0) {
           await sendMessage("📋 No applied vacancies yet.", undefined, chatId);
         } else {
@@ -442,10 +455,7 @@ export async function POST(req: NextRequest) {
             const score = v.analysis?.matchScore ?? "—";
             return `${i + 1}. <b>${v.title}</b>\n   ${v.company ?? "—"} • Score: ${score}\n   🔗 ${v.url ?? `https://hh.ru/vacancy/${v.hhId}`}`;
           });
-          await sendMessage(
-            `📋 <b>Applied Vacancies</b> (${applied.length})\n\n${lines.join("\n\n")}`,
-            undefined, chatId
-          );
+          await sendMessage(`📋 <b>Applied Vacancies</b> (${applied.length})\n\n${lines.join("\n\n")}`, undefined, chatId);
         }
         return NextResponse.json({ ok: true });
       }
@@ -503,14 +513,17 @@ export async function POST(req: NextRequest) {
         toastText = "✅ Marked as applied!";
         break;
 
-      case "profile":
-        // Sequential queries instead of $transaction (NeonDB HTTP doesn't support it)
-        await prisma.searchPreference.updateMany({ data: { isActive: false } });
-        await prisma.searchPreference.update({ where: { id: vacancyId }, data: { isActive: true } });
-        const activated = await prisma.searchPreference.findUnique({ where: { id: vacancyId } });
-        replyText = `✅ Active profile changed to: ${activated?.name}`;
+      case "profile": {
+        // Scope profile switch to the owner's userId
+        const targetPref = await prisma.searchPreference.findUnique({ where: { id: vacancyId } });
+        if (targetPref) {
+          await prisma.searchPreference.updateMany({ where: { userId: targetPref.userId }, data: { isActive: false } });
+          await prisma.searchPreference.update({ where: { id: vacancyId }, data: { isActive: true } });
+        }
+        replyText = `✅ Active profile changed to: ${targetPref?.name ?? "unknown"}`;
         toastText = "Profile updated";
         break;
+      }
 
       case "skip":
         replyText = await handleSkip(vacancyId);

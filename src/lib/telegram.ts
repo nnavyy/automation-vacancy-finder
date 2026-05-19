@@ -269,3 +269,80 @@ export async function sendVacancyNotification(
 
   return sendMessage(message, replyMarkup);
 }
+
+/**
+ * Sends a vacancy notification to a specific user's Telegram chatId.
+ * Used by the multi-user pipeline where chatId comes from TelegramLink table.
+ */
+export async function sendVacancyNotificationToUser(
+  vacancy: NormalizedVacancy,
+  analysis: AIAnalysisResult,
+  vacancyId: string,
+  chatId: string
+): Promise<boolean> {
+  const recEmoji: Record<string, string> = { apply: "✅", maybe: "🤔", skip: "❌" };
+  const recommendationIcon = recEmoji[analysis.recommendation] ?? "❓";
+
+  const matchReasonsText = analysis.match_reasons.length > 0
+    ? analysis.match_reasons.map((r) => `  ✓ ${r}`).join("\n")
+    : "  (none detected)";
+
+  const missingText = analysis.missing_requirements.length > 0
+    ? analysis.missing_requirements.map((r) => `  • ${r}`).join("\n")
+    : "  (none)";
+
+  const redFlagEmoji: Record<string, string> = { high: "🚨", medium: "⚠️", low: "💡" };
+  const redFlagsText = analysis.red_flags.length > 0
+    ? analysis.red_flags.map((f) => `  ${redFlagEmoji[f.severity] ?? "⚠️"} [${f.severity.toUpperCase()}] ${f.trigger_text}: ${f.reason}`).join("\n")
+    : "  None detected ✅";
+
+  const coverPreview = analysis.cover_letter.length > 200
+    ? `${analysis.cover_letter.slice(0, 200)}…`
+    : analysis.cover_letter;
+
+  const message = [
+    `🔥 <b>New HH Job Match</b>`,
+    ``,
+    `<b>Role:</b> ${escapeHtml(vacancy.title)}`,
+    `<b>Company:</b> ${escapeHtml(vacancy.company ?? "Not specified")}`,
+    `<b>Location:</b> ${escapeHtml(vacancy.area ?? "Remote / Not specified")}`,
+    `<b>Salary:</b> ${formatSalary(vacancy.salary)}`,
+    `<b>Experience:</b> ${escapeHtml(vacancy.experience ?? "Not specified")}`,
+    ``,
+    `<b>Score:</b> ${analysis.match_score}/100  |  <b>Confidence:</b> ${analysis.confidence}%`,
+    `<b>Recommendation:</b> ${recommendationIcon} <b>${analysis.recommendation.toUpperCase()}</b>`,
+    ``,
+    `<b>Why it matches:</b>`,
+    escapeHtml(matchReasonsText),
+    ``,
+    `<b>Missing:</b>`,
+    escapeHtml(missingText),
+    ``,
+    `<b>Red flags:</b>`,
+    escapeHtml(redFlagsText),
+    ``,
+    `<b>Suggested language:</b> ${escapeHtml(analysis.best_language)}`,
+    ``,
+    `<b>Cover letter preview:</b>`,
+    `<i>${escapeHtml(coverPreview)}</i>`,
+  ].join("\n");
+
+  const replyMarkup = {
+    inline_keyboard: [
+      [
+        { text: "✅ Mark Applied", callback_data: `approve:${vacancyId}` },
+        { text: "❌ Skip",         callback_data: `skip:${vacancyId}` },
+      ],
+      [
+        { text: "💾 Save",         callback_data: `save:${vacancyId}` },
+        { text: "✍️ Edit Letter",  callback_data: `edit:${vacancyId}` },
+      ],
+      [
+        { text: "🔗 Open Vacancy", url: vacancy.url ?? `https://hh.ru/vacancy/${vacancy.hhId}` },
+      ],
+    ],
+  };
+
+  return sendMessage(message, replyMarkup, chatId);
+}
+
