@@ -17,6 +17,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/db";
+import { requireUser } from "@/lib/auth-helpers";
 import type { VacancyStatus } from "@/types";
 
 /**
@@ -32,6 +33,7 @@ import type { VacancyStatus } from "@/types";
  *   500 { success: false, error: string }
  */
 export async function GET(req: NextRequest) {
+  const user = await requireUser();
   try {
     const { searchParams } = new URL(req.url);
 
@@ -52,7 +54,7 @@ export async function GET(req: NextRequest) {
 
     // ── Build Prisma where clause ─────────────────────────
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const where: Record<string, any> = {};
+    const where: Record<string, any> = { userId: user.id };
 
     if (status) {
       where.status = status;

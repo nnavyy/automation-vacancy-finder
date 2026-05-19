@@ -19,6 +19,7 @@ import ScoreBar from "@/components/ui/ScoreBar";
 import Badge from "@/components/ui/Badge";
 import RunCollectionButton from "@/components/RunCollectionButton";
 import prisma from "@/lib/db";
+import { requireUser } from "@/lib/auth-helpers";
 
 // ── Helpers ───────────────────────────────────────────────────
 
@@ -73,7 +74,7 @@ function StatCard({
 // ── Page ──────────────────────────────────────────────────────
 
 export default async function DashboardPage() {
-  // Direct Prisma queries instead of self-fetch — avoids URL issues on Replit
+  const user = await requireUser();
   let all: any[] = [];
   let total = 0;
   let topMatches: any[] = [];
@@ -81,57 +82,27 @@ export default async function DashboardPage() {
   try {
     const [allVacancies, allCount, topVacancies] = await Promise.all([
       prisma.vacancy.findMany({
-        take: 1000,
+        where:   { userId: user.id },
+        take:    1000,
         orderBy: { createdAt: "desc" },
         select: {
-          id: true,
-          hhId: true,
-          title: true,
-          company: true,
-          area: true,
-          salary: true,
-          url: true,
-          status: true,
-          createdAt: true,
-          updatedAt: true,
-          analysis: {
-            select: {
-              matchScore: true,
-              recommendation: true,
-              aiStatus: true,
-              redFlags: true,
-              bestLanguage: true,
-              confidence: true,
-            },
-          },
+          id: true, hhId: true, title: true, company: true, area: true,
+          salary: true, url: true, status: true, createdAt: true, updatedAt: true,
+          analysis: { select: { matchScore: true, recommendation: true, aiStatus: true, redFlags: true } },
         },
       }),
-      prisma.vacancy.count(),
+      prisma.vacancy.count({ where: { userId: user.id } }),
       prisma.vacancy.findMany({
-        take: 5,
+        where:   { userId: user.id, analysis: { isNot: null } },
+        take:    5,
         orderBy: { analysis: { matchScore: "desc" } },
-        where: { analysis: { isNot: null } },
         select: {
-          id: true,
-          hhId: true,
-          title: true,
-          company: true,
-          area: true,
-          salary: true,
-          url: true,
-          status: true,
-          analysis: {
-            select: {
-              matchScore: true,
-              recommendation: true,
-              aiStatus: true,
-              redFlags: true,
-            },
-          },
+          id: true, hhId: true, title: true, company: true, area: true,
+          salary: true, url: true, status: true,
+          analysis: { select: { matchScore: true, recommendation: true, aiStatus: true, redFlags: true } },
         },
       }),
     ]);
-
     all = allVacancies;
     total = allCount;
     topMatches = topVacancies;
