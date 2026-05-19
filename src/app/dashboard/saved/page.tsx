@@ -1,36 +1,13 @@
 // ============================================================
-// Nanda AI Job Assistant — Saved Vacancies Page
-// Dedicated page for bookmarked vacancies
+// wingkiiy Job AI — Saved Vacancies Page
 // ============================================================
 
 import Link from "next/link";
 import { Bookmark, AlertTriangle, ExternalLink } from "lucide-react";
 import Badge from "@/components/ui/Badge";
 import ScoreBar from "@/components/ui/ScoreBar";
-
-const BASE_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-
-interface AnalysisSummary {
-  matchScore: number;
-  recommendation: string;
-  aiStatus: string;
-  redFlags: unknown[];
-  coverLetter?: string;
-}
-
-interface VacancyItem {
-  id: string;
-  hhId: string;
-  title: string;
-  company?: string;
-  area?: string;
-  salary?: { from?: number; to?: number; currency?: string };
-  url?: string;
-  status: string;
-  createdAt: string;
-  updatedAt: string;
-  analysis?: AnalysisSummary;
-}
+import prisma from "@/lib/db";
+import { requireUser } from "@/lib/auth-helpers";
 
 function formatSalary(salary: unknown): string {
   if (!salary || typeof salary !== "object") return "";
@@ -53,36 +30,35 @@ export default async function SavedPage({
 }: {
   searchParams: Promise<{ page?: string }>;
 }) {
+  const user = await requireUser();
   const sp = await searchParams;
   const page = Math.max(1, parseInt(sp.page ?? "1", 10));
+  const limit = 20;
+  const skip = (page - 1) * limit;
 
-  let vacancies: VacancyItem[] = [];
+  let vacancies: any[] = [];
   let total = 0;
-  let totalPages = 1;
 
   try {
-    const qs = new URLSearchParams({
-      status: "saved",
-      page: String(page),
-      limit: "20",
-      sortBy: "matchScore",
-      order: "desc",
-    });
-    const res = await fetch(`${BASE_URL}/api/vacancies?${qs}`, {
-      cache: "no-store",
-    });
-    if (res.ok) {
-      const json = await res.json();
-      if (json.success) {
-        vacancies = json.data.vacancies;
-        total = json.data.total;
-        totalPages = json.data.totalPages;
-      }
-    }
-  } catch {
-    /* show empty state */
+    [vacancies, total] = await Promise.all([
+      prisma.vacancy.findMany({
+        where: { userId: user.id, status: "saved" },
+        skip,
+        take: limit,
+        orderBy: { updatedAt: "desc" },
+        select: {
+          id: true, hhId: true, title: true, company: true, area: true,
+          salary: true, url: true, status: true, createdAt: true, updatedAt: true,
+          analysis: { select: { matchScore: true, recommendation: true, aiStatus: true, redFlags: true, coverLetter: true } },
+        },
+      }),
+      prisma.vacancy.count({ where: { userId: user.id, status: "saved" } }),
+    ]);
+  } catch (err) {
+    console.error("[Saved Page]", err);
   }
 
+  const totalPages = Math.ceil(total / limit) || 1;
   const prevHref = `/dashboard/saved?page=${Math.max(1, page - 1)}`;
   const nextHref = `/dashboard/saved?page=${Math.min(totalPages, page + 1)}`;
 
@@ -112,10 +88,8 @@ export default async function SavedPage({
             </p>
           </div>
         ) : (
-          vacancies.map((v) => {
-            const redFlagCount = Array.isArray(v.analysis?.redFlags)
-              ? v.analysis!.redFlags.length
-              : 0;
+          vacancies.map((v: any) => {
+            const redFlagCount = Array.isArray(v.analysis?.redFlags) ? v.analysis!.redFlags.length : 0;
             const salary = formatSalary(v.salary);
 
             return (
@@ -125,7 +99,6 @@ export default async function SavedPage({
               >
                 <div className="flex items-start gap-4">
                   <div className="flex-1 min-w-0">
-                    {/* Title row */}
                     <div className="flex items-start gap-2 flex-wrap mb-1.5">
                       <Link
                         href={`/dashboard/vacancies/${v.id}`}
@@ -134,10 +107,7 @@ export default async function SavedPage({
                         {v.title}
                       </Link>
                       {v.analysis?.recommendation && (
-                        <Badge
-                          label={v.analysis.recommendation.toUpperCase()}
-                          variant={recVariant(v.analysis.recommendation)}
-                        />
+                        <Badge label={v.analysis.recommendation.toUpperCase()} variant={recVariant(v.analysis.recommendation)} />
                       )}
                       {redFlagCount > 0 && (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-red-400/10 text-red-400 border border-red-400/30">
@@ -146,45 +116,23 @@ export default async function SavedPage({
                         </span>
                       )}
                     </div>
-
-                    {/* Meta */}
                     <div className="flex items-center gap-2 text-sm text-gray-400 flex-wrap">
-                      {v.company && (
-                        <span className="font-medium text-gray-300">
-                          {v.company}
-                        </span>
-                      )}
+                      {v.company && <span className="font-medium text-gray-300">{v.company}</span>}
                       {v.area && <span>• {v.area}</span>}
-                      {salary && (
-                        <span className="text-green-400 font-medium">
-                          • {salary}
-                        </span>
-                      )}
+                      {salary && <span className="text-green-400 font-medium">• {salary}</span>}
                     </div>
-
-                    {/* Score bar */}
                     {v.analysis?.matchScore !== undefined && (
                       <div className="mt-3 max-w-xs">
                         <ScoreBar score={v.analysis.matchScore} size="sm" />
                       </div>
                     )}
                   </div>
-
-                  {/* Action buttons */}
                   <div className="flex flex-col gap-2 shrink-0">
-                    <Link
-                      href={`/dashboard/vacancies/${v.id}`}
-                      className="px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 transition-colors"
-                    >
+                    <Link href={`/dashboard/vacancies/${v.id}`} className="px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 transition-colors">
                       View Details
                     </Link>
                     {v.url && (
-                      <a
-                        href={v.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-800 text-gray-300 border border-gray-700 hover:bg-gray-700 transition-colors inline-flex items-center gap-1.5"
-                      >
+                      <a href={v.url} target="_blank" rel="noopener noreferrer" className="px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-800 text-gray-300 border border-gray-700 hover:bg-gray-700 transition-colors inline-flex items-center gap-1.5">
                         <ExternalLink size={11} />
                         Open on HH
                       </a>
@@ -200,25 +148,11 @@ export default async function SavedPage({
       {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between pt-2">
-          <Link
-            href={prevHref}
-            aria-disabled={page <= 1}
-            className={`px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-200 text-sm font-medium transition-colors ${
-              page <= 1 ? "opacity-40 pointer-events-none" : ""
-            }`}
-          >
+          <Link href={prevHref} aria-disabled={page <= 1} className={`px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-200 text-sm font-medium transition-colors ${page <= 1 ? "opacity-40 pointer-events-none" : ""}`}>
             ← Previous
           </Link>
-          <span className="text-sm text-gray-400 tabular-nums">
-            Page {page} of {totalPages}
-          </span>
-          <Link
-            href={nextHref}
-            aria-disabled={page >= totalPages}
-            className={`px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-200 text-sm font-medium transition-colors ${
-              page >= totalPages ? "opacity-40 pointer-events-none" : ""
-            }`}
-          >
+          <span className="text-sm text-gray-400 tabular-nums">Page {page} of {totalPages}</span>
+          <Link href={nextHref} aria-disabled={page >= totalPages} className={`px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-200 text-sm font-medium transition-colors ${page >= totalPages ? "opacity-40 pointer-events-none" : ""}`}>
             Next →
           </Link>
         </div>
