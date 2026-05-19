@@ -1,0 +1,16 @@
+{
+  "functions": {
+    "api/cron/collect-vacancies/route": {
+      "maxDuration": 300
+    },
+    "api/dashboard/collect/route": {
+      "maxDuration": 300
+    },
+    "api/telegram/webhook/route": {
+      "maxDuration": 30
+    },
+    "api/vacancies/analyze/route": {
+      "maxDuration": 60
+    }
+  }
+}

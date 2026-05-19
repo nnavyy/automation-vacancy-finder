@@ -19,10 +19,12 @@ build/
 *.tsbuildinfo
 next-env.d.ts
 
-# replit
+# replit (legacy)
+.replit
 .replit.nix
 .cache/
 .upm/
+replit.md
 
 # project specific
 /revisi
