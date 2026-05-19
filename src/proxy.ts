@@ -1,5 +1,8 @@
 // src/proxy.ts — Protect /dashboard routes (Next.js 16+)
-export { auth as middleware } from "@/lib/auth";
+import { auth } from "@/lib/auth";
+
+// Next.js 16 requires a "proxy" named export or default export
+export default auth;
 
 export const config = {
   matcher: ["/dashboard/:path*"],

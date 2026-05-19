@@ -83,7 +83,7 @@ export default function SidebarNav() {
           </div>
           <div>
             <p className="text-sm font-semibold text-white leading-tight">
-              Nanda Job AI
+              wingkiiy Job AI
             </p>
             <p className="text-xs text-gray-500 leading-tight">
               HH.ru Assistant

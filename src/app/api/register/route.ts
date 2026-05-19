@@ -34,17 +34,17 @@ export async function POST(req: NextRequest) {
       data: { name, email, passwordHash },
     });
 
-    // Create a default search preference for the new user
+    // Create a default search preference matching user's profile
     await prisma.searchPreference.create({
       data: {
         userId:            user.id,
         name:              "Default",
-        targetRoles:       ["Frontend Developer"],
-        searchKeywordsEn:  ["frontend developer"],
-        searchKeywordsRu:  ["фронтенд разработчик"],
-        requiredSkills:    ["React", "JavaScript"],
-        niceToHaveSkills:  [],
-        experience:        ["noExperience"],
+        targetRoles:       ["Full Stack Developer", "Frontend Developer", "UI/UX Designer", "Web Developer", "WordPress Developer"],
+        searchKeywordsEn:  ["full stack developer", "frontend developer", "react developer", "next.js developer", "UI/UX designer", "web developer intern", "wordpress developer"],
+        searchKeywordsRu:  ["фулл стек разработчик", "фронтенд разработчик", "веб разработчик", "react разработчик", "стажёр разработчик", "UI/UX дизайнер"],
+        requiredSkills:    ["React", "TypeScript", "JavaScript", "Next.js"],
+        niceToHaveSkills:  ["Figma", "Node.js", "Tailwind CSS", "Prisma", "WordPress", "PostgreSQL", "REST API", "JWT Auth"],
+        experience:        ["noExperience", "between1And3"],
         workFormat:        ["remote"],
         excludeKeywords:   [],
         redFlagKeywords:   ["паспорт", "залог"],

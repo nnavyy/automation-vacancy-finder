@@ -1,16 +1,16 @@
 // ============================================================
-// Nanda AI Job Assistant — Vacancies List Page
-// Server component — supports filter tabs + pagination via query params
+// wingkiiy Job AI — Vacancies List Page
+// Server component — supports filter tabs + pagination
 // ============================================================
 
 import Link from "next/link";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Search, Settings, Briefcase } from "lucide-react";
 import Badge from "@/components/ui/Badge";
 import ScoreBar from "@/components/ui/ScoreBar";
+import prisma from "@/lib/db";
+import { requireUser } from "@/lib/auth-helpers";
 
 // ── Constants ─────────────────────────────────────────────────
-
-const BASE_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
 const FILTER_TABS = [
   { label: "All", value: "" },
@@ -22,33 +22,6 @@ const FILTER_TABS = [
   { label: "Saved", value: "saved" },
   { label: "Low Priority", value: "low_priority" },
 ] as const;
-
-// ── Local types ───────────────────────────────────────────────
-
-interface AnalysisSummary {
-  matchScore: number;
-  recommendation: string;
-  aiStatus: string;
-  redFlags: unknown[];
-}
-
-interface VacancyItem {
-  id: string;
-  title: string;
-  company?: string;
-  area?: string;
-  salary?: unknown;
-  status: string;
-  createdAt: string;
-  analysis?: AnalysisSummary;
-}
-
-interface VacanciesResponse {
-  vacancies: VacancyItem[];
-  total: number;
-  page: number;
-  totalPages: number;
-}
 
 // ── Helpers ───────────────────────────────────────────────────
 
@@ -91,41 +64,61 @@ export default async function VacanciesPage({
 }: {
   searchParams: Promise<{ status?: string; page?: string }>;
 }) {
+  const user = await requireUser();
   const sp = await searchParams;
   const status = sp.status ?? "";
   const page = Math.max(1, parseInt(sp.page ?? "1", 10));
+  const limit = 20;
+  const skip = (page - 1) * limit;
 
-  // Build query string
-  const qs = new URLSearchParams({
-    ...(status && { status }),
-    page: String(page),
-    limit: "20",
-    sortBy: "matchScore",
-    order: "desc",
-  });
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const where: Record<string, any> = { userId: user.id };
+  if (status) where.status = status;
 
-  let data: VacanciesResponse = {
-    vacancies: [],
-    total: 0,
-    page: 1,
-    totalPages: 1,
-  };
+  let vacancies: any[] = [];
+  let total = 0;
+  let hasProfile = false;
 
   try {
-    const res = await fetch(`${BASE_URL}/api/vacancies?${qs}`, {
-      cache: "no-store",
+    // Check if user has any search preferences set up
+    const profileCount = await prisma.searchPreference.count({
+      where: { userId: user.id },
     });
-    if (res.ok) {
-      const json = await res.json();
-      if (json.success) data = json.data as VacanciesResponse;
-    }
-  } catch {
-    /* show empty state */
+    hasProfile = profileCount > 0;
+
+    [vacancies, total] = await Promise.all([
+      prisma.vacancy.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { analysis: { matchScore: "desc" } },
+        select: {
+          id: true,
+          title: true,
+          company: true,
+          area: true,
+          salary: true,
+          status: true,
+          createdAt: true,
+          analysis: {
+            select: {
+              matchScore: true,
+              recommendation: true,
+              aiStatus: true,
+              redFlags: true,
+            },
+          },
+        },
+      }),
+      prisma.vacancy.count({ where }),
+    ]);
+  } catch (err) {
+    console.error("[Vacancies Page]", err);
   }
 
-  // Helpers for pagination links
+  const totalPages = Math.ceil(total / limit) || 1;
   const prevHref = `/dashboard/vacancies?${status ? `status=${status}&` : ""}page=${Math.max(1, page - 1)}`;
-  const nextHref = `/dashboard/vacancies?${status ? `status=${status}&` : ""}page=${Math.min(data.totalPages, page + 1)}`;
+  const nextHref = `/dashboard/vacancies?${status ? `status=${status}&` : ""}page=${Math.min(totalPages, page + 1)}`;
 
   return (
     <div className="max-w-5xl space-y-6">
@@ -133,7 +126,7 @@ export default async function VacanciesPage({
       <div>
         <h1 className="text-2xl font-bold text-white">Vacancies</h1>
         <p className="text-gray-400 text-sm mt-1">
-          {data.total.toLocaleString()} total vacancies
+          {total.toLocaleString()} total vacancies
         </p>
       </div>
 
@@ -160,16 +153,54 @@ export default async function VacanciesPage({
         })}
       </div>
 
-      {/* ── Vacancy Cards ── */}
+      {/* ── Vacancy Cards / Empty State ── */}
       <div className="space-y-3">
-        {data.vacancies.length === 0 ? (
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-12 text-center">
-            <p className="text-gray-400 text-sm">
-              No vacancies found for this filter.
-            </p>
+        {vacancies.length === 0 ? (
+          <div className="bg-gray-900 border border-gray-800 rounded-xl p-16 text-center flex flex-col items-center justify-center min-h-[400px]">
+            {!hasProfile ? (
+              <>
+                <div className="w-16 h-16 rounded-2xl bg-green-500/10 border border-green-500/20 flex items-center justify-center mb-5">
+                  <Settings size={28} className="text-green-400" />
+                </div>
+                <h3 className="text-lg font-semibold text-white mb-2">
+                  Set up your profile first
+                </h3>
+                <p className="text-gray-400 text-sm max-w-sm mb-6">
+                  Configure your job search preferences — target roles, skills, and work format — so we can find matching vacancies for you.
+                </p>
+                <Link
+                  href="/dashboard/settings"
+                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors"
+                >
+                  <Settings size={15} />
+                  Go to Settings
+                </Link>
+              </>
+            ) : (
+              <>
+                <div className="w-16 h-16 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center mb-5">
+                  <Search size={28} className="text-blue-400" />
+                </div>
+                <h3 className="text-lg font-semibold text-white mb-2">
+                  No vacancies yet
+                </h3>
+                <p className="text-gray-400 text-sm max-w-sm mb-6">
+                  {status
+                    ? `No vacancies match the "${status.replace(/_/g, " ")}" filter. Try a different filter or run a new collection.`
+                    : "Run a collection to start finding job listings that match your profile. Hit the \"Run Collection\" button on the Overview page."}
+                </p>
+                <Link
+                  href="/dashboard"
+                  className="inline-flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
+                >
+                  <Briefcase size={15} />
+                  Go to Overview
+                </Link>
+              </>
+            )}
           </div>
         ) : (
-          data.vacancies.map((v) => {
+          vacancies.map((v: any) => {
             const redFlagCount = Array.isArray(v.analysis?.redFlags)
               ? v.analysis!.redFlags.length
               : 0;
@@ -243,7 +274,7 @@ export default async function VacanciesPage({
       </div>
 
       {/* ── Pagination ── */}
-      {data.totalPages > 1 && (
+      {totalPages > 1 && (
         <div className="flex items-center justify-between pt-2">
           <Link
             href={prevHref}
@@ -256,14 +287,14 @@ export default async function VacanciesPage({
           </Link>
 
           <span className="text-sm text-gray-400 tabular-nums">
-            Page {data.page} of {data.totalPages}
+            Page {page} of {totalPages}
           </span>
 
           <Link
             href={nextHref}
-            aria-disabled={page >= data.totalPages}
+            aria-disabled={page >= totalPages}
             className={`px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-200 text-sm font-medium transition-colors ${
-              page >= data.totalPages ? "opacity-40 pointer-events-none" : ""
+              page >= totalPages ? "opacity-40 pointer-events-none" : ""
             }`}
           >
             Next →
