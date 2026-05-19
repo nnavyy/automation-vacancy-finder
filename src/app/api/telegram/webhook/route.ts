@@ -304,12 +304,18 @@ export async function POST(req: NextRequest) {
 
       // ── /start — Welcome message ──────────────────────────
       if (text === "/start") {
-        // Check if this chatId is already linked
-        const link = await prisma.telegramLink.findFirst({
-          where: { telegramChatId: chatId, isActive: true },
-        });
+        let isLinked = false;
 
-        if (link) {
+        try {
+          const link = await prisma.telegramLink.findFirst({
+            where: { telegramChatId: chatId, isActive: true },
+          });
+          isLinked = Boolean(link);
+        } catch (dbErr) {
+          console.error("[Webhook /start] DB lookup failed:", dbErr);
+        }
+
+        if (isLinked) {
           await sendMessage(
             `✅ <b>Welcome back!</b>\n\n` +
             `Your Telegram is linked to the dashboard.\n\n` +
@@ -498,10 +504,9 @@ export async function POST(req: NextRequest) {
         break;
 
       case "profile":
-        await prisma.$transaction(async (tx) => {
-          await tx.searchPreference.updateMany({ data: { isActive: false } });
-          await tx.searchPreference.update({ where: { id: vacancyId }, data: { isActive: true } });
-        });
+        // Sequential queries instead of $transaction (NeonDB HTTP doesn't support it)
+        await prisma.searchPreference.updateMany({ data: { isActive: false } });
+        await prisma.searchPreference.update({ where: { id: vacancyId }, data: { isActive: true } });
         const activated = await prisma.searchPreference.findUnique({ where: { id: vacancyId } });
         replyText = `✅ Active profile changed to: ${activated?.name}`;
         toastText = "Profile updated";

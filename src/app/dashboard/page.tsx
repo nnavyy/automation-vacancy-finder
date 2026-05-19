@@ -1,6 +1,9 @@
 // ============================================================
 // Nanda AI Job Assistant — Dashboard Overview Page
 // ============================================================
+// Uses direct Prisma queries instead of self-fetch to avoid
+// URL resolution issues on Replit/serverless deployments.
+// ============================================================
 
 import Link from "next/link";
 import {
@@ -15,21 +18,7 @@ import {
 import ScoreBar from "@/components/ui/ScoreBar";
 import Badge from "@/components/ui/Badge";
 import RunCollectionButton from "@/components/RunCollectionButton";
-
-const BASE_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-
-// ── Data fetching ─────────────────────────────────────────────
-
-async function fetchApi<T>(path: string): Promise<T | null> {
-  try {
-    const res = await fetch(`${BASE_URL}${path}`, { cache: "no-store" });
-    if (!res.ok) return null;
-    const json = await res.json();
-    return json.success ? (json.data as T) : null;
-  } catch {
-    return null;
-  }
-}
+import prisma from "@/lib/db";
 
 // ── Helpers ───────────────────────────────────────────────────
 
@@ -47,32 +36,6 @@ function recVariant(rec: string): "green" | "yellow" | "red" {
   if (rec === "apply") return "green";
   if (rec === "maybe") return "yellow";
   return "red";
-}
-
-// ── Local types ───────────────────────────────────────────────
-
-interface AnalysisSummary {
-  matchScore: number;
-  recommendation: string;
-  aiStatus: string;
-  redFlags: unknown[];
-}
-
-interface VacancyItem {
-  id: string;
-  title: string;
-  company?: string;
-  area?: string;
-  salary?: unknown;
-  status: string;
-  analysis?: AnalysisSummary;
-}
-
-interface VacanciesResponse {
-  vacancies: VacancyItem[];
-  total: number;
-  page: number;
-  totalPages: number;
 }
 
 // ── StatCard ──────────────────────────────────────────────────
@@ -110,16 +73,71 @@ function StatCard({
 // ── Page ──────────────────────────────────────────────────────
 
 export default async function DashboardPage() {
-  const [allData, topData] = await Promise.all([
-    fetchApi<VacanciesResponse>("/api/vacancies?limit=1000"),
-    fetchApi<VacanciesResponse>(
-      "/api/vacancies?limit=5&sortBy=matchScore&order=desc",
-    ),
-  ]);
+  // Direct Prisma queries instead of self-fetch — avoids URL issues on Replit
+  let all: any[] = [];
+  let total = 0;
+  let topMatches: any[] = [];
 
-  const all = allData?.vacancies ?? [];
-  const total = allData?.total ?? 0;
-  const topMatches = topData?.vacancies ?? [];
+  try {
+    const [allVacancies, allCount, topVacancies] = await Promise.all([
+      prisma.vacancy.findMany({
+        take: 1000,
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          hhId: true,
+          title: true,
+          company: true,
+          area: true,
+          salary: true,
+          url: true,
+          status: true,
+          createdAt: true,
+          updatedAt: true,
+          analysis: {
+            select: {
+              matchScore: true,
+              recommendation: true,
+              aiStatus: true,
+              redFlags: true,
+              bestLanguage: true,
+              confidence: true,
+            },
+          },
+        },
+      }),
+      prisma.vacancy.count(),
+      prisma.vacancy.findMany({
+        take: 5,
+        orderBy: { analysis: { matchScore: "desc" } },
+        where: { analysis: { isNot: null } },
+        select: {
+          id: true,
+          hhId: true,
+          title: true,
+          company: true,
+          area: true,
+          salary: true,
+          url: true,
+          status: true,
+          analysis: {
+            select: {
+              matchScore: true,
+              recommendation: true,
+              aiStatus: true,
+              redFlags: true,
+            },
+          },
+        },
+      }),
+    ]);
+
+    all = allVacancies;
+    total = allCount;
+    topMatches = topVacancies;
+  } catch (err) {
+    console.error("[Dashboard] Failed to fetch data:", err);
+  }
 
   const applied = all.filter((v) => v.status === "applied_manual").length;
   const skipped = all.filter((v) => v.status === "skipped").length;
@@ -133,7 +151,7 @@ export default async function DashboardPage() {
     .map((v) => v.analysis!.matchScore);
   const avgScore =
     scores.length > 0
-      ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length)
+      ? Math.round(scores.reduce((a: number, b: number) => a + b, 0) / scores.length)
       : 0;
 
   return (
@@ -247,7 +265,7 @@ export default async function DashboardPage() {
               </p>
             </div>
           ) : (
-            topMatches.map((v) => {
+            topMatches.map((v: any) => {
               const salary = formatSalary(v.salary);
               return (
                 <Link

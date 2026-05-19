@@ -111,6 +111,26 @@ export async function sendMessage(
       console.error(
         `[Telegram] sendMessage failed — HTTP ${response.status}: ${body}`
       );
+
+      // If HTML parse fails, retry without parse_mode
+      if (response.status === 400 && body.includes("can't parse")) {
+        console.log("[Telegram] Retrying without HTML parse_mode...");
+        const retryPayload = { ...payload, parse_mode: undefined };
+        delete retryPayload.parse_mode;
+        const retryRes = await fetch(
+          `${TELEGRAM_API_BASE}/bot${botToken}/sendMessage`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(retryPayload),
+          }
+        );
+        if (retryRes.ok) {
+          console.log("[Telegram] Retry without HTML succeeded");
+          return true;
+        }
+      }
+
       return false;
     }
 
