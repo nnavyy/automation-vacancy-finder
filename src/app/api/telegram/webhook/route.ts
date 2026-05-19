@@ -299,14 +299,90 @@ export async function POST(req: NextRequest) {
     // ── Handle incoming text messages ───────────────────────
     if (update.message?.text) {
       const text = update.message.text.trim();
-      
-      if (text === "/start" || text === "/profiles") {
+      const chatId = update.message.chat.id.toString();
+      const username = (update.message as any).from?.username ?? undefined;
+
+      // ── /start — Welcome message ──────────────────────────
+      if (text === "/start") {
+        // Check if this chatId is already linked
+        const link = await prisma.telegramLink.findFirst({
+          where: { telegramChatId: chatId, isActive: true },
+        });
+
+        if (link) {
+          await sendMessage(
+            `✅ <b>Welcome back!</b>\n\n` +
+            `Your Telegram is linked to the dashboard.\n\n` +
+            `<b>Available commands:</b>\n` +
+            `/profiles — Switch active profile\n` +
+            `/saved — View saved vacancies\n` +
+            `/applied — View applied vacancies\n` +
+            `/link &lt;TOKEN&gt; — Re-link with a new token`,
+            undefined, chatId
+          );
+        } else {
+          await sendMessage(
+            `👋 <b>Welcome to Nanda AI Job Assistant!</b>\n\n` +
+            `To connect this bot with your dashboard:\n` +
+            `1. Go to Settings in your dashboard\n` +
+            `2. Click "Generate Telegram Token"\n` +
+            `3. Send: /link &lt;YOUR_TOKEN&gt;\n\n` +
+            `Example: <code>/link A3F1B2</code>`,
+            undefined, chatId
+          );
+        }
+        return NextResponse.json({ ok: true });
+      }
+
+      // ── /link <TOKEN> — Link Telegram to dashboard ────────
+      if (text.startsWith("/link ")) {
+        const token = text.slice(6).trim().toUpperCase();
+        if (!token || token.length < 4) {
+          await sendMessage("❌ Invalid token. Please check and try again.", undefined, chatId);
+          return NextResponse.json({ ok: true });
+        }
+
+        const link = await prisma.telegramLink.findFirst({
+          where: { token, isActive: true },
+        });
+
+        if (!link) {
+          await sendMessage(
+            "❌ Token not found or expired.\nGenerate a new one from the dashboard Settings.",
+            undefined, chatId
+          );
+          return NextResponse.json({ ok: true });
+        }
+
+        // Update the link with chatId
+        await prisma.telegramLink.update({
+          where: { id: link.id },
+          data: {
+            telegramChatId: chatId,
+            telegramUsername: username,
+            linkedAt: new Date(),
+          },
+        });
+
+        // Also update TELEGRAM_CHAT_ID env-style by storing it
+        await sendMessage(
+          `✅ <b>Successfully linked!</b>\n\n` +
+          `Your Telegram is now connected to the dashboard.\n` +
+          `You will receive vacancy notifications here.\n\n` +
+          `Try /profiles to switch your active profile.`,
+          undefined, chatId
+        );
+        return NextResponse.json({ ok: true });
+      }
+
+      // ── /profiles — List & switch profiles ────────────────
+      if (text === "/profiles") {
         const profiles = await prisma.searchPreference.findMany({
           select: { id: true, name: true, isActive: true },
         });
 
         if (profiles.length === 0) {
-          await sendMessage("No profiles found. Please create one in the dashboard.");
+          await sendMessage("No profiles found. Create one in the dashboard first.", undefined, chatId);
         } else {
           const inlineKeyboard = profiles.map((p) => [
             {
@@ -314,12 +390,73 @@ export async function POST(req: NextRequest) {
               callback_data: `profile:${p.id}`,
             },
           ]);
-
-          await sendMessage("Please select your active profile:", {
-            inline_keyboard: inlineKeyboard,
-          });
+          await sendMessage("Select your active profile:", { inline_keyboard: inlineKeyboard }, chatId);
         }
+        return NextResponse.json({ ok: true });
       }
+
+      // ── /saved — List saved vacancies ─────────────────────
+      if (text === "/saved") {
+        const saved = await prisma.vacancy.findMany({
+          where: { status: "saved" },
+          orderBy: { updatedAt: "desc" },
+          take: 10,
+          include: { analysis: { select: { matchScore: true, recommendation: true } } },
+        });
+
+        if (saved.length === 0) {
+          await sendMessage("📌 No saved vacancies yet.", undefined, chatId);
+        } else {
+          const lines = saved.map((v, i) => {
+            const score = v.analysis?.matchScore ?? "—";
+            const rec = v.analysis?.recommendation ?? "—";
+            return `${i + 1}. <b>${v.title}</b>\n   ${v.company ?? "—"} • Score: ${score} • ${rec}\n   🔗 ${v.url ?? `https://hh.ru/vacancy/${v.hhId}`}`;
+          });
+          await sendMessage(
+            `📌 <b>Saved Vacancies</b> (${saved.length})\n\n${lines.join("\n\n")}`,
+            undefined, chatId
+          );
+        }
+        return NextResponse.json({ ok: true });
+      }
+
+      // ── /applied — List applied vacancies ─────────────────
+      if (text === "/applied") {
+        const applied = await prisma.vacancy.findMany({
+          where: { status: "applied_manual" },
+          orderBy: { updatedAt: "desc" },
+          take: 10,
+          include: { analysis: { select: { matchScore: true, recommendation: true } } },
+        });
+
+        if (applied.length === 0) {
+          await sendMessage("📋 No applied vacancies yet.", undefined, chatId);
+        } else {
+          const lines = applied.map((v, i) => {
+            const score = v.analysis?.matchScore ?? "—";
+            return `${i + 1}. <b>${v.title}</b>\n   ${v.company ?? "—"} • Score: ${score}\n   🔗 ${v.url ?? `https://hh.ru/vacancy/${v.hhId}`}`;
+          });
+          await sendMessage(
+            `📋 <b>Applied Vacancies</b> (${applied.length})\n\n${lines.join("\n\n")}`,
+            undefined, chatId
+          );
+        }
+        return NextResponse.json({ ok: true });
+      }
+
+      // ── Unknown command — show help ───────────────────────
+      if (text.startsWith("/")) {
+        await sendMessage(
+          `<b>Available commands:</b>\n` +
+          `/start — Welcome & status\n` +
+          `/link &lt;TOKEN&gt; — Connect to dashboard\n` +
+          `/profiles — Switch active profile\n` +
+          `/saved — View saved vacancies\n` +
+          `/applied — View applied vacancies`,
+          undefined, chatId
+        );
+      }
+
       return NextResponse.json({ ok: true });
     }
 

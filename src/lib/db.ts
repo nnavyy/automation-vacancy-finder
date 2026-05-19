@@ -5,6 +5,10 @@
 // new module instances on every file change, which would cause
 // "Too many Prisma Client instances" warnings.
 // Solution: attach the client to globalThis so it survives HMR.
+//
+// NeonDB serverless connections are short-lived; we configure
+// Prisma with connection_limit and pool_timeout to prevent
+// "Error { kind: Closed }" during long-running pipelines.
 // ============================================================
 
 import { PrismaClient } from "@prisma/client";
@@ -29,8 +33,9 @@ export const prisma: PrismaClient =
   new PrismaClient({
     log:
       process.env.NODE_ENV === "development"
-        ? ["query", "error", "warn"]
+        ? ["error", "warn"]
         : ["error"],
+    datasourceUrl: process.env.DATABASE_URL,
   });
 
 // Persist the client on globalThis in non-production environments

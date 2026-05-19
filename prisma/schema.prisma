@@ -171,3 +171,24 @@ model AiUsageLog {
 
   @@map("ai_usage_logs")
 }
+
+// ============================================================
+// Telegram Link — Token-based bot ↔ dashboard linking
+// ============================================================
+// Flow:
+//   1. User clicks "Generate Token" in dashboard Settings
+//   2. User sends the token to the bot via /link <TOKEN>
+//   3. Bot verifies + stores the chatId → linked!
+// ============================================================
+model TelegramLink {
+  id              String   @id @default(cuid())
+  token           String   @unique  // 6-char alphanumeric token
+  telegramChatId  String?  @unique  // set when user links via bot
+  telegramUsername String?           // optional display name
+  linkedAt        DateTime?          // when the link was established
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("telegram_links")
+}

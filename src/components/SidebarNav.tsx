@@ -9,6 +9,8 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   Briefcase,
+  Bookmark,
+  CheckCircle,
   BarChart2,
   Settings,
   Cpu,
@@ -27,6 +29,8 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { icon: LayoutDashboard, label: "Overview", href: "/dashboard" },
   { icon: Briefcase, label: "Vacancies", href: "/dashboard/vacancies" },
+  { icon: Bookmark, label: "Saved", href: "/dashboard/saved" },
+  { icon: CheckCircle, label: "Applied", href: "/dashboard/applied" },
   { icon: BarChart2, label: "Analytics", href: "/dashboard/analytics" },
   { icon: Settings, label: "Settings", href: "/dashboard/settings" },
 ];

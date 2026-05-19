@@ -1,0 +1,12 @@
+run = "npm run dev"
+
+[nix]
+channel = "stable-24_05"
+
+[nix.packages]
+nodejs = "nodejs_20"
+
+[deployment]
+deploymentTarget = "autoscale"
+build = ["sh", "-c", "npm install && npx prisma generate && npm run build"]
+run = ["sh", "-c", "npm run start"]

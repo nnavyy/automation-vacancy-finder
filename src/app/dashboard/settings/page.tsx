@@ -18,7 +18,10 @@ import {
   DollarSign,
   Ban,
   Bot,
-  FileText
+  FileText,
+  MessageSquare,
+  Copy,
+  Check
 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────
@@ -567,6 +570,9 @@ export default function SettingsPage() {
         />
       </FormCard>
 
+      {/* ── Telegram Link ── */}
+      <TelegramLinkCard />
+
       {/* ── Bottom Save Button ── */}
       <div className="flex justify-end">
         <SaveButton saving={saving} onClick={handleSave} large />
@@ -604,3 +610,110 @@ function SaveButton({
     </button>
   );
 }
+
+// ── TelegramLinkCard ──────────────────────────────────────────
+
+function TelegramLinkCard() {
+  const [token, setToken] = useState<string | null>(null);
+  const [linked, setLinked] = useState(false);
+  const [username, setUsername] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/telegram/link")
+      .then((r) => r.json())
+      .then((json) => {
+        if (json.success && json.data) {
+          setToken(json.data.token);
+          setLinked(json.data.linked);
+          setUsername(json.data.username);
+        }
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  const handleGenerate = async () => {
+    setGenerating(true);
+    try {
+      const res = await fetch("/api/telegram/link", { method: "POST" });
+      const json = await res.json();
+      if (json.success) {
+        setToken(json.data.token);
+        setLinked(false);
+      }
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const handleCopy = () => {
+    if (token) {
+      navigator.clipboard.writeText(`/link ${token}`);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  return (
+    <FormCard title="Telegram Bot" icon={MessageSquare}>
+      <div className="space-y-4">
+        {/* Status */}
+        <div className="flex items-center gap-2">
+          <div
+            className={`w-2 h-2 rounded-full ${
+              linked ? "bg-green-400" : "bg-yellow-400"
+            }`}
+          />
+          <span className="text-sm text-gray-300">
+            {loading
+              ? "Checking..."
+              : linked
+              ? `Linked${username ? ` as @${username}` : ""}`
+              : "Not linked"}
+          </span>
+        </div>
+
+        {/* Token display */}
+        {token && !linked && (
+          <div className="bg-gray-800 border border-gray-700 rounded-lg p-3">
+            <p className="text-xs text-gray-400 mb-2">
+              Send this command to your Telegram bot:
+            </p>
+            <div className="flex items-center gap-2">
+              <code className="flex-1 bg-gray-900 px-3 py-2 rounded text-sm text-green-400 font-mono">
+                /link {token}
+              </code>
+              <button
+                onClick={handleCopy}
+                className="px-3 py-2 rounded bg-gray-700 hover:bg-gray-600 text-white transition-colors"
+              >
+                {copied ? <Check size={14} /> : <Copy size={14} />}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Generate / Regenerate button */}
+        <button
+          onClick={handleGenerate}
+          disabled={generating}
+          className="px-4 py-2 rounded-lg text-sm font-medium bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 transition-colors disabled:opacity-50"
+        >
+          {generating
+            ? "Generating..."
+            : token
+            ? "Regenerate Token"
+            : "Generate Telegram Token"}
+        </button>
+
+        <p className="text-xs text-gray-600">
+          Generate a token, then send it to your bot via{" "}
+          <code className="text-gray-400">/link TOKEN</code> to connect.
+        </p>
+      </div>
+    </FormCard>
+  );
+}
+
