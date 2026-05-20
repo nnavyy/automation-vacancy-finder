@@ -211,6 +211,29 @@ export async function POST(req: NextRequest) {
 
       console.log(`[Webhook] Command: "${text}" chatId: ${chatId} user: ${username}`);
 
+      // ── Handle Manual Cover Letter Reply ─────────────────────
+      if (update.message.reply_to_message) {
+        const rText = update.message.reply_to_message.text || "";
+        if (rText.includes("edit cover letter for Vacancy ID:\n")) {
+          const vacancyId = rText.split("\n").pop()?.trim();
+          if (vacancyId) {
+            try {
+              const dbVac = await prisma.vacancy.findUnique({ where: { id: vacancyId }, include: { analysis: true } });
+              if (dbVac && dbVac.analysis) {
+                await prisma.vacancyAnalysis.update({
+                  where: { vacancyId },
+                  data: { coverLetter: text }
+                });
+                await tgSend(chatId, `✅ <b>Cover letter saved!</b>\nYour manual edit for "${dbVac.title}" has been saved successfully.`);
+                return NextResponse.json({ ok: true });
+              }
+            } catch (err) {
+              console.error("[Webhook] Manual edit error:", err);
+            }
+          }
+        }
+      }
+
       // ── /start ─────────────────────────────────────────────
       if (text === "/start") {
         console.log("[Webhook] Handling /start...");
@@ -407,10 +430,20 @@ export async function POST(req: NextRequest) {
         break;
 
       case "edit":
-        await tgAnswerCallback(cb.id, "✍️ Generating...");
+        await tgAnswerCallback(cb.id, "✍️ Regenerating...");
         reply = await handleEdit(targetId);
         if (cbChatId) await tgSend(cbChatId, reply);
-        return NextResponse.json({ ok: true });
+        toast = "";
+        break;
+
+      case "edit_man":
+        await tgAnswerCallback(cb.id, "✏️ Please type your cover letter...");
+        if (cbChatId) {
+          const forceReplyMarkup = { force_reply: true, selective: true };
+          await tgSend(cbChatId, `Reply to this message to manually edit cover letter for Vacancy ID:\n${targetId}`, { reply_markup: forceReplyMarkup });
+        }
+        toast = "";
+        break;
 
       default:
         await tgAnswerCallback(cb.id, "Unknown");

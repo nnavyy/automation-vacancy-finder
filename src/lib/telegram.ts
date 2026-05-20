@@ -254,8 +254,11 @@ export async function sendVacancyNotification(
       ],
       [
         // Row 2: secondary actions
-        { text: "💾 Save",         callback_data: `save:${vacancyId}` },
-        { text: "✍️ Edit Letter",  callback_data: `edit:${vacancyId}` },
+        { text: "💾 Save",           callback_data: `save:${vacancyId}` },
+        { text: "✍️ Regenerate",     callback_data: `edit:${vacancyId}` },
+      ],
+      [
+        { text: "✏️ Type Manual",    callback_data: `edit_man:${vacancyId}` },
       ],
       [
         // Row 3: direct link to vacancy on HH
@@ -334,8 +337,11 @@ export async function sendVacancyNotificationToUser(
         { text: "❌ Skip",         callback_data: `skip:${vacancyId}` },
       ],
       [
-        { text: "💾 Save",         callback_data: `save:${vacancyId}` },
-        { text: "✍️ Edit Letter",  callback_data: `edit:${vacancyId}` },
+        { text: "💾 Save",           callback_data: `save:${vacancyId}` },
+        { text: "✍️ Regenerate",     callback_data: `edit:${vacancyId}` },
+      ],
+      [
+        { text: "✏️ Type Manual",    callback_data: `edit_man:${vacancyId}` },
       ],
       [
         { text: "🔗 Open Vacancy", url: vacancy.url ?? `https://hh.ru/vacancy/${vacancy.hhId}` },
