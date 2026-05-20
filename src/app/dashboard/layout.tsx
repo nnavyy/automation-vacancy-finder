@@ -11,7 +11,7 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col md:flex-row min-h-screen bg-gray-950">
+    <div className="flex flex-col md:flex-row min-h-[100dvh] bg-gray-950">
       {/* Sidebar (Wrapped for Mobile) */}
       <MobileSidebarWrapper>
         <SidebarNav />

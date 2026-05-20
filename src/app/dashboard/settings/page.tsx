@@ -200,6 +200,8 @@ export default function SettingsPage() {
 
   const [translatingJson, setTranslatingJson] = useState(false);
   const [translateJsonEn, setTranslateJsonEn] = useState(false);
+  const [uploadedJsonName, setUploadedJsonName] = useState<string | null>(null);
+  const [testingPortfolio, setTestingPortfolio] = useState(false);
 
   // ── Load current settings ────────────────────────────────
   useEffect(() => {
@@ -358,7 +360,8 @@ export default function SettingsPage() {
           portfolioUrl: data.portfolio_url || data.portfolioUrl || prev.portfolioUrl,
           targetRoles: data.target_roles ? data.target_roles.join(", ") : prev.targetRoles,
         }));
-        setMsg({ text: "✅ Profile imported successfully!", type: "success" });
+        setUploadedJsonName(file.name);
+        setMsg({ text: `✅ Profile imported successfully from ${file.name}!`, type: "success" });
       } catch (err) {
         setMsg({ text: "❌ Failed to parse JSON file.", type: "error" });
       } finally {
@@ -367,6 +370,32 @@ export default function SettingsPage() {
       }
     };
     reader.readAsText(file);
+  };
+
+  const handleTestPortfolio = async () => {
+    if (!form.portfolioUrl) {
+      setMsg({ text: "⚠️ Please enter a Portfolio URL first.", type: "warn" });
+      return;
+    }
+    setTestingPortfolio(true);
+    setMsg(null);
+    try {
+      const res = await fetch("/api/dashboard/test-crawl", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: form.portfolioUrl })
+      });
+      const json = await res.json();
+      if (json.success) {
+        setMsg({ text: `✅ ${json.message}`, type: "success" });
+      } else {
+        setMsg({ text: `❌ ${json.error}`, type: "error" });
+      }
+    } catch {
+      setMsg({ text: "❌ Failed to reach the test API.", type: "error" });
+    } finally {
+      setTestingPortfolio(false);
+    }
   };
 
   // ── Main form ────────────────────────────────────────────
@@ -405,13 +434,18 @@ export default function SettingsPage() {
           <p className="text-xs text-gray-400">
             Upload a JSON file to auto-fill your Name, Bio, Skills, Target Roles, and Portfolio URL.
           </p>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-4 flex-wrap">
             <label className="flex items-center gap-2 cursor-pointer bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm transition-colors disabled:opacity-50">
               {translatingJson ? <RefreshCw size={14} className="animate-spin" /> : <FileText size={14} />}
               {translatingJson ? "Processing..." : "Upload JSON"}
               <input type="file" accept=".json" className="hidden" onChange={handleJsonUpload} disabled={translatingJson} />
             </label>
-            <label className="flex items-center gap-2 cursor-pointer">
+            {uploadedJsonName && (
+              <span className="text-xs text-green-400 flex items-center gap-1 bg-green-400/10 px-2 py-1 rounded border border-green-400/20">
+                <Check size={12} /> {uploadedJsonName}
+              </span>
+            )}
+            <label className="flex items-center gap-2 cursor-pointer ml-auto">
               <input 
                 type="checkbox" 
                 checked={translateJsonEn} 
@@ -634,13 +668,29 @@ export default function SettingsPage() {
             </p>
           </div>
           <div>
-            <TextField
-              label="Portfolio / Website URL"
-              value={form.portfolioUrl}
-              onChange={(v) => setForm((p) => ({ ...p, portfolioUrl: v }))}
-              hint="AI will crawl this URL to extract your projects and achievements automatically."
-              placeholder="https://yoursite.com"
-            />
+            <label className="block text-xs text-gray-400 mb-1.5 font-medium">
+              Portfolio / Website URL
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={form.portfolioUrl}
+                onChange={(e) => setForm((p) => ({ ...p, portfolioUrl: e.target.value }))}
+                placeholder="https://yoursite.com"
+                className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:border-green-400/60 focus:outline-none transition-colors"
+              />
+              <button
+                onClick={handleTestPortfolio}
+                disabled={testingPortfolio || !form.portfolioUrl}
+                className="flex items-center justify-center min-w-[120px] gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm text-white transition-colors disabled:opacity-50"
+              >
+                {testingPortfolio ? <RefreshCw size={14} className="animate-spin" /> : <Bot size={14} />}
+                Test Crawl
+              </button>
+            </div>
+            <p className="text-xs text-gray-600 mt-1">
+              AI will automatically crawl this URL to extract your projects when generating cover letters.
+            </p>
           </div>
         </div>
       </FormCard>
