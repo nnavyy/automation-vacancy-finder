@@ -190,29 +190,29 @@ curl -X POST "https://api.telegram.org/bot<YOUR_BOT_TOKEN>/deleteWebhook"
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│                     n8n (port 5678)                  │
-│                                                      │
+│                     n8n (port 5678)                 │
+│                                                     │
 │  ┌──────────────────┐   ┌───────────────────────┐   │
-│  │ Workflow 1        │   │ Workflow 3             │   │
-│  │ Cron every 3h     │   │ Cron every 2h          │   │
+│  │ Workflow 1       │   │ Workflow 3            │   │
+│  │ Cron every 3h    │   │ Cron every 2h         │   │
 │  └────────┬─────────┘   └──────────┬────────────┘   │
-│           │                        │                 │
+│           │                        │                │
 │  ┌────────▼─────────┐   ┌──────────▼────────────┐   │
-│  │ POST /api/cron/  │   │ GET /api/vacancies     │   │
-│  │ collect-vacancies│   │ POST /api/vacancies/   │   │
-│  └──────────────────┘   │ analyze                │   │
+│  │ POST /api/cron/  │   │ GET /api/vacancies    │   │
+│  │ collect-vacancies│   │ POST /api/vacancies/  │   │
+│  └──────────────────┘   │ analyze               │   │
 │                         └───────────────────────┘   │
 │  ┌──────────────────┐                               │
-│  │ Workflow 2        │                               │
-│  │ Telegram Webhook  │                               │
+│  │ Workflow 2       │                               │
+│  │ Telegram Webhook │                               │
 │  └────────┬─────────┘                               │
-│           │ callback_query                           │
+│           │ callback_query                          │
 │  ┌────────▼──────────────────────────────────────┐  │
-│  │ Route: approve | skip | save | edit            │  │
-│  │ → POST /api/vacancies/:id/mark-applied         │  │
-│  │ → POST /api/vacancies/:id/skip                 │  │
-│  │ → POST /api/vacancies/:id/save                 │  │
-│  │ → POST /api/vacancies/:id/regenerate-letter    │  │
+│  │ Route: approve | skip | save | edit           │  │
+│  │ → POST /api/vacancies/:id/mark-applied        │  │
+│  │ → POST /api/vacancies/:id/skip                │  │
+│  │ → POST /api/vacancies/:id/save                │  │
+│  │ → POST /api/vacancies/:id/regenerate-lette    │  │
 │  └───────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────┘
                           │
