@@ -278,65 +278,61 @@ async function handleEdit(vacancyId: string): Promise<string> {
   );
 }
 
+// ── GET: Webhook health check ─────────────────────────────────
+export async function GET() {
+  const hasToken = !!process.env.TELEGRAM_BOT_TOKEN;
+  const hasChatId = !!process.env.TELEGRAM_CHAT_ID;
+  return NextResponse.json({
+    ok: true,
+    webhook: "active",
+    hasToken,
+    hasChatId,
+    timestamp: new Date().toISOString(),
+  });
+}
+
 // ── Route Handler ─────────────────────────────────────────────
 
-/**
- * POST /api/telegram/webhook
- *
- * Handles Telegram Bot API Update objects delivered by the webhook.
- * Only callback_query updates are processed; all others are silently ignored.
- *
- * callback_data format:  "<action>:<vacancyId>"
- *
- * Always returns 200 { ok: true } — Telegram requires a 2xx response within
- * 10 seconds, otherwise it will retry the delivery.
- */
 export async function POST(req: NextRequest) {
+  const botToken = process.env.TELEGRAM_BOT_TOKEN;
+  console.log("[Webhook] ── Incoming request ──");
+  console.log("[Webhook] TELEGRAM_BOT_TOKEN exists:", !!botToken);
+
   try {
     const update = (await req.json().catch(() => ({}))) as TelegramUpdate;
-    console.log("[Webhook] Received update type:", Object.keys(update));
+    console.log("[Webhook] Update keys:", Object.keys(update));
+    console.log("[Webhook] Full update:", JSON.stringify(update).slice(0, 500));
 
     // ── Handle incoming text messages ───────────────────────
     if (update.message?.text) {
       const text = update.message.text.trim();
       const chatId = update.message.chat.id.toString();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const username = (update.message as any).from?.username ?? undefined;
 
-      // ── /start — Welcome message ──────────────────────────
+      console.log(`[Webhook] Text command: "${text}" from chatId: ${chatId} username: ${username}`);
+
+      // ── /start — Welcome message (FAST PATH — no DB) ──────
       if (text === "/start") {
-        let isLinked = false;
+        console.log("[Webhook] /start — sending welcome message...");
 
-        try {
-          const link = await prisma.telegramLink.findFirst({
-            where: { telegramChatId: chatId, isActive: true },
-          });
-          isLinked = Boolean(link);
-        } catch (dbErr) {
-          console.error("[Webhook /start] DB lookup failed:", dbErr);
-        }
-
-        if (isLinked) {
-          await sendMessage(
-            `✅ <b>Welcome back!</b>\n\n` +
-            `Your Telegram is linked to the dashboard.\n\n` +
-            `<b>Available commands:</b>\n` +
-            `/profiles — Switch active profile\n` +
-            `/saved — View saved vacancies\n` +
-            `/applied — View applied vacancies\n` +
-            `/link &lt;TOKEN&gt; — Re-link with a new token`,
-            undefined, chatId
-          );
-        } else {
-          await sendMessage(
-            `👋 <b>Welcome to wingkiiy Job AI!</b>\n\n` +
-            `To connect this bot with your dashboard:\n` +
-            `1. Go to Settings in your dashboard\n` +
-            `2. Click "Generate Telegram Token"\n` +
-            `3. Send: /link &lt;YOUR_TOKEN&gt;\n\n` +
-            `Example: <code>/link A3F1B2</code>`,
-            undefined, chatId
-          );
-        }
+        // First reply immediately without any DB lookup
+        const welcomeSent = await sendMessage(
+          `👋 <b>Welcome to wingkiiy Job AI!</b>\n\n` +
+          `To connect this bot with your dashboard:\n` +
+          `1. Go to Settings in your dashboard\n` +
+          `2. Click "Generate Telegram Token"\n` +
+          `3. Send: /link &lt;YOUR_TOKEN&gt;\n\n` +
+          `Example: <code>/link A3F1B2</code>\n\n` +
+          `<b>Available commands:</b>\n` +
+          `/link &lt;TOKEN&gt; — Connect to dashboard\n` +
+          `/profiles — Switch active profile\n` +
+          `/saved — View saved vacancies\n` +
+          `/applied — View applied vacancies`,
+          undefined,
+          chatId
+        );
+        console.log("[Webhook] /start sendMessage result:", welcomeSent);
         return NextResponse.json({ ok: true });
       }
 
