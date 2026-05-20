@@ -32,6 +32,22 @@ export async function GET(req: NextRequest) {
     const body = await res.json();
     console.log("[Setup] Telegram response:", body);
 
+    // Set bot menu commands
+    const cmdsRes = await fetch(`https://api.telegram.org/bot${token}/setMyCommands`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        commands: [
+          { command: "start", description: "Show welcome and status" },
+          { command: "profiles", description: "Switch active profile" },
+          { command: "saved", description: "View saved vacancies" },
+          { command: "applied", description: "View applied vacancies" }
+        ]
+      }),
+    });
+    const cmdsBody = await cmdsRes.json();
+    console.log("[Setup] Set commands response:", cmdsBody);
+
     // Also get current webhook info
     const infoRes = await fetch(`https://api.telegram.org/bot${token}/getWebhookInfo`);
     const info = await infoRes.json();
