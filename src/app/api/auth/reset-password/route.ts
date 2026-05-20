@@ -21,16 +21,20 @@ export async function POST(req: NextRequest) {
     });
 
     if (!resetToken) {
-      return NextResponse.json({ success: false, error: "Invalid or expired token" }, { status: 400 });
+      return NextResponse.json({ success: false, error: "Invalid token" }, { status: 400 });
+    }
+
+    if (resetToken.expiresAt < new Date()) {
+      return NextResponse.json({ success: false, error: "Token has expired" }, { status: 400 });
     }
 
     // Hash the new password
     const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-    // Update user's password
+    // Update user's password using the correct field name (passwordHash)
     await prisma.user.update({
       where: { id: resetToken.userId },
-      data: { password: hashedPassword },
+      data: { passwordHash: hashedPassword },
     });
 
     // Delete the token so it can't be reused

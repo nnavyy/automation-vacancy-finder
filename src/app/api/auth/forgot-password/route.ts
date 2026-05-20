@@ -28,7 +28,8 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    const resetLink = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/reset-password/${token}`;
+    // Use req.nextUrl.origin to get the correct absolute URL automatically (works locally and on Vercel)
+    const resetLink = `${req.nextUrl.origin}/reset-password/${token}`;
 
     // Try to send email if GMAIL user and pass are set
     const senderEmail = process.env.EMAIL_USER;
