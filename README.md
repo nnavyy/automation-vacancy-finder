@@ -51,16 +51,19 @@ Before you begin, ensure you have the following installed on your system:
 - **NeonDB Account**: For PostgreSQL database hosting
 - **API Keys**: Groq, Google Gemini, OpenRouter, and a Telegram Bot Token.
 
-For Windows users, simply run `setup.bat` for an automated installation process.
+> **Note for Windows Users:**
+> We have provided an automated setup script. Simply double-click `setup.bat` in the project folder. It will automatically check for Node.js, install all required dependencies, create your `.env.local` file, and configure the database client. After running it, just fill in your API keys in the `.env.local` file.
 
 ---
 
-## Setup Guide (Local)
+## Setup Guide (Local / Manual)
+
+If you are not using `setup.bat`, follow these steps:
 
 ### Step 1 — Clone & Install
 
 ```bash
-cd nanda-job-assistant
+cd "automation vacancy finder"
 npm install
 ```
 
