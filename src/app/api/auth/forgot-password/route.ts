@@ -24,6 +24,7 @@ export async function POST(req: NextRequest) {
       data: {
         userId: user.id,
         token,
+        expiresAt: new Date(Date.now() + 1000 * 60 * 60), // Expires in 1 hour
       },
     });
 
