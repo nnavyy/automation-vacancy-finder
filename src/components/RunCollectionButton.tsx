@@ -1,49 +1,69 @@
 "use client";
 
 // ============================================================
-// Run Collection Button — triggers vacancy collection via
-// the server-side proxy route (keeps CRON_SECRET off the client)
+// Run Collection Button
+// Polls the database for real-time progress across page reloads
 // ============================================================
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Play, Loader2, CheckCircle, XCircle } from "lucide-react";
 
 export default function RunCollectionButton() {
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<{
-    ok: boolean;
-    message: string;
-  } | null>(null);
+  const [progress, setProgress] = useState<{ analyzed: number; total: number } | null>(null);
+  const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
+
+  // Poll status on mount and while loading
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+
+    const checkStatus = async () => {
+      try {
+        const res = await fetch("/api/dashboard/collect-status");
+        if (res.ok) {
+          const json = await res.json();
+          const status = json.data;
+          
+          if (status?.running) {
+            setLoading(true);
+            setProgress({ analyzed: status.analyzed ?? 0, total: status.total ?? 0 });
+          } else {
+            // It finished
+            if (loading) {
+              setLoading(false);
+              setProgress(null);
+              setResult({
+                ok: true,
+                message: `Collection complete — ${status?.analyzed ?? 0} analyzed.`,
+              });
+              setTimeout(() => setResult(null), 8000);
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Polling error", err);
+      }
+    };
+
+    checkStatus(); // initial check
+    interval = setInterval(checkStatus, 2000); // poll every 2s
+
+    return () => clearInterval(interval);
+  }, [loading]);
 
   const handleRun = async () => {
     setLoading(true);
+    setProgress({ analyzed: 0, total: 0 });
     setResult(null);
 
-    try {
-      const res = await fetch("/api/dashboard/collect");
-      const data = await res.json().catch(() => ({}));
-
-      if (res.ok && data.success !== false) {
-        const d = data.data ?? {};
-        setResult({
-          ok: true,
-          message: `Collection complete — ${d.analyzed ?? 0} analyzed, ${d.notified ?? 0} sent to Telegram.`,
-        });
-      } else {
-        setResult({
-          ok: false,
-          message: data.error ?? "Collection failed. Check server logs.",
-        });
-      }
-    } catch {
+    // Fire and forget
+    fetch("/api/dashboard/collect").catch(() => {
       setResult({
         ok: false,
-        message: "Network error. Ensure the dev server is running.",
+        message: "Network error starting collection.",
       });
-    } finally {
       setLoading(false);
-      setTimeout(() => setResult(null), 8000);
-    }
+    });
   };
 
   return (
@@ -59,11 +79,17 @@ export default function RunCollectionButton() {
           <Play size={14} className="shrink-0" />
         )}
         <span className="truncate">
-          {loading ? "Collecting... Please wait in background" : "Run Collection"}
+          {loading ? "Collecting..." : "Run Collection"}
         </span>
       </button>
 
-      {result && (
+      {loading && progress && (
+        <div className="text-xs text-gray-400 flex items-center gap-1.5 animate-pulse">
+          ⚙️ Analyzing {progress.analyzed} of {progress.total || "?"} vacancies...
+        </div>
+      )}
+
+      {result && !loading && (
         <div
           className={`flex items-center gap-1.5 text-xs ${
             result.ok ? "text-green-400" : "text-red-400"

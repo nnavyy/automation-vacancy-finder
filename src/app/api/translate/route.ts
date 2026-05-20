@@ -3,7 +3,7 @@ import { Groq } from "groq-sdk";
 
 export async function POST(req: NextRequest) {
   try {
-    const { text } = await req.json();
+    const { text, mode = "text" } = await req.json();
     if (!text) {
       return NextResponse.json({ success: false, error: "Text is required" }, { status: 400 });
     }
@@ -15,11 +15,15 @@ export async function POST(req: NextRequest) {
 
     const groq = new Groq({ apiKey });
 
+    const systemPrompt = mode === "json"
+      ? "You are a professional Russian to English translator. Translate the string values in the provided JSON to English. DO NOT change the JSON keys or structure. Return ONLY valid JSON, no markdown formatting."
+      : "You are a professional Russian to English translator. Translate the provided text exactly as it is, maintaining formatting and tone. Do not add any extra comments.";
+
     const completion = await groq.chat.completions.create({
       messages: [
         {
           role: "system",
-          content: "You are a professional Russian to English translator. Translate the provided job description exactly as it is, maintaining formatting and tone. Do not add any extra comments.",
+          content: systemPrompt,
         },
         {
           role: "user",

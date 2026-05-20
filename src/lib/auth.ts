@@ -9,7 +9,10 @@ import prisma from "@/lib/db";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   trustHost: true,
-  session: { strategy: "jwt" },
+  session: {
+    strategy: "jwt",
+    maxAge: 7 * 24 * 60 * 60, // 7 days (1 week)
+  },
 
   pages: {
     signIn: "/login",

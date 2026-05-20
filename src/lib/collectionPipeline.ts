@@ -83,6 +83,13 @@ export async function runCollectionPipeline(userId: string): Promise<PipelineRes
   const chatId = telegramLink?.telegramChatId ?? undefined;
 
   const summary = { processed: 0, saved: 0, ignored: 0, analyzed: 0, notified: 0, errors: 0 };
+  const startedAt = new Date().toISOString();
+
+  // Mark status as running
+  await prisma.searchPreference.update({
+    where: { id: prefRaw.id },
+    data: { collectionStatus: { running: true, analyzed: 0, total: 0, startedAt } }
+  });
 
   // ── Step 2: Collect vacancies from HH API ─────────────────
   let vacancies: NormalizedVacancy[];
@@ -90,6 +97,10 @@ export async function runCollectionPipeline(userId: string): Promise<PipelineRes
     vacancies = await collectAllVacancies(pref);
   } catch (err) {
     console.error("[Pipeline] collectAllVacancies failed:", err);
+    await prisma.searchPreference.update({
+      where: { id: prefRaw.id },
+      data: { collectionStatus: { running: false, analyzed: 0, total: 0, startedAt } }
+    });
     return {
       success: false,
       error: `Failed to collect vacancies: ${err instanceof Error ? err.message : String(err)}`,
@@ -97,6 +108,12 @@ export async function runCollectionPipeline(userId: string): Promise<PipelineRes
   }
 
   console.log(`[Pipeline] Collected ${vacancies.length} vacancies for user ${userId}`);
+
+  // Update total count
+  await prisma.searchPreference.update({
+    where: { id: prefRaw.id },
+    data: { collectionStatus: { running: true, analyzed: 0, total: vacancies.length, startedAt } }
+  });
 
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
@@ -106,8 +123,17 @@ export async function runCollectionPipeline(userId: string): Promise<PipelineRes
   });
 
   // ── Step 3: Per-vacancy pipeline ──────────────────────────
-  for (const vacancy of vacancies) {
+  for (let i = 0; i < vacancies.length; i++) {
+    const vacancy = vacancies[i];
     summary.processed++;
+
+    // Update status every 5 vacancies to avoid spamming DB
+    if (i % 5 === 0) {
+      await prisma.searchPreference.update({
+        where: { id: prefRaw.id },
+        data: { collectionStatus: { running: true, analyzed: i, total: vacancies.length, startedAt } }
+      });
+    }
 
     try {
       let dbVacancyId: string;
@@ -258,5 +284,12 @@ export async function runCollectionPipeline(userId: string): Promise<PipelineRes
   }
 
   console.log("[Pipeline] Done —", summary);
+
+  // Mark status as finished
+  await prisma.searchPreference.update({
+    where: { id: prefRaw.id },
+    data: { collectionStatus: { running: false, analyzed: summary.analyzed, total: vacancies.length, startedAt } }
+  });
+
   return { success: true, data: summary };
 }

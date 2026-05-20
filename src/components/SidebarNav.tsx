@@ -16,7 +16,7 @@ import {
   Cpu,
   LucideIcon,
   ChevronDown,
-  Plus
+  LogOut
 } from "lucide-react";
 import { useState, useEffect } from "react";
 
@@ -39,6 +39,8 @@ export default function SidebarNav() {
   const pathname = usePathname();
   const [profiles, setProfiles] = useState<{id: string; name: string; isActive: boolean}[]>([]);
   const [loading, setLoading] = useState(true);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [userName, setUserName] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/profiles")
@@ -49,6 +51,17 @@ export default function SidebarNav() {
         }
       })
       .finally(() => setLoading(false));
+
+    // Fetch session to get user email
+    fetch("/api/auth/session")
+      .then(res => res.json())
+      .then(data => {
+        if (data?.user) {
+          setUserEmail(data.user.email || null);
+          setUserName(data.user.name || null);
+        }
+      })
+      .catch(() => {});
   }, []);
 
   const handleSwitchProfile = async (id: string) => {
@@ -145,10 +158,35 @@ export default function SidebarNav() {
         })}
       </nav>
 
-      {/* Footer */}
-      <div className="p-4 border-t border-gray-800">
+      {/* Footer — User Email + Version */}
+      <div className="p-4 border-t border-gray-800 space-y-3">
+        {userEmail && (
+          <div className="flex items-center gap-2.5">
+            <div className="w-7 h-7 rounded-full bg-green-500/15 border border-green-500/25 flex items-center justify-center shrink-0">
+              <span className="text-[11px] font-bold text-green-400 uppercase">
+                {(userName || userEmail)[0]}
+              </span>
+            </div>
+            <div className="flex-1 min-w-0">
+              {userName && (
+                <p className="text-xs text-gray-300 font-medium truncate leading-tight">{userName}</p>
+              )}
+              <p className="text-[10px] text-gray-500 truncate leading-tight">{userEmail}</p>
+            </div>
+            <button
+              onClick={() => {
+                window.location.href = "/api/auth/signout";
+              }}
+              className="p-1 rounded hover:bg-gray-800 transition-colors group"
+              title="Sign out"
+            >
+              <LogOut size={13} className="text-gray-600 group-hover:text-red-400 transition-colors" />
+            </button>
+          </div>
+        )}
         <p className="text-xs text-gray-700 text-center select-none">v0.1.0</p>
       </div>
     </div>
   );
 }
+

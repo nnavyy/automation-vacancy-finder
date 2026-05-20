@@ -56,7 +56,6 @@ function serializePref(pref: any) {
     workFormat:            Array.isArray(pref.workFormat)            ? pref.workFormat            : [],
     excludeKeywords:       Array.isArray(pref.excludeKeywords)       ? pref.excludeKeywords       : [],
     redFlagKeywords:       Array.isArray(pref.redFlagKeywords)       ? pref.redFlagKeywords       : [],
-    aiProviderOrder:       Array.isArray(pref.aiProviderOrder)       ? pref.aiProviderOrder       : [],
   };
 }
 
@@ -92,7 +91,7 @@ export async function POST(req: NextRequest) {
     const scalarFields = pick(body, [
       "name", "salaryMinimum", "salaryCurrency",
       "minimumScoreToNotify", "maxNotificationsPerDay",
-      "coverLetterLanguage", "resumeText", "isActive",
+      "coverLetterLanguage", "resumeText", "isActive", "portfolioUrl",
     ]);
 
     // JSON array fields
@@ -101,7 +100,7 @@ export async function POST(req: NextRequest) {
     const arrayKeys: (keyof SearchPreferenceData)[] = [
       "targetRoles", "searchKeywordsEn", "searchKeywordsRu",
       "requiredSkills", "niceToHaveSkills", "experience",
-      "workFormat", "excludeKeywords", "redFlagKeywords", "aiProviderOrder",
+      "workFormat", "excludeKeywords", "redFlagKeywords",
     ];
     for (const key of arrayKeys) {
       if (key in body) jsonFields[key] = body[key];

@@ -130,7 +130,7 @@ export async function POST(
     const similarFeedback = [...positive, ...negative];
 
     // ── Build the AI prompt ───────────────────────────────
-    let prompt = buildAnalysisPrompt(vacancy, similarFeedback, pref);
+    let prompt = await buildAnalysisPrompt(vacancy, similarFeedback, pref);
 
     // Append custom instruction when provided so the AI tailors the letter
     if (instruction && instruction.trim()) {

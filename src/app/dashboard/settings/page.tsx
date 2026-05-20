@@ -44,6 +44,7 @@ interface FormState {
   aiProviderOrder:       string;
   coverLetterLanguage:   string;
   resumeText:            string;
+  portfolioUrl:          string;
 }
 
 interface Msg {
@@ -71,6 +72,7 @@ const DEFAULT_FORM: FormState = {
   aiProviderOrder:        "groq, gemini, openrouter",
   coverLetterLanguage:    "English",
   resumeText:             "",
+  portfolioUrl:           "",
 };
 
 const EXPERIENCE_OPTIONS = [
@@ -220,6 +222,7 @@ export default function SettingsPage() {
               aiProviderOrder:        toComma(d.aiProviderOrder        ?? []),
               coverLetterLanguage:    d.coverLetterLanguage            ?? "English",
               resumeText:             d.resumeText                     ?? "",
+              portfolioUrl:           d.portfolioUrl                   ?? "",
             });
           }
         } else if (res.status === 404) {
@@ -273,9 +276,10 @@ export default function SettingsPage() {
             ? parseInt(form.salaryMinimum, 10) || null
             : null,
         salaryCurrency:         form.salaryCurrency,
-        aiProviderOrder:        fromComma(form.aiProviderOrder),
+        // aiProviderOrder is read-only, not sending it
         coverLetterLanguage:    form.coverLetterLanguage,
         resumeText:             form.resumeText,
+        portfolioUrl:           form.portfolioUrl,
       };
 
       const res  = await fetch("/api/settings", {
@@ -317,6 +321,52 @@ export default function SettingsPage() {
     );
   }
 
+  // ── JSON Upload Logic ────────────────────────────────────
+  const [translatingJson, setTranslatingJson] = useState(false);
+  const [translateJsonEn, setTranslateJsonEn] = useState(false);
+
+  const handleJsonUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      try {
+        let content = ev.target?.result as string;
+        if (translateJsonEn) {
+          setTranslatingJson(true);
+          const res = await fetch("/api/translate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text: content, mode: "json" }),
+          });
+          const jsonRes = await res.json();
+          if (jsonRes.success && jsonRes.text) {
+            content = jsonRes.text;
+          }
+        }
+
+        const data = JSON.parse(content);
+        setForm((prev) => ({
+          ...prev,
+          name: data.name || prev.name,
+          resumeText: data.bio || data.resumeText || prev.resumeText,
+          requiredSkills: data.skills ? data.skills.join(", ") : prev.requiredSkills,
+          niceToHaveSkills: data.nice_to_have ? data.nice_to_have.join(", ") : prev.niceToHaveSkills,
+          portfolioUrl: data.portfolio_url || data.portfolioUrl || prev.portfolioUrl,
+          targetRoles: data.target_roles ? data.target_roles.join(", ") : prev.targetRoles,
+        }));
+        setMsg({ text: "✅ Profile imported successfully!", type: "success" });
+      } catch (err) {
+        setMsg({ text: "❌ Failed to parse JSON file.", type: "error" });
+      } finally {
+        setTranslatingJson(false);
+        e.target.value = ""; // reset
+      }
+    };
+    reader.readAsText(file);
+  };
+
   // ── Main form ────────────────────────────────────────────
   return (
     <div className="max-w-3xl space-y-6 pb-10">
@@ -346,6 +396,31 @@ export default function SettingsPage() {
           {msg.text}
         </div>
       )}
+
+      {/* ── JSON Import ── */}
+      <FormCard title="Import Profile via JSON" icon={FileText}>
+        <div className="flex flex-col gap-3">
+          <p className="text-xs text-gray-400">
+            Upload a JSON file to auto-fill your Name, Bio, Skills, Target Roles, and Portfolio URL.
+          </p>
+          <div className="flex items-center gap-4">
+            <label className="flex items-center gap-2 cursor-pointer bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm transition-colors disabled:opacity-50">
+              {translatingJson ? <RefreshCw size={14} className="animate-spin" /> : <FileText size={14} />}
+              {translatingJson ? "Processing..." : "Upload JSON"}
+              <input type="file" accept=".json" className="hidden" onChange={handleJsonUpload} disabled={translatingJson} />
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input 
+                type="checkbox" 
+                checked={translateJsonEn} 
+                onChange={(e) => setTranslateJsonEn(e.target.checked)}
+                className="w-4 h-4 rounded accent-blue-500"
+              />
+              <span className="text-xs text-gray-300">Translate Russian to English</span>
+            </label>
+          </div>
+        </div>
+      </FormCard>
 
       {/* ── Profile Name ── */}
       <FormCard title="Profile Information" icon={Target}>
@@ -556,18 +631,35 @@ export default function SettingsPage() {
               The AI will use this to generate highly personalized cover letters.
             </p>
           </div>
+          <div>
+            <TextField
+              label="Portfolio / Website URL"
+              value={form.portfolioUrl}
+              onChange={(v) => setForm((p) => ({ ...p, portfolioUrl: v }))}
+              hint="AI will crawl this URL to extract your projects and achievements automatically."
+              placeholder="https://yoursite.com"
+            />
+          </div>
         </div>
       </FormCard>
 
       {/* ── AI Providers ── */}
       <FormCard title="AI Provider Order" icon={Bot}>
-        <TextField
-          label="Provider Priority"
-          value={form.aiProviderOrder}
-          onChange={(v) => setForm((p) => ({ ...p, aiProviderOrder: v }))}
-          placeholder="groq, gemini, openrouter"
-          hint="Comma-separated priority order. First available provider is used."
-        />
+        <div className="bg-gray-950 border border-gray-800 rounded-lg px-4 py-3 text-sm text-gray-300">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-xs font-semibold text-gray-500">PROVIDER PRIORITY (READ-ONLY)</span>
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            {form.aiProviderOrder.split(",").map((p, i) => (
+              <span key={i} className="px-2 py-1 bg-gray-800 text-green-400 rounded-md text-xs font-mono border border-green-400/20">
+                {i + 1}. {p.trim()}
+              </span>
+            ))}
+          </div>
+          <p className="text-[10px] text-gray-500 mt-2">
+            AI providers are managed by the system. The first available provider is used.
+          </p>
+        </div>
       </FormCard>
 
       {/* ── Telegram Link ── */}

@@ -142,7 +142,8 @@ async function handleEdit(vacancyId: string): Promise<string> {
   if (!dbVac) return "❌ Vacancy not found.";
   const vacancy = toNormalizedVacancy(dbVac);
   const { positive, negative } = await getSimilarFeedbackExamples(vacancy);
-  const prompt = buildAnalysisPrompt(vacancy, [...positive, ...negative]);
+  const pref = await prisma.searchPreference.findFirst({ where: { userId: dbVac.userId, isActive: true } });
+  const prompt = await buildAnalysisPrompt(vacancy, [...positive, ...negative], pref);
   const aiResult = await callAI({ prompt, requestType: "cover_letter", maxTokens: 2048 });
 
   let coverLetter: string;
