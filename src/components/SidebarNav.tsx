@@ -35,7 +35,7 @@ const NAV_ITEMS: NavItem[] = [
   { icon: Settings, label: "Settings", href: "/dashboard/settings" },
 ];
 
-export default function SidebarNav() {
+export default function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   const [profiles, setProfiles] = useState<{id: string; name: string; isActive: boolean}[]>([]);
   const [loading, setLoading] = useState(true);
@@ -130,7 +130,7 @@ export default function SidebarNav() {
       </div>
 
       {/* Nav links */}
-      <nav className="flex-1 p-3 space-y-0.5">
+      <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
         {NAV_ITEMS.map(({ icon: Icon, label, href }) => {
           const isActive =
             href === "/dashboard"
@@ -141,6 +141,7 @@ export default function SidebarNav() {
             <Link
               key={href}
               href={href}
+              onClick={() => onNavigate && onNavigate()}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 ${
                 isActive
                   ? "bg-green-500/10 text-green-400"

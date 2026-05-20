@@ -1,6 +1,6 @@
 # n8n Workflows — Nanda AI Job Assistant
 
-This directory contains the n8n automation workflows that act as schedulers and webhook handlers for the Nanda AI Job Assistant. All business logic lives in the Next.js API; n8n is only responsible for triggering endpoints on a schedule and routing Telegram callbacks.
+This directory contains the n8n automation workflows that act as schedulers and webhook handlers for the Nanda AI Job Assistant. All business logic is processed in the Next.js API; n8n is solely responsible for triggering endpoints on a schedule and routing Telegram callbacks.
 
 ---
 
@@ -22,7 +22,7 @@ npx n8n
 
 n8n will start on **http://localhost:5678** by default.
 
-> **Tip:** Keep both n8n and the Next.js app running simultaneously:
+> **Notice:** Keep both n8n and the Next.js app running simultaneously:
 > - Terminal 1: `npx n8n` (inside any directory — n8n stores data in `~/.n8n`)
 > - Terminal 2: `npm run dev` (inside `nanda-job-assistant/`)
 
@@ -75,8 +75,8 @@ TELEGRAM_CHAT_ID=your-chat-id
 | Variable | Description | Example |
 |----------|-------------|---------|
 | `CRON_SECRET` | Shared secret between n8n and Next.js API. Must match the `.env.local` value in the Next.js project. | `super-secret-cron-key` |
-| `TELEGRAM_BOT_TOKEN` | Your Telegram Bot API token from [@BotFather](https://t.me/BotFather). | `123456789:ABCdef...` |
-| `TELEGRAM_CHAT_ID` | Your personal Telegram chat ID (or group ID). Get it from [@userinfobot](https://t.me/userinfobot). | `987654321` |
+| `TELEGRAM_BOT_TOKEN` | Your Telegram Bot API token from BotFather. | `123456789:ABCdef...` |
+| `TELEGRAM_CHAT_ID` | Your personal Telegram chat ID (or group ID). Get it from userinfobot. | `987654321` |
 
 > **Security note:** Never commit real secrets to version control. The values above are used only at runtime.
 
@@ -89,7 +89,7 @@ The Telegram nodes in workflows 1 and 3 use an n8n **Credential** called `Telegr
 1. Open n8n at `http://localhost:5678`
 2. Go to **Settings → Credentials → New Credential**
 3. Search for **Telegram** and select **Telegram API**
-4. Enter your **Bot Token** (from [@BotFather](https://t.me/BotFather))
+4. Enter your **Bot Token** (from BotFather)
 5. Name it exactly: `Telegram Bot API`
 6. Click **Save**
 

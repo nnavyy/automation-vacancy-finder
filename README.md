@@ -1,8 +1,8 @@
-# 🤖 Nanda AI Job Assistant
+# Nanda AI Job Assistant
 
 Semi-automated HH.ru job search and vacancy analysis assistant.
 
-**Collects → Filters → AI Analyzes → Sends to Telegram → You Approve**
+Collects data, filters according to specific criteria, performs AI analysis, sends notifications to Telegram, and requires user approval.
 
 ---
 
@@ -21,7 +21,7 @@ NeonDB (PostgreSQL via Prisma)
         ↓
 Telegram Bot (only high-score matches)
         ↓
-You: ✅ Apply | ❌ Skip | 💾 Save | ✍️ Edit Letter
+User Interaction: Apply | Skip | Save | Edit Letter
 ```
 
 ---
@@ -40,6 +40,18 @@ You: ✅ Apply | ❌ Skip | 💾 Save | ✍️ Edit Letter
 | AI Fallback 2 | OpenRouter (free models) |
 | AI Fallback 3 | Rule-based scoring |
 | Deployment | Vercel |
+
+---
+
+## Setup Requirements
+
+Before you begin, ensure you have the following installed on your system:
+- **Node.js**: Version 18.x or newer
+- **Git**: For cloning the repository
+- **NeonDB Account**: For PostgreSQL database hosting
+- **API Keys**: Groq, Google Gemini, OpenRouter, and a Telegram Bot Token.
+
+For Windows users, simply run `setup.bat` for an automated installation process.
 
 ---
 
@@ -63,8 +75,8 @@ Fill in `.env.local`:
 ```
 DATABASE_URL=          ← from NeonDB console
 DIRECT_URL=            ← from NeonDB console (same URL usually)
-TELEGRAM_BOT_TOKEN=    ← from @BotFather on Telegram
-TELEGRAM_CHAT_ID=      ← your Telegram chat ID (message @userinfobot)
+TELEGRAM_BOT_TOKEN=    ← from BotFather on Telegram
+TELEGRAM_CHAT_ID=      ← your Telegram chat ID (message userinfobot)
 GROQ_API_KEY=          ← from console.groq.com (free)
 GEMINI_API_KEY=        ← from aistudio.google.com (free)
 CRON_SECRET=           ← any random string, e.g. openssl rand -hex 32
@@ -89,10 +101,10 @@ npm run dev
 
 ### Step 5 — Setup Telegram Bot
 
-1. Message [@BotFather](https://t.me/BotFather) on Telegram
+1. Message BotFather on Telegram
 2. Send `/newbot` and follow instructions
 3. Copy the token → `TELEGRAM_BOT_TOKEN`
-4. Message [@userinfobot](https://t.me/userinfobot) to get your chat ID → `TELEGRAM_CHAT_ID`
+4. Message userinfobot to get your chat ID → `TELEGRAM_CHAT_ID`
 
 **Register webhook** (so Telegram sends callbacks to your app):
 ```bash
@@ -203,8 +215,8 @@ nanda-job-assistant/
 |---|---|---|
 | 90-100 | Excellent fit | Apply immediately |
 | 75-89 | Good fit | Apply |
-| 60-74 | Possible fit | Maybe apply |
-| 40-59 | Weak fit | Only if low risk |
+| 60-74 | Possible fit | Review and apply |
+| 40-59 | Weak fit | Apply with caution |
 | 0-39 | Skip | Auto-skip |
 
 ---
@@ -213,24 +225,24 @@ nanda-job-assistant/
 
 | Variable | Required | Description |
 |---|---|---|
-| `DATABASE_URL` | ✅ | NeonDB connection string |
-| `DIRECT_URL` | ✅ | NeonDB direct URL |
-| `TELEGRAM_BOT_TOKEN` | ✅ | From @BotFather |
-| `TELEGRAM_CHAT_ID` | ✅ | Your chat ID |
-| `GROQ_API_KEY` | ✅ | Primary AI (free) |
-| `GEMINI_API_KEY` | ⚡ | Fallback AI (free) |
-| `OPENROUTER_API_KEY` | ⚡ | Fallback AI 2 |
-| `CRON_SECRET` | ✅ | Protects cron endpoint |
-| `NEXT_PUBLIC_APP_URL` | ✅ | `http://localhost:3000` |
-| `HH_USER_AGENT` | ✅ | Required by HH API |
+| `DATABASE_URL` | Yes | NeonDB connection string |
+| `DIRECT_URL` | Yes | NeonDB direct URL |
+| `TELEGRAM_BOT_TOKEN` | Yes | From BotFather |
+| `TELEGRAM_CHAT_ID` | Yes | Your chat ID |
+| `GROQ_API_KEY` | Yes | Primary AI (free) |
+| `GEMINI_API_KEY` | Partial | Fallback AI (free) |
+| `OPENROUTER_API_KEY` | Partial | Fallback AI 2 |
+| `CRON_SECRET` | Yes | Protects cron endpoint |
+| `NEXT_PUBLIC_APP_URL` | Yes | `http://localhost:3000` |
+| `HH_USER_AGENT` | Yes | Required by HH API |
 
 ---
 
-## Getting API Keys (All Free)
+## Obtaining API Keys
 
 1. **Groq** → https://console.groq.com → Create API Key
 2. **Gemini** → https://aistudio.google.com → Get API Key
-3. **OpenRouter** → https://openrouter.ai → Sign up, many free models
+3. **OpenRouter** → https://openrouter.ai → Sign up for free models
 4. **NeonDB** → https://console.neon.tech → New project, copy connection string
 5. **Telegram Bot** → https://t.me/BotFather → `/newbot`
 

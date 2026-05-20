@@ -30,20 +30,23 @@ export async function POST(req: NextRequest) {
     const resetLink = `${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/reset-password/${token}`;
 
     // Try to send email if GMAIL user and pass are set
-    const userEmail = process.env.EMAIL_USER;
-    const pass = process.env.EMAIL_PASS;
+    const senderEmail = process.env.EMAIL_USER;
+    const senderPass = process.env.EMAIL_PASS;
 
-    if (userEmail && pass) {
+    if (senderEmail && senderPass) {
       const transporter = nodemailer.createTransport({
-        service: "gmail",
+        // Use explicit host/port instead of service:"gmail" — more reliable with App Passwords
+        host: "smtp.gmail.com",
+        port: 465,
+        secure: true,  // TLS on port 465
         auth: {
-          user: userEmail,
-          pass: pass,
+          user: senderEmail,
+          pass: senderPass,
         },
       });
 
       await transporter.sendMail({
-        from: `"wingkiiy Job AI" <${userEmail}>`,
+        from: `"wingkiiy Job AI" <${senderEmail}>`,
         to: user.email,
         subject: "🔐 Password Reset — wingkiiy Job AI",
         html: `
@@ -92,12 +95,17 @@ export async function POST(req: NextRequest) {
       });
       console.log("[ForgotPassword] Email sent to", user.email);
     } else {
-      console.log("[ForgotPassword] No EMAIL_USER / EMAIL_PASS found. Reset link is:", resetLink);
+      console.warn("[ForgotPassword] EMAIL_USER or EMAIL_PASS not set. Reset link:", resetLink);
     }
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("[POST /api/auth/forgot-password]", error);
+    // Log the full error so we can debug on Vercel
+    console.error("[POST /api/auth/forgot-password] Error details:", {
+      message: error instanceof Error ? error.message : String(error),
+      code: (error as any)?.code,
+      command: (error as any)?.command,
+    });
     return NextResponse.json({ success: false, error: "Failed to process request" }, { status: 500 });
   }
 }

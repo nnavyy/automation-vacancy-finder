@@ -2,12 +2,9 @@
 
 import { useState } from "react";
 import { Menu, X } from "lucide-react";
+import SidebarNav from "./SidebarNav";
 
-export default function MobileSidebarWrapper({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function MobileSidebarWrapper() {
   const [isOpen, setIsOpen] = useState(false);
 
   return (
@@ -38,12 +35,12 @@ export default function MobileSidebarWrapper({
 
       {/* Sidebar Container */}
       <aside
-        className={`fixed md:sticky top-0 left-0 h-screen w-64 bg-gray-900 border-r border-gray-800 flex flex-col shrink-0 overflow-y-auto z-40 transition-transform duration-300 md:translate-x-0 ${
+        className={`fixed md:sticky top-0 left-0 h-screen w-64 bg-gray-900 border-r border-gray-800 flex flex-col shrink-0 z-40 transition-transform duration-300 md:translate-x-0 ${
           isOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        {/* On mobile, we might want to close the sidebar when a link is clicked, but the children is a server component here. We can just rely on the user clicking outside or we can pass down a close function if we make SidebarNav accept it. For now, the user can tap the overlay to close. */}
-        {children}
+        {/* Pass close handler so nav links close sidebar on mobile tap */}
+        <SidebarNav onNavigate={() => setIsOpen(false)} />
       </aside>
     </>
   );
