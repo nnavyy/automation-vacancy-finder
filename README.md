@@ -145,55 +145,41 @@ See `n8n/README.md` for detailed n8n setup.
 ## Project Structure
 
 ```
-nanda-job-assistant/
+automation-vacancy-finder/
 ├── prisma/
-│   └── schema.prisma          ← 6 DB models
+│   └── schema.prisma          ← Database models
 ├── src/
+│   ├── proxy.ts               ← Route protection & middleware logic
 │   ├── types/
-│   │   └── index.ts           ← all TypeScript types
+│   │   └── index.ts           ← TypeScript types
 │   ├── lib/
+│   │   ├── auth.ts            ← NextAuth configuration
+│   │   ├── auth-helpers.ts    ← Authentication helper functions
+│   │   ├── collectionPipeline.ts ← Vacancy collection logic
 │   │   ├── db.ts              ← Prisma client singleton
-│   │   ├── hhPublicVacancyClient.ts  ← fetches from HH API
-│   │   ├── queryBuilder.ts    ← builds search queries
-│   │   ├── ruleFilter.ts      ← pre-filter (saves AI quota)
-│   │   ├── scoring.ts         ← rule-based scoring
-│   │   ├── redFlags.ts        ← red flag detection
-│   │   ├── aiProviderRouter.ts  ← Groq→Gemini→OpenRouter fallback
-│   │   ├── aiAnalyzer.ts      ← main AI analysis orchestrator
-│   │   ├── feedbackLearning.ts  ← feedback retrieval for personalization
+│   │   ├── hhPublicVacancyClient.ts ← HH.ru API client
+│   │   ├── aiAnalyzer.ts      ← AI analysis orchestrator
 │   │   ├── telegram.ts        ← Telegram notifications
-│   │   └── seed.ts            ← seeds default preferences
+│   │   └── ... (scoring, rules, redFlags, etc.)
 │   ├── app/
 │   │   ├── api/
-│   │   │   ├── cron/collect-vacancies/route.ts  ← main pipeline
-│   │   │   ├── vacancies/route.ts               ← list vacancies
-│   │   │   ├── vacancies/analyze/route.ts        ← manual analyze
-│   │   │   ├── vacancies/[id]/route.ts           ← single vacancy
-│   │   │   ├── vacancies/[id]/mark-applied/
-│   │   │   ├── vacancies/[id]/skip/
-│   │   │   ├── vacancies/[id]/save/
-│   │   │   ├── vacancies/[id]/regenerate-letter/
-│   │   │   ├── telegram/webhook/route.ts         ← Telegram callbacks
-│   │   │   └── settings/route.ts                 ← preferences CRUD
-│   │   └── dashboard/
-│   │       ├── page.tsx               ← overview + stats
-│   │       ├── vacancies/page.tsx     ← vacancy list with filters
-│   │       ├── vacancies/[id]/page.tsx ← vacancy detail
-│   │       ├── analytics/page.tsx     ← analytics charts
-│   │       └── settings/page.tsx      ← edit preferences
+│   │   │   ├── auth/          ← Authentication endpoints (login, reset-password, etc.)
+│   │   │   ├── cron/          ← Automated job runners
+│   │   │   ├── dashboard/     ← Manual collection endpoints
+│   │   │   ├── telegram/      ← Telegram webhooks
+│   │   │   └── vacancies/     ← Vacancy management endpoints
+│   │   ├── dashboard/         ← Protected dashboard pages
+│   │   ├── login/             ← Login page
+│   │   ├── register/          ← Registration page
+│   │   ├── forgot-password/   ← Password reset request page
+│   │   └── reset-password/    ← Password reset confirmation page
 │   └── components/
-│       ├── ui/
-│       │   ├── Badge.tsx
-│       │   └── ScoreBar.tsx
-│       ├── SidebarNav.tsx
-│       ├── RunCollectionButton.tsx
-│       └── VacancyActions.tsx
+│       ├── MobileSidebarWrapper.tsx ← Responsive layout handler
+│       ├── SidebarNav.tsx     ← Dashboard navigation
+│       └── ... (UI components)
 └── n8n/
-    ├── README.md
-    └── workflows/
-        ├── workflow1-auto-collect.json    ← cron every 3h
-        ├── workflow2-telegram-webhook.json ← Telegram handler
-        └── workflow3-ai-retry.json         ← retry AI-pending
+    ├── README.md              ← n8n setup instructions
+    └── workflows/             ← n8n JSON workflows
 ```
 
 ---
