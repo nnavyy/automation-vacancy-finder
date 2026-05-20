@@ -90,11 +90,14 @@ const WORK_FORMAT_OPTIONS = [
 
 // ── Helpers ───────────────────────────────────────────────────
 
-function toComma(arr: string[]): string {
-  return arr.join(", ");
+function toComma(arr: any): string {
+  if (Array.isArray(arr)) return arr.join(", ");
+  if (typeof arr === "string") return arr;
+  return "";
 }
 
-function fromComma(str: string): string[] {
+function fromComma(str: any): string[] {
+  if (typeof str !== "string") return [];
   return str.split(",").map((s) => s.trim()).filter(Boolean);
 }
 
@@ -194,6 +197,9 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving,  setSaving]  = useState(false);
   const [msg,     setMsg]     = useState<Msg | null>(null);
+
+  const [translatingJson, setTranslatingJson] = useState(false);
+  const [translateJsonEn, setTranslateJsonEn] = useState(false);
 
   // ── Load current settings ────────────────────────────────
   useEffect(() => {
@@ -320,10 +326,6 @@ export default function SettingsPage() {
       </div>
     );
   }
-
-  // ── JSON Upload Logic ────────────────────────────────────
-  const [translatingJson, setTranslatingJson] = useState(false);
-  const [translateJsonEn, setTranslateJsonEn] = useState(false);
 
   const handleJsonUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -723,6 +725,7 @@ function TelegramLinkCard() {
           setUsername(json.data.username);
         }
       })
+      .catch((err) => console.error("Failed to load Telegram link:", err))
       .finally(() => setLoading(false));
   }, []);
 
