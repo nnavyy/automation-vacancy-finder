@@ -95,17 +95,19 @@ export default async function SavedPage({
             return (
               <div
                 key={v.id}
-                className="bg-gray-900 border border-gray-800 rounded-xl p-5 hover:border-blue-500/30 transition-colors group"
+                className="relative bg-gray-900 border border-gray-800 rounded-xl p-5 hover:border-blue-500/30 transition-colors group"
               >
-                <div className="flex items-start gap-4">
+                {/* Full card clickable area */}
+                <Link href={`/dashboard/vacancies/${v.id}`} className="absolute inset-0 z-0 rounded-xl" aria-label="View Details" />
+
+                <div className="relative z-10 flex flex-col md:flex-row items-start gap-4">
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-start gap-2 flex-wrap mb-1.5">
-                      <Link
-                        href={`/dashboard/vacancies/${v.id}`}
+                    <div className="flex items-start gap-2 flex-wrap mb-1.5 pointer-events-none">
+                      <span
                         className="text-white font-semibold leading-snug group-hover:text-blue-400 transition-colors"
                       >
                         {v.title}
-                      </Link>
+                      </span>
                       {v.analysis?.recommendation && (
                         <Badge label={v.analysis.recommendation.toUpperCase()} variant={recVariant(v.analysis.recommendation)} />
                       )}
@@ -116,23 +118,23 @@ export default async function SavedPage({
                         </span>
                       )}
                     </div>
-                    <div className="flex items-center gap-2 text-sm text-gray-400 flex-wrap">
+                    <div className="flex items-center gap-2 text-sm text-gray-400 flex-wrap pointer-events-none">
                       {v.company && <span className="font-medium text-gray-300">{v.company}</span>}
                       {v.area && <span>• {v.area}</span>}
                       {salary && <span className="text-green-400 font-medium">• {salary}</span>}
                     </div>
                     {v.analysis?.matchScore !== undefined && (
-                      <div className="mt-3 max-w-xs">
+                      <div className="mt-3 max-w-xs pointer-events-none">
                         <ScoreBar score={v.analysis.matchScore} size="sm" />
                       </div>
                     )}
                   </div>
-                  <div className="flex flex-col gap-2 shrink-0">
-                    <Link href={`/dashboard/vacancies/${v.id}`} className="px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 transition-colors">
+                  <div className="flex flex-row md:flex-col gap-2 shrink-0">
+                    <Link href={`/dashboard/vacancies/${v.id}`} className="px-3 py-1.5 rounded-lg text-xs font-medium bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 transition-colors text-center">
                       View Details
                     </Link>
                     {v.url && (
-                      <a href={v.url} target="_blank" rel="noopener noreferrer" className="px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-800 text-gray-300 border border-gray-700 hover:bg-gray-700 transition-colors inline-flex items-center gap-1.5">
+                      <a href={v.url} target="_blank" rel="noopener noreferrer" className="px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-800 text-gray-300 border border-gray-700 hover:bg-gray-700 transition-colors inline-flex items-center justify-center gap-1.5">
                         <ExternalLink size={11} />
                         Open on HH
                       </a>

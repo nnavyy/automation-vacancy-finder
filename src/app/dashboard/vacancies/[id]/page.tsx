@@ -18,6 +18,8 @@ import Badge from "@/components/ui/Badge";
 import ScoreBar from "@/components/ui/ScoreBar";
 import VacancyActions from "@/components/VacancyActions";
 import TranslateDescription from "@/components/TranslateDescription";
+import prisma from "@/lib/db";
+import { requireUser } from "@/lib/auth-helpers";
 
 // ── Constants ─────────────────────────────────────────────────
 
@@ -134,19 +136,24 @@ export default async function VacancyDetailPage({
 }) {
   const { id } = await params;
 
+  const user = await requireUser();
+
   let vacancy: VacancyDetail | null = null;
 
   try {
-    const res = await fetch(`${BASE_URL}/api/vacancies/${id}`, {
-      cache: "no-store",
+    const data = await prisma.vacancy.findUnique({
+      where: { id: id, userId: user.id },
+      include: {
+        analysis: true,
+        logs: { orderBy: { createdAt: "desc" } },
+      },
     });
-    if (res.status === 404) notFound();
-    if (res.ok) {
-      const json = await res.json();
-      if (json.success) vacancy = json.data as VacancyDetail;
+    
+    if (data) {
+      vacancy = data as unknown as VacancyDetail;
     }
-  } catch {
-    /* show error fallback below */
+  } catch (err) {
+    console.error("[VacancyDetail] Error fetching vacancy:", err);
   }
 
   if (!vacancy) {

@@ -54,11 +54,13 @@ export default function RunCollectionButton() {
         className="flex items-center gap-2 px-4 py-2 rounded-lg bg-green-600 hover:bg-green-700 active:bg-green-800 text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {loading ? (
-          <Loader2 size={14} className="animate-spin" />
+          <Loader2 size={14} className="animate-spin shrink-0" />
         ) : (
-          <Play size={14} />
+          <Play size={14} className="shrink-0" />
         )}
-        {loading ? "Running..." : "Run Collection"}
+        <span className="truncate">
+          {loading ? "Collecting... Please wait in background" : "Run Collection"}
+        </span>
       </button>
 
       {result && (

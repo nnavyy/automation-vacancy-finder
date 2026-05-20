@@ -150,8 +150,7 @@ async function handleEdit(vacancyId: string): Promise<string> {
     coverLetter = dbVac.analysis?.coverLetter ?? "Cover letter not available.";
   } else {
     try {
-      const parsed = parseAIResponse(aiResult.content);
-      coverLetter = parsed.cover_letter;
+      coverLetter = aiResult.content.trim();
       if (dbVac.analysis) {
         await prisma.vacancyAnalysis.update({ where: { vacancyId }, data: { coverLetter } });
       }
