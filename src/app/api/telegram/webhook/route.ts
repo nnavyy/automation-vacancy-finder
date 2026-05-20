@@ -1,284 +1,175 @@
 // ============================================================
-// Nanda AI Job Assistant — Telegram Bot Webhook
+// wingkiiy Job AI — Telegram Bot Webhook (Vercel Serverless)
 // ============================================================
-// POST /api/telegram/webhook
-//
-// Receives Telegram Bot API Update objects and handles inline
-// keyboard button callbacks from vacancy notification messages.
-//
-// callback_data format:  "<action>:<vacancyId>"
-//   approve:<id>  — mark as applied_manual + send confirmation
-//   skip:<id>     — mark as skipped + send confirmation
-//   save:<id>     — bookmark for later + send confirmation
-//   edit:<id>     — regenerate cover letter + send it to Telegram
-//
-// Telegram requirements:
-//   - answerCallbackQuery() MUST be called to remove the spinner
-//   - sendMessage() sends the confirmation / new letter to the chat
-//
-// Required env vars:
-//   TELEGRAM_BOT_TOKEN  — bot token from @BotFather
-//   TELEGRAM_CHAT_ID    — Nanda's personal Telegram chat ID
+// POST /api/telegram/webhook  — receives Telegram updates
+// GET  /api/telegram/webhook  — health check + debug info
 // ============================================================
 
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { saveFeedback } from "@/lib/feedbackLearning";
-import { sendMessage } from "@/lib/telegram";
 import { buildAnalysisPrompt, parseAIResponse } from "@/lib/aiAnalyzer";
 import { callAI } from "@/lib/aiProviderRouter";
 import { getSimilarFeedbackExamples } from "@/lib/feedbackLearning";
 import type { NormalizedVacancy, HHSalary } from "@/types";
 
-// ── Telegram API Types ────────────────────────────────────────
+// ── Direct Telegram API call (no external deps) ──────────────
 
-interface TelegramUser {
-  id: number;
-  first_name: string;
-  username?: string;
-}
-
-interface TelegramChat {
-  id: number;
-  type: string;
-}
-
-interface TelegramMessage {
-  message_id: number;
-  chat: TelegramChat;
-  text?: string;
-}
-
-interface TelegramCallbackQuery {
-  id: string;
-  from: TelegramUser;
-  message?: TelegramMessage;
-  data?: string;
-}
-
-interface TelegramUpdate {
-  update_id: number;
-  callback_query?: TelegramCallbackQuery;
-  message?: TelegramMessage;
-}
-
-// ── Telegram API Helpers ──────────────────────────────────────
-
-const TG_API_BASE = "https://api.telegram.org";
-
-/**
- * Answers a Telegram callback_query to remove the loading spinner.
- * MUST be called within 10 seconds of receiving the callback_query.
- *
- * @param callbackQueryId - The id from the callback_query object
- * @param text            - Optional short text shown as a toast notification
- */
-async function answerCallbackQuery(
-  callbackQueryId: string,
-  text?: string
-): Promise<void> {
+async function tgSend(chatId: string, text: string, replyMarkup?: object): Promise<{ ok: boolean; status: number; body: string }> {
   const token = process.env.TELEGRAM_BOT_TOKEN;
-  if (!token) return;
+  if (!token) {
+    console.error("[TG] No TELEGRAM_BOT_TOKEN env var!");
+    return { ok: false, status: 0, body: "TELEGRAM_BOT_TOKEN not set" };
+  }
+
+  const payload: Record<string, unknown> = {
+    chat_id: chatId,
+    text,
+    parse_mode: "HTML",
+    disable_web_page_preview: true,
+  };
+  if (replyMarkup) payload.reply_markup = replyMarkup;
 
   try {
-    await fetch(`${TG_API_BASE}/bot${token}/answerCallbackQuery`, {
+    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        callback_query_id: callbackQueryId,
-        text: text ?? "",
-        show_alert: false,
-      }),
+      body: JSON.stringify(payload),
     });
+    const body = await res.text();
+    console.log(`[TG] sendMessage status=${res.status} body=${body.slice(0, 300)}`);
+
+    // If HTML parsing fails, retry without parse_mode
+    if (!res.ok && res.status === 400 && body.includes("can't parse")) {
+      console.log("[TG] Retrying without HTML...");
+      delete payload.parse_mode;
+      const retry = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const retryBody = await retry.text();
+      return { ok: retry.ok, status: retry.status, body: retryBody };
+    }
+
+    return { ok: res.ok, status: res.status, body };
   } catch (err) {
-    console.error("[Webhook] answerCallbackQuery failed:", err);
+    console.error("[TG] fetch error:", err);
+    return { ok: false, status: 0, body: String(err) };
   }
 }
 
-// ── DB → NormalizedVacancy converter ─────────────────────────
+async function tgAnswerCallback(callbackQueryId: string, text?: string): Promise<void> {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token) return;
+  try {
+    await fetch(`https://api.telegram.org/bot${token}/answerCallbackQuery`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ callback_query_id: callbackQueryId, text: text ?? "", show_alert: false }),
+    });
+  } catch (err) {
+    console.error("[TG] answerCallbackQuery error:", err);
+  }
+}
 
-/**
- * Converts a raw Prisma Vacancy row to NormalizedVacancy so it can be
- * passed to buildAnalysisPrompt / getSimilarFeedbackExamples.
- */
+// ── Types ─────────────────────────────────────────────────────
+
+interface TelegramUpdate {
+  update_id: number;
+  message?: {
+    message_id: number;
+    chat: { id: number; type: string };
+    from?: { id: number; username?: string };
+    text?: string;
+  };
+  callback_query?: {
+    id: string;
+    from: { id: number; username?: string };
+    message?: { message_id: number; chat: { id: number } };
+    data?: string;
+  };
+}
+
+// ── Helpers ───────────────────────────────────────────────────
+
 function toNormalizedVacancy(v: {
-  hhId: string;
-  title: string;
-  company: string | null;
-  area: string | null;
-  salary: unknown;
-  url: string | null;
-  applyUrl: string | null;
-  apiUrl: string | null;
-  experience: string | null;
-  employment: string | null;
-  schedule: string | null;
-  workFormat: unknown;
-  snippet: unknown;
-  description: string | null;
-  descriptionHash: string | null;
-  sourceKeyword: string | null;
+  hhId: string; title: string; company: string | null; area: string | null;
+  salary: unknown; url: string | null; applyUrl: string | null; apiUrl: string | null;
+  experience: string | null; employment: string | null; schedule: string | null;
+  workFormat: unknown; snippet: unknown; description: string | null;
+  descriptionHash: string | null; sourceKeyword: string | null;
 }): NormalizedVacancy {
   return {
-    hhId: v.hhId,
-    title: v.title,
-    company: v.company ?? undefined,
-    area: v.area ?? undefined,
+    hhId: v.hhId, title: v.title,
+    company: v.company ?? undefined, area: v.area ?? undefined,
     salary: (v.salary as HHSalary) ?? undefined,
-    url: v.url ?? undefined,
-    applyUrl: v.applyUrl ?? undefined,
-    apiUrl: v.apiUrl ?? undefined,
-    experience: v.experience ?? undefined,
-    employment: v.employment ?? undefined,
+    url: v.url ?? undefined, applyUrl: v.applyUrl ?? undefined, apiUrl: v.apiUrl ?? undefined,
+    experience: v.experience ?? undefined, employment: v.employment ?? undefined,
     schedule: v.schedule ?? undefined,
-    workFormat:
-      (v.workFormat as { id: string; name: string }[]) ?? undefined,
-    snippet:
-      (v.snippet as { requirement?: string; responsibility?: string }) ??
-      undefined,
-    description: v.description ?? undefined,
-    descriptionHash: v.descriptionHash ?? undefined,
+    workFormat: (v.workFormat as { id: string; name: string }[]) ?? undefined,
+    snippet: (v.snippet as { requirement?: string; responsibility?: string }) ?? undefined,
+    description: v.description ?? undefined, descriptionHash: v.descriptionHash ?? undefined,
     sourceKeyword: v.sourceKeyword ?? undefined,
   };
 }
 
 // ── Action Handlers ───────────────────────────────────────────
 
-/**
- * Handles "approve" callback — marks vacancy as applied and confirms via Telegram.
- */
 async function handleApprove(vacancyId: string): Promise<string> {
-  const vacancy = await prisma.vacancy.findUnique({
-    where: { id: vacancyId },
-  });
-  if (!vacancy) return "❌ Vacancy not found.";
-
+  const v = await prisma.vacancy.findUnique({ where: { id: vacancyId } });
+  if (!v) return "❌ Vacancy not found.";
   await saveFeedback(vacancyId, "apply");
-
-  return (
-    `✅ <b>Marked as Applied!</b>\n\n` +
-    `<b>Role:</b> ${vacancy.title}\n` +
-    `<b>Company:</b> ${vacancy.company ?? "N/A"}\n\n` +
-    `Good luck with your application, Nanda! 🍀`
-  );
+  return `✅ <b>Marked as Applied!</b>\n\n<b>Role:</b> ${v.title}\n<b>Company:</b> ${v.company ?? "N/A"}\n\nGood luck! 🍀`;
 }
 
-/**
- * Handles "skip" callback — marks vacancy as skipped and confirms via Telegram.
- */
 async function handleSkip(vacancyId: string): Promise<string> {
-  const vacancy = await prisma.vacancy.findUnique({
-    where: { id: vacancyId },
-  });
-  if (!vacancy) return "❌ Vacancy not found.";
-
+  const v = await prisma.vacancy.findUnique({ where: { id: vacancyId } });
+  if (!v) return "❌ Vacancy not found.";
   await saveFeedback(vacancyId, "skip");
-
-  return (
-    `🚫 <b>Vacancy Skipped</b>\n\n` +
-    `<b>Role:</b> ${vacancy.title}\n` +
-    `<b>Company:</b> ${vacancy.company ?? "N/A"}\n\n` +
-    `Skipped — this feedback helps the AI learn your preferences.`
-  );
+  return `🚫 <b>Vacancy Skipped</b>\n\n<b>Role:</b> ${v.title}\n<b>Company:</b> ${v.company ?? "N/A"}\n\nFeedback saved.`;
 }
 
-/**
- * Handles "save" callback — bookmarks vacancy and confirms via Telegram.
- */
 async function handleSave(vacancyId: string): Promise<string> {
-  const vacancy = await prisma.vacancy.findUnique({
-    where: { id: vacancyId },
-  });
-  if (!vacancy) return "❌ Vacancy not found.";
-
+  const v = await prisma.vacancy.findUnique({ where: { id: vacancyId } });
+  if (!v) return "❌ Vacancy not found.";
   await saveFeedback(vacancyId, "save");
-
-  return (
-    `💾 <b>Saved for Later</b>\n\n` +
-    `<b>Role:</b> ${vacancy.title}\n` +
-    `<b>Company:</b> ${vacancy.company ?? "N/A"}\n\n` +
-    `You can review this vacancy in the dashboard when you're ready.`
-  );
+  return `💾 <b>Saved for Later</b>\n\n<b>Role:</b> ${v.title}\n<b>Company:</b> ${v.company ?? "N/A"}`;
 }
 
-/**
- * Handles "edit" callback — regenerates the cover letter and sends it via Telegram.
- * On AI failure, sends the existing cover letter with a warning note.
- */
 async function handleEdit(vacancyId: string): Promise<string> {
-  const dbVacancy = await prisma.vacancy.findUnique({
-    where: { id: vacancyId },
-    include: { analysis: true },
-  });
-
-  if (!dbVacancy) return "❌ Vacancy not found.";
-
-  const vacancy = toNormalizedVacancy(dbVacancy);
-
-  // Get feedback context
+  const dbVac = await prisma.vacancy.findUnique({ where: { id: vacancyId }, include: { analysis: true } });
+  if (!dbVac) return "❌ Vacancy not found.";
+  const vacancy = toNormalizedVacancy(dbVac);
   const { positive, negative } = await getSimilarFeedbackExamples(vacancy);
-  const similarFeedback = [...positive, ...negative];
-
-  // Build prompt and call AI
-  const prompt = buildAnalysisPrompt(vacancy, similarFeedback);
-  const aiResult = await callAI({
-    prompt,
-    requestType: "cover_letter",
-    maxTokens: 2048,
-  });
+  const prompt = buildAnalysisPrompt(vacancy, [...positive, ...negative]);
+  const aiResult = await callAI({ prompt, requestType: "cover_letter", maxTokens: 2048 });
 
   let coverLetter: string;
-
   if (aiResult.isRateLimited || !aiResult.content.trim()) {
-    // Keep existing letter when AI is unavailable
-    coverLetter =
-      dbVacancy.analysis?.coverLetter ??
-      "Cover letter not available. Please try again later.";
-    console.warn(
-      `[Webhook/edit] AI unavailable for vacancy ${vacancyId}. Using existing letter.`
-    );
+    coverLetter = dbVac.analysis?.coverLetter ?? "Cover letter not available.";
   } else {
     try {
       const parsed = parseAIResponse(aiResult.content);
       coverLetter = parsed.cover_letter;
-
-      // Persist the updated cover letter
-      if (dbVacancy.analysis) {
-        await prisma.vacancyAnalysis.update({
-          where: { vacancyId },
-          data: { coverLetter },
-        });
+      if (dbVac.analysis) {
+        await prisma.vacancyAnalysis.update({ where: { vacancyId }, data: { coverLetter } });
       }
     } catch {
-      coverLetter =
-        dbVacancy.analysis?.coverLetter ??
-        "Cover letter not available. Please try again later.";
+      coverLetter = dbVac.analysis?.coverLetter ?? "Cover letter not available.";
     }
   }
 
-  // Log the regeneration
   await prisma.applicationLog.create({
-    data: {
-      vacancyId,
-      action: "regenerate_letter",
-      notes: `Cover letter regenerated via Telegram. Provider: ${aiResult.provider}`,
-    },
+    data: { vacancyId, action: "regenerate_letter", notes: `Provider: ${aiResult.provider}` },
   });
 
-  // Telegram messages have a 4096 char limit — truncate if needed
-  const truncatedLetter =
-    coverLetter.length > 3500
-      ? `${coverLetter.slice(0, 3500)}…\n\n<i>(truncated — see full letter in dashboard)</i>`
-      : coverLetter;
-
-  return (
-    `✍️ <b>New Cover Letter for "${dbVacancy.title}"</b>\n\n` +
-    `<i>${truncatedLetter}</i>\n\n` +
-    `<b>Provider:</b> ${aiResult.provider}`
-  );
+  const truncated = coverLetter.length > 3500 ? `${coverLetter.slice(0, 3500)}…\n\n<i>(truncated)</i>` : coverLetter;
+  return `✍️ <b>New Cover Letter for "${dbVac.title}"</b>\n\n<i>${truncated}</i>\n\n<b>Provider:</b> ${aiResult.provider}`;
 }
 
-// ── GET: Webhook health check ─────────────────────────────────
+// ── GET: Health check ─────────────────────────────────────────
+
 export async function GET() {
   const hasToken = !!process.env.TELEGRAM_BOT_TOKEN;
   const hasChatId = !!process.env.TELEGRAM_CHAT_ID;
@@ -291,273 +182,246 @@ export async function GET() {
   });
 }
 
-// ── Route Handler ─────────────────────────────────────────────
+// ── POST: Handle Telegram updates ─────────────────────────────
 
 export async function POST(req: NextRequest) {
-  const botToken = process.env.TELEGRAM_BOT_TOKEN;
-  console.log("[Webhook] ── Incoming request ──");
-  console.log("[Webhook] TELEGRAM_BOT_TOKEN exists:", !!botToken);
+  console.log("[Webhook] ── Incoming POST ──");
+  console.log("[Webhook] TELEGRAM_BOT_TOKEN exists:", !!process.env.TELEGRAM_BOT_TOKEN);
 
   try {
-    const update = (await req.json().catch(() => ({}))) as TelegramUpdate;
-    console.log("[Webhook] Update keys:", Object.keys(update));
-    console.log("[Webhook] Full update:", JSON.stringify(update).slice(0, 500));
+    const body = await req.text();
+    console.log("[Webhook] Raw body:", body.slice(0, 500));
 
-    // ── Handle incoming text messages ───────────────────────
+    let update: TelegramUpdate;
+    try {
+      update = JSON.parse(body);
+    } catch {
+      console.error("[Webhook] Invalid JSON body");
+      return NextResponse.json({ ok: true });
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // TEXT MESSAGES
+    // ═══════════════════════════════════════════════════════════
     if (update.message?.text) {
       const text = update.message.text.trim();
       const chatId = update.message.chat.id.toString();
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const username = (update.message as any).from?.username ?? undefined;
+      const username = update.message.from?.username ?? "unknown";
 
-      console.log(`[Webhook] Text command: "${text}" from chatId: ${chatId} username: ${username}`);
+      console.log(`[Webhook] Command: "${text}" chatId: ${chatId} user: ${username}`);
 
-      // ── /start — Welcome message (FAST PATH — no DB) ──────
+      // ── /start ─────────────────────────────────────────────
       if (text === "/start") {
-        console.log("[Webhook] /start — sending welcome message...");
-
-        // First reply immediately without any DB lookup
-        const welcomeSent = await sendMessage(
+        console.log("[Webhook] Handling /start...");
+        const result = await tgSend(chatId,
           `👋 <b>Welcome to wingkiiy Job AI!</b>\n\n` +
           `To connect this bot with your dashboard:\n` +
           `1. Go to Settings in your dashboard\n` +
           `2. Click "Generate Telegram Token"\n` +
           `3. Send: /link &lt;YOUR_TOKEN&gt;\n\n` +
           `Example: <code>/link A3F1B2</code>\n\n` +
-          `<b>Available commands:</b>\n` +
+          `<b>Commands:</b>\n` +
           `/link &lt;TOKEN&gt; — Connect to dashboard\n` +
           `/profiles — Switch active profile\n` +
           `/saved — View saved vacancies\n` +
-          `/applied — View applied vacancies`,
-          undefined,
-          chatId
+          `/applied — View applied vacancies`
         );
-        console.log("[Webhook] /start sendMessage result:", welcomeSent);
+        console.log("[Webhook] /start result:", JSON.stringify(result));
         return NextResponse.json({ ok: true });
       }
 
-      // ── /link <TOKEN> — Link Telegram to dashboard ────────
+      // ── /link <TOKEN> ──────────────────────────────────────
       if (text.startsWith("/link ")) {
         const token = text.slice(6).trim().toUpperCase();
         if (!token || token.length < 4) {
-          await sendMessage("❌ Invalid token. Please check and try again.", undefined, chatId);
+          await tgSend(chatId, "❌ Invalid token. Please check and try again.");
           return NextResponse.json({ ok: true });
         }
 
-        const link = await prisma.telegramLink.findFirst({
-          where: { token, isActive: true },
-        });
-
-        if (!link) {
-          await sendMessage(
-            "❌ Token not found or expired.\nGenerate a new one from the dashboard Settings.",
-            undefined, chatId
+        try {
+          const link = await prisma.telegramLink.findFirst({ where: { token, isActive: true } });
+          if (!link) {
+            await tgSend(chatId, "❌ Token not found or expired.\nGenerate a new one from the dashboard Settings.");
+            return NextResponse.json({ ok: true });
+          }
+          await prisma.telegramLink.update({
+            where: { id: link.id },
+            data: { telegramChatId: chatId, telegramUsername: username, linkedAt: new Date() },
+          });
+          await tgSend(chatId,
+            `✅ <b>Successfully linked!</b>\n\n` +
+            `Your Telegram is now connected to the dashboard.\n` +
+            `You will receive vacancy notifications here.\n\n` +
+            `Try /profiles to switch your active profile.`
           );
-          return NextResponse.json({ ok: true });
+        } catch (err) {
+          console.error("[Webhook] /link DB error:", err);
+          await tgSend(chatId, "⚠️ Error linking account. Please try again.");
         }
-
-        // Update the link with chatId
-        await prisma.telegramLink.update({
-          where: { id: link.id },
-          data: {
-            telegramChatId: chatId,
-            telegramUsername: username,
-            linkedAt: new Date(),
-          },
-        });
-
-        // Also update TELEGRAM_CHAT_ID env-style by storing it
-        await sendMessage(
-          `✅ <b>Successfully linked!</b>\n\n` +
-          `Your Telegram is now connected to the dashboard.\n` +
-          `You will receive vacancy notifications here.\n\n` +
-          `Try /profiles to switch your active profile.`,
-          undefined, chatId
-        );
         return NextResponse.json({ ok: true });
       }
 
-      // ── /profiles — List & switch profiles ────────────────
+      // ── /profiles ──────────────────────────────────────────
       if (text === "/profiles") {
-        const linkedUser = await prisma.telegramLink.findFirst({
-          where: { telegramChatId: chatId, isActive: true },
-        });
-        if (!linkedUser) {
-          await sendMessage("❌ Not linked. Send /start to get started.", undefined, chatId);
-          return NextResponse.json({ ok: true });
-        }
-        const profiles = await prisma.searchPreference.findMany({
-          where:  { userId: linkedUser.userId },
-          select: { id: true, name: true, isActive: true },
-        });
-        if (profiles.length === 0) {
-          await sendMessage("No profiles found. Create one in the dashboard first.", undefined, chatId);
-        } else {
-          const inlineKeyboard = profiles.map((p) => [
-            { text: `${p.isActive ? "✅" : "⚪"} ${p.name}`, callback_data: `profile:${p.id}` },
-          ]);
-          await sendMessage("Select your active profile:", { inline_keyboard: inlineKeyboard }, chatId);
+        try {
+          const linked = await prisma.telegramLink.findFirst({ where: { telegramChatId: chatId, isActive: true } });
+          if (!linked) {
+            await tgSend(chatId, "❌ Not linked yet. Use /link &lt;TOKEN&gt; first.");
+            return NextResponse.json({ ok: true });
+          }
+          const profiles = await prisma.searchPreference.findMany({
+            where: { userId: linked.userId },
+            select: { id: true, name: true, isActive: true },
+          });
+          if (profiles.length === 0) {
+            await tgSend(chatId, "No profiles found. Create one in the dashboard first.");
+          } else {
+            const kb = profiles.map((p) => [{ text: `${p.isActive ? "✅" : "⚪"} ${p.name}`, callback_data: `profile:${p.id}` }]);
+            await tgSend(chatId, "Select your active profile:", { inline_keyboard: kb });
+          }
+        } catch (err) {
+          console.error("[Webhook] /profiles error:", err);
+          await tgSend(chatId, "⚠️ Error loading profiles.");
         }
         return NextResponse.json({ ok: true });
       }
 
-      // ── /saved — List saved vacancies ─────────────────────
+      // ── /saved ─────────────────────────────────────────────
       if (text === "/saved") {
-        const linkedUser = await prisma.telegramLink.findFirst({
-          where: { telegramChatId: chatId, isActive: true },
-        });
-        if (!linkedUser) {
-          await sendMessage("❌ Not linked. Send /start to get started.", undefined, chatId);
-          return NextResponse.json({ ok: true });
-        }
-        const saved = await prisma.vacancy.findMany({
-          where: { userId: linkedUser.userId, status: "saved" },
-          orderBy: { updatedAt: "desc" },
-          take: 10,
-          include: { analysis: { select: { matchScore: true, recommendation: true } } },
-        });
-        if (saved.length === 0) {
-          await sendMessage("📌 No saved vacancies yet.", undefined, chatId);
-        } else {
-          const lines = saved.map((v, i) => {
-            const score = v.analysis?.matchScore ?? "—";
-            const rec = v.analysis?.recommendation ?? "—";
-            return `${i + 1}. <b>${v.title}</b>\n   ${v.company ?? "—"} • Score: ${score} • ${rec}\n   🔗 ${v.url ?? `https://hh.ru/vacancy/${v.hhId}`}`;
+        try {
+          const linked = await prisma.telegramLink.findFirst({ where: { telegramChatId: chatId, isActive: true } });
+          if (!linked) { await tgSend(chatId, "❌ Not linked. Use /link first."); return NextResponse.json({ ok: true }); }
+          const saved = await prisma.vacancy.findMany({
+            where: { userId: linked.userId, status: "saved" },
+            orderBy: { updatedAt: "desc" }, take: 10,
+            include: { analysis: { select: { matchScore: true, recommendation: true } } },
           });
-          await sendMessage(`📌 <b>Saved Vacancies</b> (${saved.length})\n\n${lines.join("\n\n")}`, undefined, chatId);
+          if (saved.length === 0) {
+            await tgSend(chatId, "📌 No saved vacancies yet.");
+          } else {
+            const lines = saved.map((v, i) => {
+              const score = v.analysis?.matchScore ?? "—";
+              return `${i + 1}. <b>${v.title}</b>\n   ${v.company ?? "—"} • Score: ${score}\n   🔗 ${v.url ?? `https://hh.ru/vacancy/${v.hhId}`}`;
+            });
+            await tgSend(chatId, `📌 <b>Saved</b> (${saved.length})\n\n${lines.join("\n\n")}`);
+          }
+        } catch (err) {
+          console.error("[Webhook] /saved error:", err);
+          await tgSend(chatId, "⚠️ Error loading saved vacancies.");
         }
         return NextResponse.json({ ok: true });
       }
 
-      // ── /applied — List applied vacancies ─────────────────
+      // ── /applied ───────────────────────────────────────────
       if (text === "/applied") {
-        const linkedUser = await prisma.telegramLink.findFirst({
-          where: { telegramChatId: chatId, isActive: true },
-        });
-        if (!linkedUser) {
-          await sendMessage("❌ Not linked. Send /start to get started.", undefined, chatId);
-          return NextResponse.json({ ok: true });
-        }
-        const applied = await prisma.vacancy.findMany({
-          where: { userId: linkedUser.userId, status: "applied_manual" },
-          orderBy: { updatedAt: "desc" },
-          take: 10,
-          include: { analysis: { select: { matchScore: true, recommendation: true } } },
-        });
-        if (applied.length === 0) {
-          await sendMessage("📋 No applied vacancies yet.", undefined, chatId);
-        } else {
-          const lines = applied.map((v, i) => {
-            const score = v.analysis?.matchScore ?? "—";
-            return `${i + 1}. <b>${v.title}</b>\n   ${v.company ?? "—"} • Score: ${score}\n   🔗 ${v.url ?? `https://hh.ru/vacancy/${v.hhId}`}`;
+        try {
+          const linked = await prisma.telegramLink.findFirst({ where: { telegramChatId: chatId, isActive: true } });
+          if (!linked) { await tgSend(chatId, "❌ Not linked. Use /link first."); return NextResponse.json({ ok: true }); }
+          const applied = await prisma.vacancy.findMany({
+            where: { userId: linked.userId, status: "applied_manual" },
+            orderBy: { updatedAt: "desc" }, take: 10,
+            include: { analysis: { select: { matchScore: true } } },
           });
-          await sendMessage(`📋 <b>Applied Vacancies</b> (${applied.length})\n\n${lines.join("\n\n")}`, undefined, chatId);
+          if (applied.length === 0) {
+            await tgSend(chatId, "📋 No applied vacancies yet.");
+          } else {
+            const lines = applied.map((v, i) => {
+              const score = v.analysis?.matchScore ?? "—";
+              return `${i + 1}. <b>${v.title}</b>\n   ${v.company ?? "—"} • Score: ${score}\n   🔗 ${v.url ?? `https://hh.ru/vacancy/${v.hhId}`}`;
+            });
+            await tgSend(chatId, `📋 <b>Applied</b> (${applied.length})\n\n${lines.join("\n\n")}`);
+          }
+        } catch (err) {
+          console.error("[Webhook] /applied error:", err);
+          await tgSend(chatId, "⚠️ Error loading applied vacancies.");
         }
         return NextResponse.json({ ok: true });
       }
 
-      // ── Unknown command — show help ───────────────────────
+      // ── Unknown command ────────────────────────────────────
       if (text.startsWith("/")) {
-        await sendMessage(
-          `<b>Available commands:</b>\n` +
-          `/start — Welcome & status\n` +
+        await tgSend(chatId,
+          `<b>Commands:</b>\n` +
+          `/start — Welcome\n` +
           `/link &lt;TOKEN&gt; — Connect to dashboard\n` +
-          `/profiles — Switch active profile\n` +
-          `/saved — View saved vacancies\n` +
-          `/applied — View applied vacancies`,
-          undefined, chatId
+          `/profiles — Switch profile\n` +
+          `/saved — Saved vacancies\n` +
+          `/applied — Applied vacancies`
         );
       }
-
       return NextResponse.json({ ok: true });
     }
 
-    // ── Handle callback queries (inline keyboard button presses)
-    const callbackQuery = update.callback_query;
-    if (!callbackQuery) {
+    // ═══════════════════════════════════════════════════════════
+    // CALLBACK QUERIES (inline keyboard buttons)
+    // ═══════════════════════════════════════════════════════════
+    const cb = update.callback_query;
+    if (!cb) return NextResponse.json({ ok: true });
+
+    const cbData = cb.data ?? "";
+    const cbChatId = cb.message?.chat?.id?.toString();
+    const colonIdx = cbData.indexOf(":");
+    if (colonIdx === -1) {
+      await tgAnswerCallback(cb.id, "Unknown action");
       return NextResponse.json({ ok: true });
     }
 
-    const callbackData = callbackQuery.data ?? "";
-
-    // ── Parse callback_data: "<action>:<vacancyId>" ───────
-    const colonIndex = callbackData.indexOf(":");
-    if (colonIndex === -1) {
-      console.warn(`[Webhook] Malformed callback_data: "${callbackData}"`);
-      await answerCallbackQuery(callbackQuery.id, "Unknown action");
+    const action = cbData.slice(0, colonIdx);
+    const targetId = cbData.slice(colonIdx + 1);
+    if (!targetId) {
+      await tgAnswerCallback(cb.id, "Missing ID");
       return NextResponse.json({ ok: true });
     }
 
-    const action = callbackData.slice(0, colonIndex);
-    const vacancyId = callbackData.slice(colonIndex + 1);
+    console.log(`[Webhook] Callback: action="${action}" id="${targetId}"`);
 
-    if (!vacancyId) {
-      console.warn(`[Webhook] Missing vacancyId in callback_data: "${callbackData}"`);
-      await answerCallbackQuery(callbackQuery.id, "Missing vacancy ID");
-      return NextResponse.json({ ok: true });
-    }
-
-    console.log(`[Webhook] Action="${action}" for vacancy="${vacancyId}"`);
-
-    // ── Dispatch to action handler ────────────────────────
-    let replyText: string;
-    let toastText: string;
+    let reply: string;
+    let toast: string;
 
     switch (action) {
       case "approve":
-        replyText = await handleApprove(vacancyId);
-        toastText = "✅ Marked as applied!";
+        reply = await handleApprove(targetId);
+        toast = "✅ Applied!";
         break;
 
       case "profile": {
-        // Scope profile switch to the owner's userId
-        const targetPref = await prisma.searchPreference.findUnique({ where: { id: vacancyId } });
-        if (targetPref) {
-          await prisma.searchPreference.updateMany({ where: { userId: targetPref.userId }, data: { isActive: false } });
-          await prisma.searchPreference.update({ where: { id: vacancyId }, data: { isActive: true } });
+        const pref = await prisma.searchPreference.findUnique({ where: { id: targetId } });
+        if (pref) {
+          await prisma.searchPreference.updateMany({ where: { userId: pref.userId }, data: { isActive: false } });
+          await prisma.searchPreference.update({ where: { id: targetId }, data: { isActive: true } });
         }
-        replyText = `✅ Active profile changed to: ${targetPref?.name ?? "unknown"}`;
-        toastText = "Profile updated";
+        reply = `✅ Active profile: ${pref?.name ?? "unknown"}`;
+        toast = "Profile updated";
         break;
       }
 
       case "skip":
-        replyText = await handleSkip(vacancyId);
-        toastText = "🚫 Vacancy skipped";
+        reply = await handleSkip(targetId);
+        toast = "🚫 Skipped";
         break;
 
       case "save":
-        replyText = await handleSave(vacancyId);
-        toastText = "💾 Saved for later";
+        reply = await handleSave(targetId);
+        toast = "💾 Saved";
         break;
 
       case "edit":
-        // "edit" takes longer — answer immediately so the spinner disappears
-        await answerCallbackQuery(callbackQuery.id, "✍️ Generating new letter...");
-        const chatId = callbackQuery.message?.chat?.id?.toString();
-        replyText = await handleEdit(vacancyId);
-        // Don't answer again below — already answered above
-        await sendMessage(replyText, undefined, chatId);
+        await tgAnswerCallback(cb.id, "✍️ Generating...");
+        reply = await handleEdit(targetId);
+        if (cbChatId) await tgSend(cbChatId, reply);
         return NextResponse.json({ ok: true });
 
       default:
-        console.warn(`[Webhook] Unknown action: "${action}"`);
-        await answerCallbackQuery(callbackQuery.id, "Unknown action");
+        await tgAnswerCallback(cb.id, "Unknown");
         return NextResponse.json({ ok: true });
     }
 
-    // ── Answer callback_query (removes the spinner on the button) ──
-    await answerCallbackQuery(callbackQuery.id, toastText);
-
-    // ── Send confirmation / result message to Telegram ────
-    const chatId = callbackQuery.message?.chat?.id?.toString();
-    await sendMessage(replyText, undefined, chatId);
+    await tgAnswerCallback(cb.id, toast);
+    if (cbChatId) await tgSend(cbChatId, reply);
 
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error("[POST /api/telegram/webhook]", err);
-    // Always return 200 — a 5xx response causes Telegram to re-deliver
-    // the same update for up to 3 retries.
-    return NextResponse.json({ ok: true });
+    console.error("[Webhook] Unhandled error:", err);
+    return NextResponse.json({ ok: true }); // Always 200 for Telegram
   }
 }
