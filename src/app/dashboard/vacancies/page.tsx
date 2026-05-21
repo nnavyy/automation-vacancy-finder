@@ -4,7 +4,7 @@
 // ============================================================
 
 import Link from "next/link";
-import { AlertTriangle, Search, Settings, Briefcase } from "lucide-react";
+import { AlertTriangle, Search, Settings, Briefcase, Users } from "lucide-react";
 import Badge from "@/components/ui/Badge";
 import ScoreBar from "@/components/ui/ScoreBar";
 import prisma from "@/lib/db";
@@ -260,8 +260,18 @@ export default async function VacanciesPage({
                     )}
                   </div>
 
-                  {/* View Details */}
-                  <div className="shrink-0 self-center">
+                  {/* Actions */}
+                  <div className="shrink-0 self-center flex items-center gap-3">
+                    {v.company && (
+                      <Link
+                        href={`/dashboard/company-intel?company=${encodeURIComponent(v.company)}`}
+                        onClick={(e) => e.stopPropagation()}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-500/10 hover:bg-violet-500/20 border border-violet-500/20 text-xs font-medium text-violet-400 hover:text-violet-300 transition-all duration-150"
+                      >
+                        <Users size={12} />
+                        Find Contacts
+                      </Link>
+                    )}
                     <span className="text-gray-500 group-hover:text-gray-300 text-sm font-medium transition-colors">
                       View Details →
                     </span>

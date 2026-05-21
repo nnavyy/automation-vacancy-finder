@@ -28,6 +28,7 @@ model User {
   telegramLinks      TelegramLink[]
   vacancies          Vacancy[]
   passwordResetTokens PasswordResetToken[]
+  companyIntels      CompanyIntel[]
 
   @@map("users")
 }
@@ -221,4 +222,51 @@ model PasswordResetToken {
   createdAt DateTime @default(now())
 
   @@map("password_reset_tokens")
+}
+
+// ============================================================
+// Company Intel — hasil pencarian struktur org perusahaan
+// ============================================================
+model CompanyIntel {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  companyName String
+  domain      String?
+  linkedinUrl String?
+  industry    String?
+  size        String?
+  description String?
+  vacancyId   String?  // optional: linked ke vacancy tertentu
+
+  contacts    CompanyContact[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("company_intel")
+}
+
+// ============================================================
+// Company Contact — individual kontak yang ditemukan
+// ============================================================
+model CompanyContact {
+  id              String       @id @default(cuid())
+  companyIntelId  String
+  companyIntel    CompanyIntel @relation(fields: [companyIntelId], references: [id], onDelete: Cascade)
+
+  name            String
+  role            String       // "CEO", "Hiring Manager", "Recruiter", dst
+  department      String?
+  linkedinUrl     String?
+  email           String?
+  emailVerified   Boolean      @default(false)
+  seniority       String?      // "C-Level", "VP", "Director", "Manager", "IC"
+  firstName       String?
+  lastName        String?
+
+  createdAt       DateTime @default(now())
+
+  @@map("company_contacts")
 }

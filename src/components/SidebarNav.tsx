@@ -14,6 +14,7 @@ import {
   BarChart2,
   Settings,
   Cpu,
+  Users,
   LucideIcon,
   ChevronDown,
   LogOut
@@ -31,6 +32,7 @@ const NAV_ITEMS: NavItem[] = [
   { icon: Briefcase, label: "Vacancies", href: "/dashboard/vacancies" },
   { icon: Bookmark, label: "Saved", href: "/dashboard/saved" },
   { icon: CheckCircle, label: "Applied", href: "/dashboard/applied" },
+  { icon: Users, label: "Company Intel", href: "/dashboard/company-intel" },
   { icon: BarChart2, label: "Analytics", href: "/dashboard/analytics" },
   { icon: Settings, label: "Settings", href: "/dashboard/settings" },
 ];
