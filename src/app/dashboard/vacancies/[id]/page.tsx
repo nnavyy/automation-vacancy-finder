@@ -13,6 +13,8 @@ import {
   MessageSquare,
   ChevronLeft,
   Cpu,
+  Users,
+  Building2,
 } from "lucide-react";
 import Badge from "@/components/ui/Badge";
 import ScoreBar from "@/components/ui/ScoreBar";
@@ -249,6 +251,24 @@ export default async function VacancyDetailPage({
             </a>
           )}
         </div>
+
+        {/* Company Intel Banner */}
+        {vacancy.company && (
+          <div className="mt-4 pt-4 border-t border-gray-800 flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-2 text-sm">
+              <Building2 size={14} className="text-gray-500 shrink-0" />
+              <span className="text-gray-400">Company:</span>
+              <span className="text-gray-200 font-medium">{vacancy.company}</span>
+            </div>
+            <Link
+              href={`/dashboard/company-intel?company=${encodeURIComponent(vacancy.company)}`}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-500/10 hover:bg-violet-500/20 border border-violet-500/20 text-xs font-medium text-violet-400 hover:text-violet-300 transition-all duration-150"
+            >
+              <Users size={12} />
+              Find Contacts at {vacancy.company}
+            </Link>
+          </div>
+        )}
       </div>
 
       {/* ═══════════════════════════════════════════════════

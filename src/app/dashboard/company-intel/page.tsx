@@ -482,8 +482,9 @@ function CompanyIntelContent() {
 
           {/* How it works */}
           <div className="mt-5 bg-violet-500/5 border border-violet-500/20 rounded-xl p-4">
-            <p className="text-xs text-violet-300 font-medium mb-2">
-              💡 Pro Strategy
+            <p className="text-xs text-violet-300 font-medium mb-2 flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5" />
+              Pro Strategy
             </p>
             <p className="text-xs text-gray-400 leading-relaxed">
               Right after hitting apply, send a personalized email directly to
@@ -556,8 +557,9 @@ function CompanyIntelContent() {
 
           {/* API key notice */}
           {!process.env.NEXT_PUBLIC_HAS_CONTACT_API && (
-            <p className="mt-3 text-xs text-gray-500">
-              ⚙️ Add{" "}
+            <p className="mt-3 text-xs text-gray-500 flex items-start gap-1.5">
+              <AlertCircle className="w-3 h-3 mt-0.5 shrink-0" />
+              Add{" "}
               <code className="text-gray-400 bg-gray-800 px-1 rounded">
                 HUNTER_API_KEY
               </code>{" "}
