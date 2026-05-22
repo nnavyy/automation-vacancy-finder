@@ -239,10 +239,10 @@ export default function SettingsPage() {
             type: "warn",
           });
         } else {
-          setMsg({ text: "⚠️ Failed to load settings from server.", type: "warn" });
+          setMsg({ text: "Failed to load settings from server.", type: "warn" });
         }
       } catch {
-        setMsg({ text: "⚠️ Network error loading settings.", type: "warn" });
+        setMsg({ text: "Network error loading settings.", type: "warn" });
       } finally {
         setLoading(false);
       }
@@ -298,15 +298,15 @@ export default function SettingsPage() {
       const json = await res.json();
 
       if (res.ok && json.success) {
-        setMsg({ text: "✅ Settings saved successfully!", type: "success" });
+        setMsg({ text: "Settings saved successfully!", type: "success" });
       } else {
         setMsg({
-          text:  `❌ ${json.error ?? "Failed to save settings."}`,
+          text:  `${json.error ?? "Failed to save settings."}`,
           type:  "error",
         });
       }
     } catch {
-      setMsg({ text: "❌ Network error — please try again.", type: "error" });
+      setMsg({ text: "Network error — please try again.", type: "error" });
     } finally {
       setSaving(false);
       setTimeout(() => setMsg(null), 6000);
@@ -333,48 +333,269 @@ export default function SettingsPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Validate file extension
+    if (!file.name.endsWith(".json")) {
+      setMsg({ text: "Invalid file type. Please upload a .json file.", type: "error" });
+      e.target.value = "";
+      return;
+    }
+
     const reader = new FileReader();
     reader.onload = async (ev) => {
       try {
         let content = ev.target?.result as string;
+
+        // Optional: translate Russian JSON to English first
         if (translateJsonEn) {
           setTranslatingJson(true);
-          const res = await fetch("/api/translate", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text: content, mode: "json" }),
-          });
-          const jsonRes = await res.json();
-          if (jsonRes.success && jsonRes.text) {
-            content = jsonRes.text;
+          try {
+            const res = await fetch("/api/translate", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ text: content, mode: "json" }),
+            });
+            const jsonRes = await res.json();
+            if (jsonRes.success && jsonRes.text) {
+              content = jsonRes.text;
+            }
+          } catch {
+            // Translation failed, continue with original
           }
         }
 
-        const data = JSON.parse(content);
-        setForm((prev) => ({
-          ...prev,
-          name: data.name || prev.name,
-          resumeText: data.bio || data.resumeText || prev.resumeText,
-          requiredSkills: data.skills ? data.skills.join(", ") : prev.requiredSkills,
-          niceToHaveSkills: data.nice_to_have ? data.nice_to_have.join(", ") : prev.niceToHaveSkills,
-          portfolioUrl: data.portfolio_url || data.portfolioUrl || prev.portfolioUrl,
-          targetRoles: data.target_roles ? data.target_roles.join(", ") : prev.targetRoles,
-        }));
+        // ── Parse JSON safely ───────────────────────────────
+        let data: Record<string, unknown>;
+        try {
+          data = JSON.parse(content);
+        } catch {
+          setMsg({
+            text: "Invalid JSON file. The file could not be parsed. Please check it is valid JSON.",
+            type: "error",
+          });
+          e.target.value = "";
+          setTranslatingJson(false);
+          return;
+        }
+
+        if (typeof data !== "object" || data === null || Array.isArray(data)) {
+          setMsg({
+            text: "Invalid format. The JSON file must be an object ({}), not an array or primitive.",
+            type: "error",
+          });
+          e.target.value = "";
+          setTranslatingJson(false);
+          return;
+        }
+
+        // ── Smart field extraction (supports both formats) ──
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const d = data as any;
+
+        const safeJoin = (v: unknown): string => {
+          if (Array.isArray(v)) return v.filter(s => typeof s === "string").join(", ");
+          if (typeof v === "string") return v;
+          return "";
+        };
+
+        // Profile name
+        const profileName =
+          typeof d.profileName === "string" ? d.profileName :
+          typeof d.name === "string" ? d.name : null;
+
+        // Resume / bio text
+        const resumeText =
+          typeof d.coverLetterContext?.resumeBackgroundText === "string" ? d.coverLetterContext.resumeBackgroundText :
+          typeof d.bio === "string" ? d.bio :
+          typeof d.resumeText === "string" ? d.resumeText :
+          typeof d.resume === "string" ? d.resume : null;
+
+        // Portfolio URL
+        const portfolioUrl =
+          typeof d.portfolioUrl === "string" ? d.portfolioUrl :
+          typeof d.portfolio_url === "string" ? d.portfolio_url :
+          typeof d.coverLetterContext?.portfolioWebsiteUrl === "string" ? d.coverLetterContext.portfolioWebsiteUrl : null;
+
+        // Target roles — from matchingRules.highPriorityMatch or targetRolesSummary or target_roles array
+        let targetRoles: string = "";
+        if (Array.isArray(d.targetRoles)) targetRoles = safeJoin(d.targetRoles);
+        else if (Array.isArray(d.target_roles)) targetRoles = safeJoin(d.target_roles);
+        else if (Array.isArray(d.matchingRules?.highPriorityMatch)) targetRoles = safeJoin(d.matchingRules.highPriorityMatch);
+        else if (typeof d.targetRolesSummary === "string") targetRoles = d.targetRolesSummary;
+
+        // Search keywords EN
+        let keywordsEn: string = "";
+        if (Array.isArray(d.searchKeywordsEn)) keywordsEn = safeJoin(d.searchKeywordsEn);
+        else if (Array.isArray(d.searchKeywords?.english)) keywordsEn = safeJoin(d.searchKeywords.english);
+        else if (Array.isArray(d.keywords_en)) keywordsEn = safeJoin(d.keywords_en);
+
+        // Search keywords RU
+        let keywordsRu: string = "";
+        if (Array.isArray(d.searchKeywordsRu)) keywordsRu = safeJoin(d.searchKeywordsRu);
+        else if (Array.isArray(d.searchKeywords?.russian)) keywordsRu = safeJoin(d.searchKeywords.russian);
+        else if (Array.isArray(d.keywords_ru)) keywordsRu = safeJoin(d.keywords_ru);
+
+        // Required skills
+        let requiredSkills: string = "";
+        if (Array.isArray(d.requiredSkills)) requiredSkills = safeJoin(d.requiredSkills);
+        else if (Array.isArray(d.skills?.required)) requiredSkills = safeJoin(d.skills.required);
+        else if (Array.isArray(d.skills) && typeof d.skills[0] === "string") requiredSkills = safeJoin(d.skills);
+
+        // Nice-to-have skills
+        let niceToHave: string = "";
+        if (Array.isArray(d.niceToHaveSkills)) niceToHave = safeJoin(d.niceToHaveSkills);
+        else if (Array.isArray(d.skills?.niceToHave)) niceToHave = safeJoin(d.skills.niceToHave);
+        else if (Array.isArray(d.nice_to_have)) niceToHave = safeJoin(d.nice_to_have);
+
+        // Exclude keywords
+        let excludeKw: string = "";
+        if (Array.isArray(d.excludeKeywords)) excludeKw = safeJoin(d.excludeKeywords);
+        else if (d.exclusionFilters) {
+          const enKw = Array.isArray(d.exclusionFilters.excludeKeywordsEnglish) ? d.exclusionFilters.excludeKeywordsEnglish : [];
+          const ruKw = Array.isArray(d.exclusionFilters.excludeKeywordsRussian) ? d.exclusionFilters.excludeKeywordsRussian : [];
+          excludeKw = safeJoin([...enKw, ...ruKw]);
+        }
+
+        // Red flag keywords
+        let redFlagKw: string = "";
+        if (Array.isArray(d.redFlagKeywords)) redFlagKw = safeJoin(d.redFlagKeywords);
+        else if (d.redFlagKeywords && typeof d.redFlagKeywords === "object") {
+          const enKw = Array.isArray(d.redFlagKeywords.english) ? d.redFlagKeywords.english : [];
+          const ruKw = Array.isArray(d.redFlagKeywords.russian) ? d.redFlagKeywords.russian : [];
+          redFlagKw = safeJoin([...enKw, ...ruKw]);
+        }
+
+        // Salary
+        const salaryMin = d.salary?.minimumSalary ?? d.salaryMinimum ?? null;
+        const salaryCurrency = typeof d.salary?.currency === "string" ? d.salary.currency :
+          typeof d.salaryCurrency === "string" ? d.salaryCurrency : null;
+
+        // Cover letter language
+        const clLang =
+          typeof d.coverLetterContext?.language === "string" ? d.coverLetterContext.language :
+          typeof d.preferredLanguage === "string" ? d.preferredLanguage :
+          typeof d.coverLetterLanguage === "string" ? d.coverLetterLanguage : null;
+
+        // Work format
+        const workFmtMap: Record<string, string> = {
+          remote: "remote", hybrid: "hybrid", office: "office",
+        };
+        let workFormat: string[] = [];
+        if (Array.isArray(d.workFormat)) {
+          workFormat = d.workFormat.filter((v: string) => workFmtMap[v]);
+        } else if (d.workFormat && typeof d.workFormat === "object") {
+          if (d.workFormat.remote) workFormat.push("remote");
+          if (d.workFormat.hybrid) workFormat.push("hybrid");
+          if (d.workFormat.office) workFormat.push("office");
+        }
+
+        // Experience
+        let experience: string[] = [];
+        if (Array.isArray(d.experience)) {
+          experience = d.experience;
+        } else if (d.experienceLevel && typeof d.experienceLevel === "object") {
+          if (d.experienceLevel.noExperience) experience.push("noExperience");
+          if (d.experienceLevel.oneToThreeYears) experience.push("between1And3");
+          if (d.experienceLevel.threeToSixYears) experience.push("between3And6");
+          if (d.experienceLevel.sixPlusYears) experience.push("moreThan6");
+        }
+
+        // Notification settings
+        const minScore = typeof d.notifications?.minimumScoreToNotify === "number"
+          ? d.notifications.minimumScoreToNotify
+          : typeof d.minimumScoreToNotify === "number" ? d.minimumScoreToNotify : null;
+        const maxNotif = typeof d.notifications?.maxNotificationsPerDay === "number"
+          ? d.notifications.maxNotificationsPerDay
+          : typeof d.maxNotificationsPerDay === "number" ? d.maxNotificationsPerDay : null;
+
+        // ── Track what was successfully imported ─────────────
+        const imported: string[] = [];
+        const skipped: string[] = [];
+
+        // Apply all extracted values to form
+        setForm((prev) => {
+          const next = { ...prev };
+
+          if (profileName) { next.name = profileName; imported.push("Profile Name"); }
+          else skipped.push("Profile Name");
+
+          if (resumeText) { next.resumeText = resumeText; imported.push("Resume/Bio Text"); }
+          else skipped.push("Resume Text");
+
+          if (portfolioUrl) { next.portfolioUrl = portfolioUrl; imported.push("Portfolio URL"); }
+          else skipped.push("Portfolio URL");
+
+          if (targetRoles) { next.targetRoles = targetRoles; imported.push("Target Roles"); }
+          else skipped.push("Target Roles");
+
+          if (keywordsEn) { next.searchKeywordsEn = keywordsEn; imported.push("English Keywords"); }
+          else skipped.push("English Keywords");
+
+          if (keywordsRu) { next.searchKeywordsRu = keywordsRu; imported.push("Russian Keywords"); }
+          else skipped.push("Russian Keywords");
+
+          if (requiredSkills) { next.requiredSkills = requiredSkills; imported.push("Required Skills"); }
+          else skipped.push("Required Skills");
+
+          if (niceToHave) { next.niceToHaveSkills = niceToHave; imported.push("Nice-to-Have Skills"); }
+          else skipped.push("Nice-to-Have Skills");
+
+          if (excludeKw) { next.excludeKeywords = excludeKw; imported.push("Exclude Keywords"); }
+          if (redFlagKw) { next.redFlagKeywords = redFlagKw; imported.push("Red Flag Keywords"); }
+
+          if (workFormat.length > 0) { next.workFormat = workFormat; imported.push("Work Format"); }
+          if (experience.length > 0) { next.experience = experience; imported.push("Experience Level"); }
+
+          if (salaryMin !== null && !isNaN(Number(salaryMin))) {
+            next.salaryMinimum = String(salaryMin);
+            imported.push("Minimum Salary");
+          }
+          if (salaryCurrency) next.salaryCurrency = salaryCurrency;
+          if (clLang) { next.coverLetterLanguage = clLang; imported.push("Cover Letter Language"); }
+          if (minScore !== null) next.minimumScoreToNotify = minScore;
+          if (maxNotif !== null) next.maxNotificationsPerDay = String(maxNotif);
+
+          return next;
+        });
+
         setUploadedJsonName(file.name);
-        setMsg({ text: `✅ Profile imported successfully from ${file.name}!`, type: "success" });
+
+        const importedStr = imported.length > 0 ? imported.join(", ") : "none";
+        const skippedStr = skipped.filter(s => ["Profile Name", "Resume Text", "Required Skills", "Target Roles"].includes(s));
+
+        if (imported.length === 0) {
+          setMsg({
+            text: `JSON parsed but no recognizable fields found. Supported fields: profileName, skills, searchKeywords, portfolioUrl, etc.`,
+            type: "warn",
+          });
+        } else if (skippedStr.length > 0) {
+          setMsg({
+            text: `Imported: ${importedStr}. Not found in JSON: ${skippedStr.join(", ")}. Click Save to apply.`,
+            type: "warn",
+          });
+        } else {
+          setMsg({
+            text: `Successfully imported ${imported.length} fields from ${file.name}. Click Save to apply.`,
+            type: "success",
+          });
+        }
       } catch (err) {
-        setMsg({ text: "❌ Failed to parse JSON file.", type: "error" });
+        console.error("[JSON Upload] Unexpected error:", err);
+        setMsg({
+          text: `Unexpected error while processing the file: ${err instanceof Error ? err.message : "Unknown error"}`,
+          type: "error",
+        });
       } finally {
         setTranslatingJson(false);
-        e.target.value = ""; // reset
+        e.target.value = ""; // reset file input
       }
     };
     reader.readAsText(file);
   };
 
+
   const handleTestPortfolio = async () => {
     if (!form.portfolioUrl) {
-      setMsg({ text: "⚠️ Please enter a Portfolio URL first.", type: "warn" });
+      setMsg({ text: "Please enter a Portfolio URL first.", type: "warn" });
       return;
     }
     setTestingPortfolio(true);
@@ -387,12 +608,12 @@ export default function SettingsPage() {
       });
       const json = await res.json();
       if (json.success) {
-        setMsg({ text: `✅ ${json.message}`, type: "success" });
+        setMsg({ text: json.message, type: "success" });
       } else {
-        setMsg({ text: `❌ ${json.error}`, type: "error" });
+        setMsg({ text: json.error ?? "Test failed.", type: "error" });
       }
     } catch {
-      setMsg({ text: "❌ Failed to reach the test API.", type: "error" });
+      setMsg({ text: "Failed to reach the test API.", type: "error" });
     } finally {
       setTestingPortfolio(false);
     }

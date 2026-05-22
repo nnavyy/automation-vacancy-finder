@@ -124,6 +124,7 @@ export interface SearchPreferenceData {
   aiProviderOrder: string[];
   coverLetterLanguage: string;
   resumeText?: string | null;
+  portfolioUrl?: string | null;
   isActive: boolean;
 }
 
