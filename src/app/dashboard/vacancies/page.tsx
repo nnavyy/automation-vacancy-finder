@@ -7,7 +7,7 @@ import Link from "next/link";
 import { AlertTriangle, Search, Settings, Briefcase, Users } from "lucide-react";
 import Badge from "@/components/ui/Badge";
 import ScoreBar from "@/components/ui/ScoreBar";
-import prisma from "@/lib/db";
+import prisma, { withRetry } from "@/lib/db";
 import { requireUser } from "@/lib/auth-helpers";
 
 // ── Constants ─────────────────────────────────────────────────
@@ -81,40 +81,45 @@ export default async function VacanciesPage({
 
   try {
     // Check if user has any search preferences set up
-    const profileCount = await prisma.searchPreference.count({
-      where: { userId: user.id },
-    });
+    const profileCount = await withRetry(() =>
+      prisma.searchPreference.count({ where: { userId: user.id } })
+    );
     hasProfile = profileCount > 0;
 
-    [vacancies, total] = await Promise.all([
-      prisma.vacancy.findMany({
-        where,
-        skip,
-        take: limit,
-        orderBy: { analysis: { matchScore: "desc" } },
-        select: {
-          id: true,
-          title: true,
-          company: true,
-          area: true,
-          salary: true,
-          status: true,
-          createdAt: true,
-          analysis: {
-            select: {
-              matchScore: true,
-              recommendation: true,
-              aiStatus: true,
-              redFlags: true,
+    [vacancies, total] = await withRetry(() =>
+      Promise.all([
+        prisma.vacancy.findMany({
+          where,
+          skip,
+          take: limit,
+          orderBy: { analysis: { matchScore: "desc" } },
+          select: {
+            id: true,
+            title: true,
+            company: true,
+            area: true,
+            salary: true,
+            status: true,
+            createdAt: true,
+            analysis: {
+              select: {
+                matchScore: true,
+                recommendation: true,
+                aiStatus: true,
+                redFlags: true,
+              },
             },
           },
-        },
-      }),
-      prisma.vacancy.count({ where }),
-    ]);
+        }),
+        prisma.vacancy.count({ where }),
+      ])
+    );
   } catch (err) {
-    console.error("[Vacancies Page]", err);
+    console.error("[Vacancies Page] Database error:", err);
+    // Re-throw so the error.tsx boundary can catch and show a proper error page
+    throw err;
   }
+
 
   const totalPages = Math.ceil(total / limit) || 1;
   const prevHref = `/dashboard/vacancies?${status ? `status=${status}&` : ""}page=${Math.max(1, page - 1)}`;

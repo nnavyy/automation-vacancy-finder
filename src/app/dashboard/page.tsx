@@ -18,7 +18,7 @@ import {
 import ScoreBar from "@/components/ui/ScoreBar";
 import Badge from "@/components/ui/Badge";
 import RunCollectionButton from "@/components/RunCollectionButton";
-import prisma from "@/lib/db";
+import prisma, { withRetry } from "@/lib/db";
 import { requireUser } from "@/lib/auth-helpers";
 
 // ── Helpers ───────────────────────────────────────────────────
@@ -80,34 +80,37 @@ export default async function DashboardPage() {
   let topMatches: any[] = [];
 
   try {
-    const [allVacancies, allCount, topVacancies] = await Promise.all([
-      prisma.vacancy.findMany({
-        where:   { userId: user.id },
-        take:    1000,
-        orderBy: { createdAt: "desc" },
-        select: {
-          id: true, hhId: true, title: true, company: true, area: true,
-          salary: true, url: true, status: true, createdAt: true, updatedAt: true,
-          analysis: { select: { matchScore: true, recommendation: true, aiStatus: true, redFlags: true } },
-        },
-      }),
-      prisma.vacancy.count({ where: { userId: user.id } }),
-      prisma.vacancy.findMany({
-        where:   { userId: user.id, analysis: { isNot: null } },
-        take:    5,
-        orderBy: { analysis: { matchScore: "desc" } },
-        select: {
-          id: true, hhId: true, title: true, company: true, area: true,
-          salary: true, url: true, status: true,
-          analysis: { select: { matchScore: true, recommendation: true, aiStatus: true, redFlags: true } },
-        },
-      }),
-    ]);
+    const [allVacancies, allCount, topVacancies] = await withRetry(() =>
+      Promise.all([
+        prisma.vacancy.findMany({
+          where:   { userId: user.id },
+          take:    1000,
+          orderBy: { createdAt: "desc" },
+          select: {
+            id: true, hhId: true, title: true, company: true, area: true,
+            salary: true, url: true, status: true, createdAt: true, updatedAt: true,
+            analysis: { select: { matchScore: true, recommendation: true, aiStatus: true, redFlags: true } },
+          },
+        }),
+        prisma.vacancy.count({ where: { userId: user.id } }),
+        prisma.vacancy.findMany({
+          where:   { userId: user.id, analysis: { isNot: null } },
+          take:    5,
+          orderBy: { analysis: { matchScore: "desc" } },
+          select: {
+            id: true, hhId: true, title: true, company: true, area: true,
+            salary: true, url: true, status: true,
+            analysis: { select: { matchScore: true, recommendation: true, aiStatus: true, redFlags: true } },
+          },
+        }),
+      ])
+    );
     all = allVacancies;
     total = allCount;
     topMatches = topVacancies;
   } catch (err) {
     console.error("[Dashboard] Failed to fetch data:", err);
+    throw err;
   }
 
   const applied = all.filter((v) => v.status === "applied_manual").length;

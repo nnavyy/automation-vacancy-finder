@@ -20,7 +20,7 @@ import Badge from "@/components/ui/Badge";
 import ScoreBar from "@/components/ui/ScoreBar";
 import VacancyActions from "@/components/VacancyActions";
 import TranslateDescription from "@/components/TranslateDescription";
-import prisma from "@/lib/db";
+import prisma, { withRetry } from "@/lib/db";
 import { requireUser } from "@/lib/auth-helpers";
 
 // ── Constants ─────────────────────────────────────────────────
@@ -143,39 +143,30 @@ export default async function VacancyDetailPage({
   let vacancy: VacancyDetail | null = null;
 
   try {
-    const data = await prisma.vacancy.findUnique({
-      where: { id: id, userId: user.id },
-      include: {
-        analysis: true,
-        logs: { orderBy: { createdAt: "desc" } },
-      },
-    });
-    
+    const data = await withRetry(() =>
+      prisma.vacancy.findUnique({
+        where: { id: id, userId: user.id },
+        include: {
+          analysis: true,
+          logs: { orderBy: { createdAt: "desc" } },
+        },
+      })
+    );
+
     if (data) {
       vacancy = data as unknown as VacancyDetail;
     }
   } catch (err) {
-    console.error("[VacancyDetail] Error fetching vacancy:", err);
+    console.error("[VacancyDetail] Database error:", err);
+    // Re-throw so the error.tsx boundary shows a proper error page
+    throw err;
   }
 
+  // Vacancy not found — trigger the not-found.tsx page
   if (!vacancy) {
-    return (
-      <div className="max-w-4xl space-y-4">
-        <Link
-          href="/dashboard/vacancies"
-          className="inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition-colors"
-        >
-          <ChevronLeft size={15} /> Back to Vacancies
-        </Link>
-        <div className="bg-red-400/10 border border-red-400/30 rounded-xl p-10 text-center">
-          <p className="text-red-400 font-medium">Failed to load vacancy.</p>
-          <p className="text-gray-500 text-sm mt-1">
-            The record may have been deleted or the server is unavailable.
-          </p>
-        </div>
-      </div>
-    );
+    notFound();
   }
+
 
   const a      = vacancy.analysis;
   const salary = formatSalary(vacancy.salary);
