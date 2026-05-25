@@ -143,6 +143,12 @@ export async function runCollectionPipeline(userId: string): Promise<PipelineRes
       });
 
       if (existing) {
+        // Skip already processed vacancies to preserve statuses (saved/applied/etc.) and avoid API spam
+        if (existing.status !== "new") {
+          summary.processed--;
+          continue;
+        }
+
         if (existing.descriptionHash === vacancy.descriptionHash) {
           summary.processed--;
           continue;

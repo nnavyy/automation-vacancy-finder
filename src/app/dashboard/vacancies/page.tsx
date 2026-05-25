@@ -92,7 +92,7 @@ export default async function VacanciesPage({
           where,
           skip,
           take: limit,
-          orderBy: { analysis: { matchScore: "desc" } },
+          orderBy: { createdAt: "desc" },
           select: {
             id: true,
             title: true,
