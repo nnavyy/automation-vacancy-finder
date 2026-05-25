@@ -212,18 +212,20 @@ export default async function VacanciesPage({
             const salary = formatSalary(v.salary);
 
             return (
-              <Link
+              <div
                 key={v.id}
-                href={`/dashboard/vacancies/${v.id}`}
-                className="bg-gray-900 border border-gray-800 rounded-xl p-5 hover:border-gray-700 hover:bg-gray-800/50 transition-colors block group"
+                className="relative bg-gray-900 border border-gray-800 rounded-xl p-5 hover:border-gray-700 hover:bg-gray-800/50 transition-colors block group"
               >
                 <div className="flex items-start gap-4">
                   <div className="flex-1 min-w-0">
                     {/* Title + badges */}
                     <div className="flex items-start gap-2 flex-wrap mb-1.5">
-                      <h3 className="text-white font-semibold leading-snug group-hover:text-green-400 transition-colors">
+                      <Link 
+                        href={`/dashboard/vacancies/${v.id}`}
+                        className="text-white font-semibold leading-snug group-hover:text-green-400 transition-colors before:absolute before:inset-0"
+                      >
                         {v.title}
-                      </h3>
+                      </Link>
                       <Badge
                         label={v.status.replace(/_/g, " ")}
                         variant={statusVariant(v.status)}
@@ -270,8 +272,7 @@ export default async function VacanciesPage({
                     {v.company && (
                       <Link
                         href={`/dashboard/company-intel?company=${encodeURIComponent(v.company)}`}
-                        onClick={(e) => e.stopPropagation()}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-500/10 hover:bg-violet-500/20 border border-violet-500/20 text-xs font-medium text-violet-400 hover:text-violet-300 transition-all duration-150"
+                        className="relative z-10 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-500/10 hover:bg-violet-500/20 border border-violet-500/20 text-xs font-medium text-violet-400 hover:text-violet-300 transition-all duration-150"
                       >
                         <Users size={12} />
                         Find Contacts
@@ -282,7 +283,7 @@ export default async function VacanciesPage({
                     </span>
                   </div>
                 </div>
-              </Link>
+              </div>
             );
           })
         )}
