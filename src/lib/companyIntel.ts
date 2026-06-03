@@ -3,6 +3,8 @@
 // Clearbit autocomplete → Hunter.io email finder → Apollo enrichment
 // ============================================================
 
+import * as cheerio from 'cheerio';
+
 export interface ContactResult {
   name: string;
   firstName?: string;
@@ -161,7 +163,8 @@ export async function findContactsApollo(
 
 export function mergeContacts(
   hunterContacts: ContactResult[],
-  apolloContacts: ContactResult[]
+  apolloContacts: ContactResult[],
+  ddgContacts: ContactResult[] = []
 ): ContactResult[] {
   const map = new Map<string, ContactResult>();
 
@@ -182,6 +185,27 @@ export function mergeContacts(
       if (!existing.email && c.email) {
         map.set(key, { ...existing, email: c.email, emailVerified: c.emailVerified });
       }
+    }
+  }
+
+  // DDG fills remaining gaps (people found via Google/DDG)
+  for (const c of ddgContacts) {
+    const key = c.name.toLowerCase();
+    let found = false;
+    
+    // Check if we already have this person
+    for (const [k, existing] of map.entries()) {
+      if (existing.name.toLowerCase().includes(key) || key.includes(existing.name.toLowerCase())) {
+        if (!existing.linkedinUrl && c.linkedinUrl) {
+          existing.linkedinUrl = c.linkedinUrl;
+        }
+        found = true;
+        break;
+      }
+    }
+    
+    if (!found) {
+      map.set(key, c);
     }
   }
 
@@ -225,4 +249,68 @@ function classifySeniority(seniority: string): string {
     "entry": "Entry Level",
   };
   return (map[seniority.toLowerCase()] ?? seniority) || "Professional";
+}
+
+// ── Bing OSINT Scraper (Bypasses Telkomsel DDG Block) ─────────
+
+export async function findContactsDDG(
+  companyName: string
+): Promise<ContactResult[]> {
+  try {
+    const query = `site:linkedin.com/in "${companyName}"`;
+    const url = `https://www.bing.com/search?q=${encodeURIComponent(query)}`;
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36',
+        'Accept-Language': 'en-US,en;q=0.9',
+      },
+      signal: AbortSignal.timeout(10000)
+    });
+    
+    if (!res.ok) return [];
+    
+    const html = await res.text();
+    const $ = cheerio.load(html);
+    const results: ContactResult[] = [];
+    
+    // Bing search results are usually in 'li.b_algo'
+    $('li.b_algo').each((_, el) => {
+      const titleEl = $(el).find('h2 a');
+      const snippetEl = $(el).find('.b_caption p');
+      
+      let title = titleEl.text().trim();
+      let link = titleEl.attr('href') || '';
+      const snippet = snippetEl.text().trim();
+      
+      if (!title || !link) return;
+      
+      // Clean up title
+      title = title.replace(/\s+\|\s+LinkedIn/g, '').replace(/LinkedIn/g, '').replace(/\.\.\./g, '').trim();
+      
+      // Extract name and role (e.g. "John Doe - Software Engineer - Google")
+      const parts = title.split(' - ');
+      const name = parts[0]?.trim();
+      let role = parts.length > 1 ? parts.slice(1).join(' - ').trim() : '';
+      
+      if (!role) {
+        // try to extract from snippet
+        role = "Professional";
+      }
+      
+      if (name && link.includes('linkedin.com/in')) {
+        results.push({
+          name,
+          role,
+          emailVerified: false,
+          linkedinUrl: link,
+          seniority: normalizeSeniority(role)
+        });
+      }
+    });
+    
+    return results;
+  } catch (e) {
+    console.error("[DDG Scrape Error]", e);
+    return [];
+  }
 }

@@ -45,6 +45,12 @@ interface FormState {
   coverLetterLanguage:   string;
   resumeText:            string;
   portfolioUrl:          string;
+  hhToken:               string;
+  hhResumeId:            string;
+  hhResumeTitle:         string;
+  hhProfileName:         string;
+  hhProfileAvatar:       string;
+  hhTotalApplications:   number;
 }
 
 interface Msg {
@@ -73,6 +79,12 @@ const DEFAULT_FORM: FormState = {
   coverLetterLanguage:    "English",
   resumeText:             "",
   portfolioUrl:           "",
+  hhToken:                "",
+  hhResumeId:             "",
+  hhResumeTitle:          "",
+  hhProfileName:          "",
+  hhProfileAvatar:        "",
+  hhTotalApplications:    0,
 };
 
 const EXPERIENCE_OPTIONS = [
@@ -202,6 +214,10 @@ export default function SettingsPage() {
   const [translateJsonEn, setTranslateJsonEn] = useState(false);
   const [uploadedJsonName, setUploadedJsonName] = useState<string | null>(null);
   const [testingPortfolio, setTestingPortfolio] = useState(false);
+  
+  const [validatingHH, setValidatingHH] = useState(false);
+  const [syncingHH, setSyncingHH] = useState(false);
+  const [hhResumes, setHhResumes] = useState<any[]>([]);
 
   // ── Load current settings ────────────────────────────────
   useEffect(() => {
@@ -231,6 +247,12 @@ export default function SettingsPage() {
               coverLetterLanguage:    d.coverLetterLanguage            ?? "English",
               resumeText:             d.resumeText                     ?? "",
               portfolioUrl:           d.portfolioUrl                   ?? "",
+              hhToken:                d.hhToken                        ?? "",
+              hhResumeId:             d.hhResumeId                     ?? "",
+              hhResumeTitle:          d.hhResumeTitle                  ?? "",
+              hhProfileName:          d.hhProfileName                  ?? "",
+              hhProfileAvatar:        d.hhProfileAvatar                ?? "",
+              hhTotalApplications:    d.hhTotalApplications            ?? 0,
             });
           }
         } else if (res.status === 404) {
@@ -288,6 +310,9 @@ export default function SettingsPage() {
         coverLetterLanguage:    form.coverLetterLanguage,
         resumeText:             form.resumeText,
         portfolioUrl:           form.portfolioUrl,
+        hhToken:                form.hhToken,
+        hhResumeId:             form.hhResumeId,
+        hhResumeTitle:          form.hhResumeTitle,
       };
 
       const res  = await fetch("/api/settings", {
@@ -591,7 +616,73 @@ export default function SettingsPage() {
     };
     reader.readAsText(file);
   };
+  const handleValidateHH = async () => {
+    if (!form.hhToken) {
+      setMsg({ text: "Please enter your HH.ru Session Token (hhtoken) first.", type: "warn" });
+      return;
+    }
+    setValidatingHH(true);
+    setMsg(null);
+    try {
+      const res = await fetch("/api/settings/validate-hh", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: form.hhToken })
+      });
+      const json = await res.json();
+      if (json.success && json.resumes) {
+        setHhResumes(json.resumes);
+        setMsg({ text: `Successfully loaded ${json.resumes.length} resumes! Please select one below.`, type: "success" });
+        
+        // Auto-select the first resume if none is set
+        if (!form.hhResumeId && json.resumes.length > 0) {
+          setForm(prev => ({ 
+            ...prev, 
+            hhResumeId: json.resumes[0].id,
+            hhResumeTitle: json.resumes[0].title
+          }));
+        }
+        
+        if (json.profile) {
+          setForm(prev => ({
+            ...prev,
+            hhProfileName: json.profile.name || "",
+            hhProfileAvatar: json.profile.avatar || "",
+            hhTotalApplications: json.profile.totalApplications || 0,
+          }));
+        }
+      } else {
+        setMsg({ text: json.error ?? "Failed to validate token.", type: "error" });
+      }
+    } catch {
+      setMsg({ text: "Failed to reach the validation API.", type: "error" });
+    } finally {
+      setValidatingHH(false);
+    }
+  };
 
+  const handleSyncHistory = async () => {
+    if (!form.hhToken) return;
+    setSyncingHH(true);
+    setMsg(null);
+    try {
+      const res = await fetch("/api/settings/sync-history", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: form.hhToken })
+      });
+      const json = await res.json();
+      if (json.success) {
+        setMsg({ text: json.message, type: "success" });
+      } else {
+        setMsg({ text: json.error ?? "Failed to sync history.", type: "error" });
+      }
+    } catch {
+      setMsg({ text: "Failed to reach the sync API.", type: "error" });
+    } finally {
+      setSyncingHH(false);
+    }
+  };
 
   const handleTestPortfolio = async () => {
     if (!form.portfolioUrl) {
@@ -621,11 +712,14 @@ export default function SettingsPage() {
 
   // ── Main form ────────────────────────────────────────────
   return (
-    <div className="max-w-3xl space-y-6 pb-10">
+    <div className="max-w-6xl mx-auto flex flex-col lg:flex-row gap-6 pb-10">
+      
+      {/* ── Main Settings Column ── */}
+      <div className="flex-1 space-y-6">
 
-      {/* ── Header ── */}
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
+        {/* ── Header ── */}
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div>
           <h1 className="text-2xl font-bold text-white">Settings</h1>
           <p className="text-gray-400 text-sm mt-1">
             Configure your job search preferences
@@ -687,6 +781,55 @@ export default function SettingsPage() {
           onChange={(v) => setForm((p) => ({ ...p, name: v }))}
           hint="Name of this profile (e.g. Nanda, Web Developer, Backend)"
         />
+      </FormCard>
+
+      {/* ── HH.ru Account Integration ── */}
+      <FormCard title="HH.ru Account Integration" icon={Bot}>
+        <div className="space-y-4">
+          <div className="flex gap-3 items-end">
+            <div className="flex-1">
+              <TextField
+                label="Session Token (hhtoken)"
+                value={form.hhToken}
+                onChange={(v) => setForm((p) => ({ ...p, hhToken: v }))}
+                placeholder="kC1Prc_YclrJL..."
+                hint="Find this in DevTools -> Application -> Cookies -> hh.ru -> hhtoken"
+              />
+            </div>
+            <button
+              onClick={handleValidateHH}
+              disabled={validatingHH || !form.hhToken}
+              className="flex items-center gap-2 px-4 py-2 mb-[22px] rounded-lg bg-green-600 hover:bg-green-700 text-white text-sm font-medium transition-colors disabled:opacity-50"
+            >
+              {validatingHH ? <RefreshCw size={14} className="animate-spin" /> : <Check size={14} />}
+              Load Resumes
+            </button>
+          </div>
+          
+          {hhResumes.length > 0 && (
+            <div>
+              <label className="block text-xs text-gray-400 mb-1.5 font-medium">Select Resume for Auto-Apply</label>
+              <select
+                value={form.hhResumeId}
+                onChange={(e) => {
+                  const r = hhResumes.find(x => x.id === e.target.value);
+                  setForm(p => ({ ...p, hhResumeId: r?.id || "", hhResumeTitle: r?.title || "" }));
+                }}
+                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-green-400/60 focus:outline-none"
+              >
+                <option value="" disabled>Select a resume...</option>
+                {hhResumes.map(r => (
+                  <option key={r.id} value={r.id}>{r.title} ({r.status?.name || "Active"})</option>
+                ))}
+              </select>
+            </div>
+          )}
+          {form.hhResumeTitle && hhResumes.length === 0 && (
+            <p className="text-xs text-green-400 bg-green-400/10 border border-green-400/20 p-2 rounded">
+              ✓ Connected to Resume: <strong>{form.hhResumeTitle}</strong>
+            </p>
+          )}
+        </div>
       </FormCard>
 
       {/* ── Target Roles ── */}
@@ -943,6 +1086,65 @@ export default function SettingsPage() {
         <SaveButton saving={saving} onClick={handleSave} large />
       </div>
 
+      </div> {/* End Main Column */}
+
+      {/* ── Right Side Panel (Profile & Analytics) ── */}
+      <div className="w-full lg:w-80 shrink-0 space-y-6">
+        {form.hhProfileName ? (
+          <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden shadow-lg sticky top-6">
+            <div className="h-24 bg-gradient-to-r from-blue-600 to-green-500 opacity-80"></div>
+            <div className="px-5 pb-6 relative text-center">
+              <div className="w-20 h-20 mx-auto rounded-full border-4 border-gray-900 bg-gray-800 -mt-10 overflow-hidden flex items-center justify-center">
+                {form.hhProfileAvatar && form.hhProfileAvatar !== "null" ? (
+                  <img src={form.hhProfileAvatar} alt="Avatar" className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-3xl font-black text-gray-400">
+                    {form.hhProfileName ? form.hhProfileName.charAt(0).toUpperCase() : "?"}
+                  </span>
+                )}
+              </div>
+              <h3 className="mt-3 text-lg font-bold text-white">{form.hhProfileName}</h3>
+              <p className="text-sm text-gray-400">HeadHunter Profile</p>
+              
+              <div className="mt-6 pt-5 border-t border-gray-800 grid grid-cols-2 gap-4">
+                <div className="text-center">
+                  <div className="text-2xl font-black text-green-400">{form.hhTotalApplications || 0}</div>
+                  <div className="text-[10px] text-gray-500 uppercase tracking-wider mt-1 font-semibold">Total Responses</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-black text-blue-400">{form.hhResumeId ? "1" : "0"}</div>
+                  <div className="text-[10px] text-gray-500 uppercase tracking-wider mt-1 font-semibold">Active CV</div>
+                </div>
+              </div>
+
+              <div className="mt-6">
+                <button
+                  onClick={handleSyncHistory}
+                  disabled={syncingHH}
+                  className="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-sm font-medium text-white transition-colors disabled:opacity-50 border border-gray-700"
+                >
+                  {syncingHH ? (
+                    <RefreshCw size={16} className="animate-spin text-green-400" />
+                  ) : (
+                    <RefreshCw size={16} className="text-gray-400" />
+                  )}
+                  {syncingHH ? "Syncing History..." : "Sync History to Database"}
+                </button>
+                <p className="text-[10px] text-gray-500 mt-2 text-center">
+                  Imports all your past HH.ru applications into the local Applied tab.
+                </p>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="bg-gray-900/50 border border-gray-800/50 border-dashed rounded-xl p-8 flex flex-col items-center justify-center text-center sticky top-6">
+            <Bot size={32} className="text-gray-600 mb-3" />
+            <h3 className="text-gray-400 font-medium">No Profile Loaded</h3>
+            <p className="text-xs text-gray-500 mt-2">Load your HH.ru account to view your profile and analytics dashboard.</p>
+          </div>
+        )}
+      </div>
+
     </div>
   );
 }
@@ -1083,3 +1285,7 @@ function TelegramLinkCard() {
   );
 }
 
+
+// ts recheck
+
+// ts recheck again

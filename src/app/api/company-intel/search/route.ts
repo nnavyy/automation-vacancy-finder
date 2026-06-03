@@ -10,6 +10,7 @@ import {
   findCompanyDomain,
   findEmailsHunter,
   findContactsApollo,
+  findContactsDDG,
   mergeContacts,
 } from "@/lib/companyIntel";
 
@@ -18,8 +19,9 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json().catch(() => ({}));
-    const { companyName, vacancyId } = body as {
+    const { companyName, domain: providedDomain, vacancyId } = body as {
       companyName?: string;
+      domain?: string;
       vacancyId?: string;
     };
 
@@ -32,18 +34,22 @@ export async function POST(req: NextRequest) {
 
     const name = companyName.trim();
 
-    // Step 1: Find company domain via Clearbit
-    const clearbitResult = await findCompanyDomain(name);
-    const domain = clearbitResult?.domain;
+    // Step 1: Use provided domain or find via Clearbit
+    let domain = providedDomain?.trim();
+    if (!domain) {
+      const clearbitResult = await findCompanyDomain(name);
+      domain = clearbitResult?.domain;
+    }
 
-    // Step 2: Fetch contacts in parallel from Hunter + Apollo
-    const [hunterContacts, apolloContacts] = await Promise.all([
+    // Step 2: Fetch contacts in parallel from Hunter + Apollo + DDG OSINT
+    const [hunterContacts, apolloContacts, ddgContacts] = await Promise.all([
       domain ? findEmailsHunter(domain) : Promise.resolve([]),
       domain ? findContactsApollo(domain) : Promise.resolve([]),
+      findContactsDDG(name)
     ]);
 
     // Step 3: Merge and deduplicate
-    const mergedContacts = mergeContacts(hunterContacts, apolloContacts);
+    const mergedContacts = mergeContacts(hunterContacts, apolloContacts, ddgContacts);
 
     // Step 4: Save to DB
     const intel = await prisma.companyIntel.create({

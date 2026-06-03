@@ -1,246 +1,75 @@
-# Nanda AI Job Assistant
+# Nanda AI Job Assistant: User Guide & Features
 
-Semi-automated HH.ru job search and vacancy analysis assistant.
+> **Note for Developers:** For local installation, tech stack details, and project structure, please see the [TECHNICAL_GUIDE.md](./TECHNICAL_GUIDE.md).
 
-Collects data, filters according to specific criteria, performs AI analysis, sends notifications to Telegram, and requires user approval.
-
----
-
-## Architecture
-
-```
-HH Public API (api.hh.ru/vacancies)
-        ↓
-n8n Scheduler (every 3h)
-        ↓ calls
-Next.js API (/api/cron/collect-vacancies)
-        ↓
-[Keyword Filter → Rule Score → AI Analysis (Groq)]
-        ↓
-NeonDB (PostgreSQL via Prisma)
-        ↓
-Telegram Bot (only high-score matches)
-        ↓
-User Interaction: Apply | Skip | Save | Edit Letter
-```
+Welcome to the **Nanda AI Job Assistant**, your personal, semi-automated job search engine for HH.ru. This application is designed to take the tedious manual labor out of job hunting by automating vacancy scraping, evaluating them using Artificial Intelligence, and assisting with OSINT (Open-Source Intelligence) to contact hiring managers directly.
 
 ---
 
-## Stack
+## Core Philosophy
 
-| Layer | Tool |
-|---|---|
-| Framework | Next.js 15 (App Router) |
-| Language | TypeScript |
-| Database | NeonDB PostgreSQL + Prisma ORM |
-| Scheduler | n8n (local via `npx n8n`) |
-| Notifications | Telegram Bot API |
-| AI Primary | Groq (llama-3.3-70b-versatile) |
-| AI Fallback 1 | Gemini (gemini-1.5-flash) |
-| AI Fallback 2 | OpenRouter (free models) |
-| AI Fallback 3 | Rule-based scoring |
-| Deployment | Vercel |
+The traditional job search requires you to manually browse pages of jobs, read long descriptions, guess if you match the requirements, and blindly apply through an ATS (Applicant Tracking System). 
+
+This app flips the script:
+1. **It searches for you** while you sleep.
+2. **It reads and scores** every job description using AI.
+3. **It alerts you** via Telegram only for the best matches.
+4. **It helps you bypass ATS** by finding the emails and LinkedIn profiles of company decision-makers.
 
 ---
 
-## Setup Requirements
+## Key Features
 
-Before you begin, ensure you have the following installed on your system:
-- **Node.js**: Version 18.x or newer
-- **Git**: For cloning the repository
-- **NeonDB Account**: For PostgreSQL database hosting
-- **API Keys**: Groq, Google Gemini, OpenRouter, and a Telegram Bot Token.
+### 1. Smart Vacancy Dashboard
+Instead of a messy spreadsheet, you get a clean, modern dashboard to manage your entire job pipeline.
+- **Overview:** See your latest AI-scored job matches at a glance.
+- **Vacancies:** Review jobs that the system collected. Read the AI's explanation of *why* you are a good fit (or why you are missing skills).
+- **Saved & Applied:** Track jobs you've bookmarked and jobs you've already applied for.
 
-> **Note for Windows Users:**
-> We have provided an automated setup script. Simply double-click `setup.bat` in the project folder. It will automatically check for Node.js, install all required dependencies, create your `.env.local` file, and configure the database client. After running it, just fill in your API keys in the `.env.local` file.
+### 2. AI-Powered Evaluation (Groq & Gemini)
+Every vacancy pulled from HH.ru is passed through a multi-layer AI pipeline.
+- **Pre-screening:** Removes spam, fake jobs, or irrelevant postings.
+- **Scoring (0-100):** The AI scores the job based on your exact profile, tech stack, and experience. 
+- **Red Flags:** Automatically detects toxic phrases in job descriptions (e.g., "work hard play hard", "stress tolerance").
+- **Cover Letters:** Automatically generates a personalized cover letter tailored to the specific job requirements.
 
----
+### 3. Company Intel (OSINT & Contact Finder)
+When you apply through a standard portal, you become just another PDF. The **Company Intel** feature helps you bypass the queue.
+- **Automated Contact Scraping:** Enter a company name (e.g., "Gojek" or "cian.ru"), and the app will hunt down the emails, roles, and LinkedIn profiles of their employees.
+- **Multi-layered Search:** It uses a hybrid of Hunter.io, Apollo.io, and a proprietary Bing OSINT Scraper to ensure you find the right people.
+- **Smart OSINT Links:** One-click buttons to instantly perform a LinkedIn Search, Google X-Ray search, or Glassdoor check for the company.
 
-## Setup Guide (Local / Manual)
+### 4. Real-time HH.ru Synchronization
+- Connects securely to your private HH.ru account.
+- Syncs your application history, interview invites, and negotiation statuses in real-time so your dashboard is always up to date with the platform.
 
-If you are not using `setup.bat`, follow these steps:
-
-### Step 1 — Clone & Install
-
-```bash
-cd "automation vacancy finder"
-npm install
-```
-
-### Step 2 — Environment Variables
-
-```bash
-cp .env.example .env.local
-```
-
-Fill in `.env.local`:
-
-```
-DATABASE_URL=          ← from NeonDB console
-DIRECT_URL=            ← from NeonDB console (same URL usually)
-TELEGRAM_BOT_TOKEN=    ← from BotFather on Telegram
-TELEGRAM_CHAT_ID=      ← your Telegram chat ID (message userinfobot)
-GROQ_API_KEY=          ← from console.groq.com (free)
-GEMINI_API_KEY=        ← from aistudio.google.com (free)
-CRON_SECRET=           ← any random string, e.g. openssl rand -hex 32
-NEXT_PUBLIC_APP_URL=http://localhost:3000
-```
-
-### Step 3 — Setup Database
-
-```bash
-npm run db:push        # push schema to NeonDB
-npm run db:generate    # generate Prisma client
-npm run db:seed        # seed default preferences for Nanda
-```
-
-### Step 4 — Start Next.js
-
-```bash
-npm run dev
-# App runs at http://localhost:3000
-# Dashboard at http://localhost:3000/dashboard
-```
-
-### Step 5 — Setup Telegram Bot
-
-1. Message BotFather on Telegram
-2. Send `/newbot` and follow instructions
-3. Copy the token → `TELEGRAM_BOT_TOKEN`
-4. Message userinfobot to get your chat ID → `TELEGRAM_CHAT_ID`
-
-**Register webhook** (so Telegram sends callbacks to your app):
-```bash
-# While running locally, use ngrok first:
-npx ngrok http 3000
-
-# Then register webhook:
-curl -X POST "https://api.telegram.org/bot<YOUR_TOKEN>/setWebhook" \
-  -H "Content-Type: application/json" \
-  -d '{"url": "https://YOUR-NGROK-URL.ngrok.io/api/telegram/webhook"}'
-```
-
-Or use n8n webhook instead (see `n8n/README.md`).
-
-### Step 6 — Setup n8n
-
-```bash
-# In a separate terminal:
-npx n8n
-
-# n8n runs at http://localhost:5678
-```
-
-1. Open http://localhost:5678
-2. Go to **Settings → Environment Variables**
-3. Add: `CRON_SECRET` = same value as in your .env.local
-4. Add: `TELEGRAM_BOT_TOKEN` = your bot token
-5. Import workflows from `n8n/workflows/` folder
-6. Activate all 3 workflows
-
-See `n8n/README.md` for detailed n8n setup.
+### 5. Telegram Bot Integration
+You don't need to stare at the web app all day. 
+- The system runs in the background and sends a Telegram message directly to your phone when a **High-Score Job** (e.g., >80/100) is found.
+- You can read the AI summary and click "Apply" right from your chat.
 
 ---
 
-## Project Structure
+## How to Use the App
 
-```
-automation-vacancy-finder/
-├── prisma/
-│   └── schema.prisma          ← Database models
-├── src/
-│   ├── proxy.ts               ← Route protection & middleware logic
-│   ├── types/
-│   │   └── index.ts           ← TypeScript types
-│   ├── lib/
-│   │   ├── auth.ts            ← NextAuth configuration
-│   │   ├── auth-helpers.ts    ← Authentication helper functions
-│   │   ├── collectionPipeline.ts ← Vacancy collection logic
-│   │   ├── db.ts              ← Prisma client singleton
-│   │   ├── hhPublicVacancyClient.ts ← HH.ru API client
-│   │   ├── aiAnalyzer.ts      ← AI analysis orchestrator
-│   │   ├── telegram.ts        ← Telegram notifications
-│   │   └── ... (scoring, rules, redFlags, etc.)
-│   ├── app/
-│   │   ├── api/
-│   │   │   ├── auth/          ← Authentication endpoints (login, reset-password, etc.)
-│   │   │   ├── cron/          ← Automated job runners
-│   │   │   ├── dashboard/     ← Manual collection endpoints
-│   │   │   ├── telegram/      ← Telegram webhooks
-│   │   │   └── vacancies/     ← Vacancy management endpoints
-│   │   ├── dashboard/         ← Protected dashboard pages
-│   │   ├── login/             ← Login page
-│   │   ├── register/          ← Registration page
-│   │   ├── forgot-password/   ← Password reset request page
-│   │   └── reset-password/    ← Password reset confirmation page
-│   └── components/
-│       ├── MobileSidebarWrapper.tsx ← Responsive layout handler
-│       ├── SidebarNav.tsx     ← Dashboard navigation
-│       └── ... (UI components)
-└── n8n/
-    ├── README.md              ← n8n setup instructions
-    └── workflows/             ← n8n JSON workflows
-```
+### Step 1: Configure Your Profile & Settings
+Before the AI can find your perfect job, you must configure your skills, keywords, and link your HH.ru account token. 
+Read the full step-by-step tutorial here: **[How to Setup Profile & Settings](./HOW_TO_SETTINGS_PROFILE.md)**.
 
----
+### Step 2: Review Your Matches
+Check your Telegram or the **Overview** page on the dashboard. Look at the AI Score and the "Pros/Cons" generated for each job.
 
-## How It Works (DFD Level 1)
+### Step 2: Apply or Save
+If you like the job, you have two choices:
+1. **Apply via HH.ru:** Click the link, apply normally.
+2. **The Pro Strategy (Recommended):** Use the **Company Intel** tab.
 
-```
-1. Load Preferences → 2. Build EN+RU Queries → 3. Fetch HH API
-→ 4. Pagination Loop → 5. Normalize Data → 6. Duplicate Check
-→ (if new) 7. Basic Rule Filter → (if passes) 8. Rule Pre-Score
-→ (if score >= 30) 9. AI Analysis → 10. Red Flag Detection
-→ 11. Generate Cover Letter → 12. Save to DB
-→ (if score >= threshold) 13. Send Telegram Notification
-→ User: Mark Applied | Skip | Save | Edit Letter
-```
+### Step 3: The Pro Strategy (Bypassing ATS)
+1. Go to the **Company Intel** menu.
+2. Type in the company name (e.g., "Faceit").
+3. The system will find the hiring managers, HRs, or CTOs.
+4. Copy their email or LinkedIn URL.
+5. Send them a direct, personalized message using the AI-generated Cover Letter from the vacancy page.
 
----
-
-## AI Score Guide
-
-| Score | Meaning | Action |
-|---|---|---|
-| 90-100 | Excellent fit | Apply immediately |
-| 75-89 | Good fit | Apply |
-| 60-74 | Possible fit | Review and apply |
-| 40-59 | Weak fit | Apply with caution |
-| 0-39 | Skip | Auto-skip |
-
----
-
-## Environment Variables Reference
-
-| Variable | Required | Description |
-|---|---|---|
-| `DATABASE_URL` | Yes | NeonDB connection string |
-| `DIRECT_URL` | Yes | NeonDB direct URL |
-| `TELEGRAM_BOT_TOKEN` | Yes | From BotFather |
-| `TELEGRAM_CHAT_ID` | Yes | Your chat ID |
-| `GROQ_API_KEY` | Yes | Primary AI (free) |
-| `GEMINI_API_KEY` | Partial | Fallback AI (free) |
-| `OPENROUTER_API_KEY` | Partial | Fallback AI 2 |
-| `CRON_SECRET` | Yes | Protects cron endpoint |
-| `NEXT_PUBLIC_APP_URL` | Yes | `http://localhost:3000` |
-| `HH_USER_AGENT` | Yes | Required by HH API |
-
----
-
-## Obtaining API Keys
-
-1. **Groq** → https://console.groq.com → Create API Key
-2. **Gemini** → https://aistudio.google.com → Get API Key
-3. **OpenRouter** → https://openrouter.ai → Sign up for free models
-4. **NeonDB** → https://console.neon.tech → New project, copy connection string
-5. **Telegram Bot** → https://t.me/BotFather → `/newbot`
-
----
-
-## Roadmap
-
-- [x] Phase 1: n8n + Telegram + AI + NeonDB (MVP)
-- [x] Phase 2: Dashboard + Full API
-- [ ] Phase 3: Analytics improvement
-- [ ] Phase 4: Adaptive scoring weights from feedback
-- [ ] Phase 5: ML model for personalized scoring
+### Step 4: Track Analytics
+Go to the **Analytics** tab to see your conversion rates: How many jobs were collected, how many you applied to, and how many resulted in interviews. Let the AI optimize your strategy based on the data.

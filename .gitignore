@@ -28,6 +28,21 @@ replit.md
 
 # project specific
 /revisi
+/vc low code
 
 test-email.js
 check-page.js
+
+# test files
+*test*.js
+test*.js
+scratch*.js
+check-*.js
+create-test*.js
+find-tel.js
+reset-data.js
+
+# HTML tests and outputs
+*test*.html
+test*.html
+*.log

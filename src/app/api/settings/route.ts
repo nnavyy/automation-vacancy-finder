@@ -92,6 +92,8 @@ export async function POST(req: NextRequest) {
       "name", "salaryMinimum", "salaryCurrency",
       "minimumScoreToNotify", "maxNotificationsPerDay",
       "coverLetterLanguage", "resumeText", "isActive", "portfolioUrl",
+      "hhToken", "hhResumeId", "hhResumeTitle",
+      "hhProfileName", "hhProfileAvatar", "hhTotalApplications",
     ]);
 
     // JSON array fields
@@ -130,3 +132,5 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: "Failed to save settings" }, { status: 500 });
   }
 }
+
+// ts recheck

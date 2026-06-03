@@ -62,12 +62,13 @@ function recVariant(rec: string): "green" | "yellow" | "red" {
 export default async function VacanciesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; page?: string }>;
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
+  await new Promise(r => setTimeout(r, 800));
   const user = await requireUser();
   const sp = await searchParams;
-  const status = sp.status ?? "";
-  const page = Math.max(1, parseInt(sp.page ?? "1", 10));
+  const status = (sp.status as string) ?? "";
+  const page = Math.max(1, parseInt((sp.page as string) ?? "1", 10));
   const limit = 20;
   const skip = (page - 1) * limit;
 
@@ -101,6 +102,7 @@ export default async function VacanciesPage({
             salary: true,
             status: true,
             createdAt: true,
+            rawData: true,
             analysis: {
               select: {
                 matchScore: true,
@@ -210,6 +212,13 @@ export default async function VacanciesPage({
               ? v.analysis!.redFlags.length
               : 0;
             const salary = formatSalary(v.salary);
+            
+            let dateStr = "";
+            if (v.rawData && typeof v.rawData === 'object' && 'published_at' in v.rawData) {
+              dateStr = new Date((v.rawData as any).published_at).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
+            } else if (v.createdAt) {
+              dateStr = new Date(v.createdAt).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
+            }
 
             return (
               <div
@@ -253,8 +262,13 @@ export default async function VacanciesPage({
                       )}
                       {v.area && <span>• {v.area}</span>}
                       {salary && (
-                        <span className="text-green-400 font-medium">
+                        <span className="text-green-500 font-medium">
                           • {salary}
+                        </span>
+                      )}
+                      {dateStr && (
+                        <span className="text-gray-500">
+                          • {dateStr}
                         </span>
                       )}
                     </div>

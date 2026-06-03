@@ -59,6 +59,14 @@ model SearchPreference {
   coverLetterLanguage    String  @default("English")
   resumeText             String?
   portfolioUrl           String?
+
+  hhToken                String?
+  hhResumeId             String?
+  hhResumeTitle          String?
+  hhProfileName          String?
+  hhProfileAvatar        String?
+  hhTotalApplications    Int?      @default(0)
+
   collectionStatus       Json?   // { running: boolean, analyzed: number, total: number, startedAt: string }
   isActive               Boolean @default(true)
 

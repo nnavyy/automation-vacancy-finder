@@ -26,6 +26,7 @@ import {
   Briefcase,
   ShieldCheck,
 } from "lucide-react";
+import { SkeletonCard } from "@/components/ui/Skeleton";
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -373,15 +374,30 @@ function CompanyIntelCard({
       {/* Contacts Grid */}
       {expanded && (
         <div className="p-5">
+          {/* Quick OSINT Links */}
+          <div className="mb-4 flex flex-wrap gap-2">
+            <a href={`https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(intel.companyName + (jobTitle ? ' ' + jobTitle : ''))}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-blue-500/10 text-blue-400 border border-blue-500/20 rounded-lg hover:bg-blue-500/20 transition-all">
+              <Linkedin className="w-3.5 h-3.5" />
+              LinkedIn Search
+            </a>
+            <a href={`https://www.google.com/search?q=site:linkedin.com/in+"${encodeURIComponent(intel.companyName)}"`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-gray-800 text-gray-300 border border-gray-700 rounded-lg hover:bg-gray-700 transition-all">
+              <Search className="w-3.5 h-3.5" />
+              Google X-Ray
+            </a>
+            <a href={`https://www.glassdoor.com/Search/results.htm?keyword=${encodeURIComponent(intel.companyName)}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-green-500/10 text-green-400 border border-green-500/20 rounded-lg hover:bg-green-500/20 transition-all">
+              <Globe className="w-3.5 h-3.5" />
+              Glassdoor
+            </a>
+          </div>
+
           {sortedContacts.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-10 text-center">
-              <AlertCircle className="w-8 h-8 text-gray-600 mb-3" />
+            <div className="flex flex-col items-center justify-center py-6 text-center bg-gray-800/20 rounded-xl border border-gray-800 border-dashed">
+              <AlertCircle className="w-6 h-6 text-gray-600 mb-2" />
               <p className="text-sm text-gray-400 font-medium">
-                No contacts found
+                No automated contacts found
               </p>
-              <p className="text-xs text-gray-500 mt-1">
-                Try adding your Hunter.io and Apollo.io API keys in your .env
-                file.
+              <p className="text-xs text-gray-500 mt-1 max-w-xs">
+                Use the manual OSINT links above to find people directly on LinkedIn.
               </p>
             </div>
           ) : (
@@ -414,9 +430,37 @@ function CompanyIntelContent() {
   const [companyName, setCompanyName] = useState(searchParams.get("company") ?? "");
   const [jobTitle, setJobTitle] = useState("");
   const [error, setError] = useState("");
+  const [suggestions, setSuggestions] = useState<{name: string, domain: string, logo: string}[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [selectedDomain, setSelectedDomain] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchSuggestions = async () => {
+      if (!companyName.trim() || companyName.includes('.')) {
+        setSuggestions([]);
+        setShowSuggestions(false);
+        return;
+      }
+      try {
+        const res = await fetch(`https://autocomplete.clearbit.com/v1/companies/suggest?query=${encodeURIComponent(companyName)}`);
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          setSuggestions(data);
+          setShowSuggestions(true);
+        }
+      } catch (e) {
+        setSuggestions([]);
+      }
+    };
+    
+    const timer = setTimeout(fetchSuggestions, 300);
+    return () => clearTimeout(timer);
+  }, [companyName]);
 
   const fetchIntels = useCallback(async () => {
     try {
+      // Artificial delay so skeleton is visible (user requested)
+      await new Promise(r => setTimeout(r, 1200));
       const res = await fetch("/api/company-intel");
       const json = await res.json();
       if (json.success) setIntels(json.data);
@@ -435,12 +479,24 @@ function CompanyIntelContent() {
 
     setSearching(true);
     setError("");
+    setShowSuggestions(false);
+
+    let domainToPass = selectedDomain;
+    if (!domainToPass && companyName.includes('.') && !companyName.includes(' ')) {
+      domainToPass = companyName.trim();
+    }
 
     try {
+      // Artificial delay so skeleton is visible (user requested)
+      await new Promise(r => setTimeout(r, 1500));
+      
       const res = await fetch("/api/company-intel/search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ companyName: companyName.trim() }),
+        body: JSON.stringify({ 
+          companyName: companyName.trim(),
+          domain: domainToPass
+        }),
       });
       const json = await res.json();
 
@@ -506,16 +562,43 @@ function CompanyIntelContent() {
           </h2>
 
           <div className="flex flex-col sm:flex-row gap-3">
-            <div className="flex-1">
+            <div className="flex-1 relative">
               <input
                 id="company-name-input"
                 type="text"
                 value={companyName}
-                onChange={(e) => setCompanyName(e.target.value)}
-                placeholder="Company name (e.g. Google, Yandex, Grab...)"
+                onChange={(e) => {
+                  setCompanyName(e.target.value);
+                  setSelectedDomain(null);
+                }}
+                onFocus={() => { if (suggestions.length > 0) setShowSuggestions(true); }}
+                onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                placeholder="Company name or domain (e.g. Google or cian.ru)"
                 disabled={searching}
                 className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500/50 transition-all duration-150 disabled:opacity-50"
+                autoComplete="off"
               />
+              {showSuggestions && suggestions.length > 0 && (
+                <div className="absolute z-10 w-full mt-2 bg-gray-800 border border-gray-700 rounded-xl shadow-xl overflow-hidden max-h-60 overflow-y-auto">
+                  {suggestions.map((s, idx) => (
+                    <div 
+                      key={idx}
+                      className="flex items-center gap-3 px-4 py-3 hover:bg-gray-700 cursor-pointer transition-colors"
+                      onClick={() => {
+                        setCompanyName(s.name);
+                        setSelectedDomain(s.domain);
+                        setShowSuggestions(false);
+                      }}
+                    >
+                      {s.logo ? <img src={s.logo} alt="" className="w-6 h-6 rounded-md bg-white" /> : <div className="w-6 h-6 rounded-md bg-gray-600"></div>}
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-white truncate">{s.name}</p>
+                        <p className="text-xs text-gray-400 truncate">{s.domain}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="sm:w-64">
               <input
@@ -556,27 +639,19 @@ function CompanyIntelContent() {
           )}
 
           {/* API key notice */}
-          {!process.env.NEXT_PUBLIC_HAS_CONTACT_API && (
-            <p className="mt-3 text-xs text-gray-500 flex items-start gap-1.5">
-              <AlertCircle className="w-3 h-3 mt-0.5 shrink-0" />
-              Add{" "}
-              <code className="text-gray-400 bg-gray-800 px-1 rounded">
-                HUNTER_API_KEY
-              </code>{" "}
-              and{" "}
-              <code className="text-gray-400 bg-gray-800 px-1 rounded">
-                APOLLO_API_KEY
-              </code>{" "}
-              to your .env for contact data. Domain lookup works without API
-              keys.
-            </p>
-          )}
+          <p className="mt-3 text-xs text-gray-500 flex items-start gap-1.5">
+            <Sparkles className="w-3 h-3 mt-0.5 shrink-0 text-violet-400" />
+            Tip: The app will automatically search via Hunter/Apollo. If they fail, use the Quick OSINT links to search LinkedIn directly.
+          </p>
         </form>
 
         {/* Results */}
         {loading ? (
-          <div className="flex items-center justify-center py-20">
-            <Loader2 className="w-8 h-8 animate-spin text-violet-400" />
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 gap-4">
+              <SkeletonCard />
+              <SkeletonCard />
+            </div>
           </div>
         ) : intels.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20 text-center">

@@ -74,6 +74,7 @@ function StatCard({
 // ── Page ──────────────────────────────────────────────────────
 
 export default async function DashboardPage() {
+  await new Promise(r => setTimeout(r, 800));
   const user = await requireUser();
   let all: any[] = [];
   let total = 0;
@@ -99,7 +100,7 @@ export default async function DashboardPage() {
           orderBy: { analysis: { matchScore: "desc" } },
           select: {
             id: true, hhId: true, title: true, company: true, area: true,
-            salary: true, url: true, status: true,
+            salary: true, url: true, status: true, rawData: true, createdAt: true,
             analysis: { select: { matchScore: true, recommendation: true, aiStatus: true, redFlags: true } },
           },
         }),
@@ -241,6 +242,14 @@ export default async function DashboardPage() {
           ) : (
             topMatches.map((v: any) => {
               const salary = formatSalary(v.salary);
+              // Safely extract the publication date from rawData or fallback to createdAt
+              let dateStr = "";
+              if (v.rawData && typeof v.rawData === 'object' && 'published_at' in v.rawData) {
+                dateStr = new Date((v.rawData as any).published_at).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
+              } else if (v.createdAt) {
+                dateStr = new Date(v.createdAt).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
+              }
+
               return (
                 <Link
                   key={v.id}
@@ -261,11 +270,14 @@ export default async function DashboardPage() {
                     </div>
                     <div className="flex items-center gap-2 text-xs text-gray-500 flex-wrap">
                       {v.company && (
-                        <span className="text-gray-400">{v.company}</span>
+                        <span className="text-gray-400 font-medium">{v.company}</span>
                       )}
                       {v.area && <span>· {v.area}</span>}
                       {salary && (
                         <span className="text-green-500">· {salary}</span>
+                      )}
+                      {dateStr && (
+                        <span className="text-gray-500">· {dateStr}</span>
                       )}
                     </div>
                   </div>

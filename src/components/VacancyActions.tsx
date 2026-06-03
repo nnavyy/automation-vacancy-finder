@@ -28,7 +28,7 @@ interface VacancyActionsProps {
   coverLetter?: string;
 }
 
-type ActionKey = "applied" | "skip" | "save" | "regenerate" | "block_company" | "telegram";
+type ActionKey = "applied" | "apply_hh" | "skip" | "save" | "regenerate" | "block_company" | "telegram";
 
 interface Msg {
   text: string;
@@ -39,6 +39,7 @@ interface Msg {
 
 const ENDPOINT: Record<ActionKey, (id: string) => string> = {
   applied: (id) => `/api/vacancies/${id}/mark-applied`,
+  apply_hh: (id) => `/api/vacancies/${id}/apply-hh`,
   skip: (id) => `/api/vacancies/${id}/skip`,
   save: (id) => `/api/vacancies/${id}/save`,
   regenerate: (id) => `/api/vacancies/${id}/regenerate-letter`,
@@ -48,6 +49,7 @@ const ENDPOINT: Record<ActionKey, (id: string) => string> = {
 
 const STATUS_AFTER: Partial<Record<ActionKey, string>> = {
   applied: "applied_manual",
+  apply_hh: "applied_hh",
   skip: "skipped",
   save: "saved",
   block_company: "ignored",
@@ -55,6 +57,7 @@ const STATUS_AFTER: Partial<Record<ActionKey, string>> = {
 
 const SUCCESS_MSG: Record<ActionKey, string> = {
   applied: "Marked as applied.",
+  apply_hh: "Application sent via HH.ru successfully!",
   skip: "Vacancy skipped.",
   save: "Saved to your list.",
   regenerate: "Regeneration queued — refresh to see the new letter.",
@@ -146,10 +149,24 @@ export default function VacancyActions({
 
       {/* Primary action buttons */}
       <div className="flex flex-wrap gap-3">
+        {/* 🚀 Apply via HH.ru (Auto) */}
+        <button
+          onClick={() => handleAction("apply_hh")}
+          disabled={loading !== null || status === "applied_manual" || status === "applied_hh"}
+          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {busy("apply_hh") ? (
+            <Loader2 size={14} className="animate-spin" />
+          ) : (
+            <Send size={14} />
+          )}
+          {status === "applied_hh" ? "Applied on HH" : "Apply via HH.ru"}
+        </button>
+
         {/* ✅ Mark Applied */}
         <button
           onClick={() => handleAction("applied")}
-          disabled={loading !== null || status === "applied_manual"}
+          disabled={loading !== null || status === "applied_manual" || status === "applied_hh"}
           className="flex items-center gap-2 px-4 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {busy("applied") ? (
@@ -157,7 +174,7 @@ export default function VacancyActions({
           ) : (
             <CheckCircle size={14} />
           )}
-          {status === "applied_manual" ? "Applied" : "Mark Applied"}
+          {status === "applied_manual" ? "Marked Applied" : "Mark Applied"}
         </button>
 
         {/* ❌ Skip */}

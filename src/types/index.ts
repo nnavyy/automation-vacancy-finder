@@ -126,6 +126,13 @@ export interface SearchPreferenceData {
   resumeText?: string | null;
   portfolioUrl?: string | null;
   isActive: boolean;
+
+  hhToken?: string | null;
+  hhResumeId?: string | null;
+  hhResumeTitle?: string | null;
+  hhProfileName?: string | null;
+  hhProfileAvatar?: string | null;
+  hhTotalApplications?: number | null;
 }
 
 // ------------------------------------------------------------
