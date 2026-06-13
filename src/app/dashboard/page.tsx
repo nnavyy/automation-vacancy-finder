@@ -265,6 +265,9 @@ export default async function DashboardPage() {
                       <span className="text-sm font-medium text-white group-hover:text-green-400 transition-colors truncate">
                         {v.title}
                       </span>
+                      {v.status && v.status.startsWith("applied") && (
+                        <Badge label="APPLIED" variant="green" />
+                      )}
                       {v.analysis?.recommendation && (
                         <Badge
                           label={v.analysis.recommendation}
