@@ -95,7 +95,11 @@ export default async function DashboardPage() {
         }),
         prisma.vacancy.count({ where: { userId: user.id } }),
         prisma.vacancy.findMany({
-          where:   { userId: user.id, analysis: { isNot: null } },
+          where:   { 
+            userId: user.id, 
+            analysis: { isNot: null },
+            createdAt: { gte: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000) }
+          },
           take:    5,
           orderBy: { analysis: { matchScore: "desc" } },
           select: {

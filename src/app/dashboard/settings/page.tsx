@@ -789,11 +789,11 @@ export default function SettingsPage() {
           <div className="flex gap-3 items-end">
             <div className="flex-1">
               <TextField
-                label="Session Token (hhtoken)"
+                label="Full Cookie String"
                 value={form.hhToken}
                 onChange={(v) => setForm((p) => ({ ...p, hhToken: v }))}
-                placeholder="kC1Prc_YclrJL..."
-                hint="Find this in DevTools -> Application -> Cookies -> hh.ru -> hhtoken"
+                placeholder="hhtoken=...; hhuid=...; _xsrf=..."
+                hint="Go to Network tab, refresh hh.ru, click a request, copy 'Cookie' from Request Headers"
               />
             </div>
             <button
