@@ -82,6 +82,10 @@ interface TelegramUpdate {
     chat: { id: number; type: string };
     from?: { id: number; username?: string };
     text?: string;
+    reply_to_message?: {
+      message_id: number;
+      text?: string;
+    };
   };
   callback_query?: {
     id: string;
@@ -434,8 +438,7 @@ export async function POST(req: NextRequest) {
         await tgAnswerCallback(cb.id, "✍️ Regenerating...");
         reply = await handleEdit(targetId);
         if (cbChatId) await tgSend(cbChatId, reply);
-        toast = "";
-        break;
+        return NextResponse.json({ ok: true });
 
       case "edit_man":
         await tgAnswerCallback(cb.id, "✏️ Please type your cover letter...");
@@ -443,8 +446,7 @@ export async function POST(req: NextRequest) {
           const forceReplyMarkup = { force_reply: true, selective: true };
           await tgSend(cbChatId, `Reply to this message to manually edit cover letter for Vacancy ID:\n${targetId}`, { reply_markup: forceReplyMarkup });
         }
-        toast = "";
-        break;
+        return NextResponse.json({ ok: true });
 
       default:
         await tgAnswerCallback(cb.id, "Unknown");
@@ -452,7 +454,7 @@ export async function POST(req: NextRequest) {
     }
 
     await tgAnswerCallback(cb.id, toast);
-    if (cbChatId) await tgSend(cbChatId, reply);
+    if (cbChatId && reply) await tgSend(cbChatId, reply);
 
     return NextResponse.json({ ok: true });
   } catch (err) {

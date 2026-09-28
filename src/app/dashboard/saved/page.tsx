@@ -30,7 +30,6 @@ export default async function SavedPage({
 }: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
-  await new Promise(r => setTimeout(r, 800));
   const user = await requireUser();
   const sp = await searchParams;
   const page = Math.max(1, parseInt((sp.page as string) ?? "1", 10));

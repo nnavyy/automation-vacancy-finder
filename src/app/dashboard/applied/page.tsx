@@ -34,7 +34,6 @@ export default async function AppliedPage({
 }: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
-  await new Promise(r => setTimeout(r, 800));
   const user = await requireUser();
   const sp = await searchParams;
   const page = Math.max(1, parseInt(sp.page as string ?? "1", 10));
@@ -47,7 +46,7 @@ export default async function AppliedPage({
   try {
     [vacancies, total] = await Promise.all([
       prisma.vacancy.findMany({
-        where: { userId: user.id, status: "applied_manual" },
+        where: { userId: user.id, status: { in: ["applied_manual", "applied_hh"] } },
         skip,
         take: limit,
         orderBy: { updatedAt: "desc" },
@@ -57,7 +56,7 @@ export default async function AppliedPage({
           analysis: { select: { matchScore: true, recommendation: true, aiStatus: true, redFlags: true } },
         },
       }),
-      prisma.vacancy.count({ where: { userId: user.id, status: "applied_manual" } }),
+      prisma.vacancy.count({ where: { userId: user.id, status: { in: ["applied_manual", "applied_hh"] } } }),
     ]);
   } catch (err) {
     console.error("[Applied Page]", err);

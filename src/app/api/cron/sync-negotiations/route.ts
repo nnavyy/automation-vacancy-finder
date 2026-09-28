@@ -29,14 +29,13 @@ export async function GET(req: Request) {
           let vacancyIdMatch = item.url.match(/vacancy\/(\d+)/);
           let vacancyId = vacancyIdMatch ? vacancyIdMatch[1] : `manual-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
           
-          const exists = await prisma.vacancy.findUnique({
-            where: { id: vacancyId }
+          const exists = await prisma.vacancy.findFirst({
+            where: { hhId: vacancyId, userId: pref.userId }
           });
           
           if (!exists) {
-            await prisma.vacancy.create({
+            const created = await prisma.vacancy.create({
               data: {
-                id: vacancyId,
                 userId: pref.userId,
                 hhId: vacancyId,
                 title: item.title,
@@ -51,7 +50,7 @@ export async function GET(req: Request) {
             
             await prisma.applicationLog.create({
               data: {
-                vacancyId: vacancyId,
+                vacancyId: created.id,
                 action: "HH.ru Cron Sync",
                 notes: `Status on HH: ${item.status}`
               }

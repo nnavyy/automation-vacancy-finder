@@ -40,6 +40,7 @@ function statusVariant(
 ): "green" | "yellow" | "red" | "blue" | "gray" {
   const map: Record<string, "green" | "yellow" | "red" | "blue" | "gray"> = {
     applied_manual: "green",
+    applied_hh: "green",
     analyzed: "blue",
     notified: "yellow",
     skipped: "red",
@@ -64,7 +65,6 @@ export default async function VacanciesPage({
 }: {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }) {
-  await new Promise(r => setTimeout(r, 800));
   const user = await requireUser();
   const sp = await searchParams;
   const status = (sp.status as string) ?? "";
@@ -74,7 +74,11 @@ export default async function VacanciesPage({
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const where: Record<string, any> = { userId: user.id };
-  if (status) where.status = status;
+  if (status === "applied_manual") {
+    where.status = { in: ["applied_manual", "applied_hh"] };
+  } else if (status) {
+    where.status = status;
+  }
 
   let vacancies: any[] = [];
   let total = 0;

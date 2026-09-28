@@ -84,7 +84,7 @@ model Vacancy {
   userId          String
   user            User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  hhId            String   @unique
+  hhId            String
   title           String
   company         String?
   area            String?
@@ -110,6 +110,8 @@ model Vacancy {
   feedbacks VacancyFeedback[]
   logs      ApplicationLog[]
 
+  @@unique([userId, hhId])
+  @@index([userId, status])
   @@map("vacancies")
 }
 

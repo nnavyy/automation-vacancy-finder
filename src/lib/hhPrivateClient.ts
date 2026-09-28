@@ -2,19 +2,57 @@ import axios from "axios";
 import * as cheerio from "cheerio";
 
 /**
- * Standard API User-Agent required by HH.ru API (must include app name and contact)
- * Note: generic emails like admin@example.com are blacklisted by HH.
+ * Modern Chrome Browser User-Agent for accessing hh.ru web pages without getting blocked by DDoS-Guard / WAF.
  */
-const USER_AGENT = "NandaJobAssistant/1.0 (nandazhafran@gmail.com)";
+const BROWSER_USER_AGENT =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 
 /**
- * Common headers for HH.ru private endpoints using session token
+ * Standard API User-Agent for api.hh.ru REST endpoints.
  */
-function getHeaders(token: string) {
+const API_USER_AGENT = "NandaJobAssistant/1.0 (nandazhafran@gmail.com)";
+
+/**
+ * Cleans and formats the HH cookie string.
+ * Supports:
+ *   1. Just the raw token value: "kC1Prc_YclrJLbU2xWEC!VF1uP!l" -> "hhtoken=kC1Prc_..."
+ *   2. Single cookie key-value: "hhtoken=kC1Prc_..."
+ *   3. Full cookie string from Network tab: "hhtoken=...; hhuid=...; __ddg1_=...; _xsrf=..."
+ * Preserves DDoS-Guard cookies (__ddg*) to avoid 403 Forbidden WAF blocks.
+ */
+export function formatHHCookies(cookieString: string): string {
+  if (!cookieString) return "";
+  let clean = cookieString.replace(/^['"]|['"]$/g, "").trim();
+  // Strip "Cookie: " prefix if copied directly from Request Headers
+  clean = clean.replace(/^cookie:\s*/i, "").trim();
+
+  // If user pasted only the raw token value (no key=value format)
+  if (!clean.includes("=") && !clean.includes(";")) {
+    return `hhtoken=${clean}`;
+  }
+
+  // If it's a full cookie string or key=value, preserve it all
+  return clean;
+}
+
+/**
+ * Browser request headers for hh.ru HTML endpoints.
+ */
+function getWebHeaders(cookieString: string) {
   return {
-    "User-Agent": USER_AGENT,
-    "Authorization": `Bearer ${token}`,
-    "Accept": "application/json",
+    "User-Agent": BROWSER_USER_AGENT,
+    "Cookie": formatHHCookies(cookieString),
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    "Accept-Language": "ru-RU,ru;q=0.9,en-US;q=0.8,en;q=0.7",
+    "Cache-Control": "max-age=0",
+    "Sec-Ch-Ua": '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+    "Sec-Ch-Ua-Mobile": "?0",
+    "Sec-Ch-Ua-Platform": '"Windows"',
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "same-origin",
+    "Sec-Fetch-User": "?1",
+    "Upgrade-Insecure-Requests": "1",
   };
 }
 
@@ -30,164 +68,186 @@ export interface HHResume {
 }
 
 /**
+ * Extracts JSON data from Frontik/React SSR templates in HH.ru HTML.
+ */
+function extractHHInitialState(html: string): Record<string, any> | null {
+  try {
+    const luxMatch = html.match(/<template[^>]*HH-Lux-InitialState[^>]*>([\s\S]*?)<\/template>/i);
+    if (luxMatch) {
+      return JSON.parse(luxMatch[1]);
+    }
+
+    const stateMatch = html.match(/window\.__initialState__\s*=\s*({[\s\S]*?});/);
+    if (stateMatch) {
+      return JSON.parse(stateMatch[1]);
+    }
+  } catch (e) {
+    // Ignore JSON parse errors
+  }
+  return null;
+}
+
+/**
  * Fetches the list of active resumes for the authenticated user by scraping the web UI.
- * This bypasses the api.hh.ru OAuth restriction by using the raw browser cookies.
+ * Supports both raw token values and full cookie strings.
  */
 export async function fetchMyResumes(cookieString: string): Promise<HHResume[]> {
   try {
-    // Clean up the cookie string just in case the user accidentally copied quotes
-    let cleanCookie = cookieString.replace(/^['"]|['"]$/g, '').trim();
-
-    // Extract ONLY the essential cookies to avoid DDoS-Guard (WAF) 403 Forbidden errors
-    const extractCookie = (name: string) => {
-      const match = cleanCookie.match(new RegExp(`(?:^|;\\s*)${name}=([^;]+)`));
-      return match ? `${name}=${match[1]}` : null;
-    };
-
-    const hhtoken = extractCookie("hhtoken");
-    const hhuid = extractCookie("hhuid");
-    const xsrf = extractCookie("_xsrf");
-
-    const minimalCookies = [hhtoken, hhuid, xsrf].filter(Boolean).join("; ");
-
-    const res = await axios.get("https://hh.ru/applicant/resumes", {
-      headers: {
-        "User-Agent": USER_AGENT,
-        "Cookie": minimalCookies,
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-      },
-    });
-
-    const text = res.data;
-    
-    // Parse the HTML using regex to find resumes
-    // Matches: <a ... href="/resume/1234567890abcdef" ... data-qa="resume-title" ...><span ...>Resume Title</span>
-    const regex = /href="\/resume\/([a-f0-9]+(?:\?[^"]*)?)"[^>]*>.*?data-qa="resume-title".*?<span[^>]*>([^<]+)<\/span>/g;
-    let match;
-    const resumes: HHResume[] = [];
-    
-    while ((match = regex.exec(text)) !== null) {
-      resumes.push({
-        id: match[1].split('?')[0],
-        title: match[2],
-        updated_at: new Date().toISOString(), // Mock date as it's hard to parse from HTML
-        url: `https://hh.ru/resume/${match[1]}`,
-        status: { id: "published", name: "Active" }
-      });
+    const formattedCookies = formatHHCookies(cookieString);
+    if (!formattedCookies) {
+      throw new Error("HH.ru Token/Cookie is empty. Please provide your hhtoken or cookie string.");
     }
 
+    const res = await axios.get("https://hh.ru/applicant/resumes", {
+      headers: getWebHeaders(formattedCookies),
+      timeout: 15000,
+      validateStatus: () => true,
+    });
+
+    if (res.status === 403) {
+      throw new Error("Access denied by HH.ru (403). Please copy the full Cookie string from your browser's Network tab (including __ddg cookies) and try again.");
+    }
+
+    const text = String(res.data);
+    const resumes: HHResume[] = [];
+    const seenIds = new Set<string>();
+
+    // 1. Check for structured SSR data in HH-Lux-InitialState
+    const state = extractHHInitialState(text);
+    if (state && Array.isArray(state.resumes)) {
+      for (const r of state.resumes) {
+        if (r.id && !seenIds.has(r.id)) {
+          seenIds.add(r.id);
+          resumes.push({
+            id: r.id,
+            title: r.title || "Resume",
+            updated_at: r.updatedAt || new Date().toISOString(),
+            url: `https://hh.ru/resume/${r.id}`,
+            status: { id: r.status?.id || "published", name: r.status?.name || "Active" },
+          });
+        }
+      }
+    }
+
+    // 2. Parse HTML using Cheerio
+    const $ = cheerio.load(text);
+
+    // Look for resume title elements
+    $('[data-qa="resume-title"]').each((_, el) => {
+      const item = $(el);
+      const link = item.attr("href") || item.closest("a").attr("href") || item.find("a").attr("href") || "";
+      const title = item.text().trim();
+
+      const match = link.match(/\/resume\/([a-f0-9]+)/i) || link.match(/resume=([a-f0-9]+)/i);
+      if (match && !seenIds.has(match[1])) {
+        seenIds.add(match[1]);
+        resumes.push({
+          id: match[1],
+          title: title || "Resume",
+          updated_at: new Date().toISOString(),
+          url: `https://hh.ru/resume/${match[1]}`,
+          status: { id: "published", name: "Active" },
+        });
+      }
+    });
+
+    // Also look for all links matching /resume/<hex>
+    $('a[href*="/resume/"]').each((_, el) => {
+      const href = $(el).attr("href") || "";
+      const match = href.match(/\/resume\/([a-f0-9]+)/i);
+      if (match && !seenIds.has(match[1])) {
+        const title = $(el).text().trim();
+        if (title && title.length < 100) {
+          seenIds.add(match[1]);
+          resumes.push({
+            id: match[1],
+            title,
+            updated_at: new Date().toISOString(),
+            url: `https://hh.ru/resume/${match[1]}`,
+            status: { id: "published", name: "Active" },
+          });
+        }
+      }
+    });
+
     if (resumes.length === 0) {
-      // Check if we got redirected to login
-      if (text.includes('data-qa="login-input-username"')) {
-        throw new Error("Session expired or invalid. Please copy the FULL cookie string from your Network tab again.");
+      if (text.includes('data-qa="login-input-username"') || text.includes("/account/login")) {
+        throw new Error("HH.ru session expired or invalid. Please copy your hhtoken or Cookie string from your browser again.");
       }
     }
 
     return resumes;
   } catch (error: any) {
     console.error("[HH Private] Failed to fetch resumes via web:", error.message);
-    throw new Error(error.message || "Failed to fetch resumes from web UI. Ensure your full Cookie string is correct.");
-  }
-}
-
-/**
- * Applies to a vacancy on HH.ru.
- */
-export async function applyToVacancy(
-  token: string,
-  resumeId: string,
-  vacancyId: string,
-  message: string
-): Promise<boolean> {
-  try {
-    // According to HH API docs, you submit a POST to /negotiations
-    // with query parameters or body form-data
-    const params = new URLSearchParams();
-    params.append("vacancy_id", vacancyId);
-    params.append("resume_id", resumeId);
-    params.append("message", message);
-
-    const res = await axios.post("https://api.hh.ru/negotiations", params, {
-      headers: {
-        ...getHeaders(token),
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-    });
-
-    // 201 Created means successfully applied
-    return res.status === 201 || res.status === 200;
-  } catch (error: any) {
-    console.error("[HH Private] Failed to apply:", error.response?.data || error.message);
-    // 400 Bad Request often means already applied or questions required
-    if (error.response?.status === 400 && error.response?.data?.description?.includes("already")) {
-       throw new Error("You have already applied to this vacancy.");
-    }
-    throw new Error(error.response?.data?.description || "Failed to apply. Vacancy may be closed or require an external test.");
-  }
-}
-
-/**
- * Optional utility to bump/update resume.
- */
-export async function bumpResume(token: string, resumeId: string): Promise<boolean> {
-  try {
-    const res = await axios.post(`https://api.hh.ru/resumes/${resumeId}/publish`, {}, {
-      headers: getHeaders(token),
-    });
-    return res.status === 204 || res.status === 200;
-  } catch (error: any) {
-    console.error("[HH Private] Failed to bump resume:", error.response?.data || error.message);
-    return false;
+    throw new Error(error.message || "Failed to fetch resumes from HH.ru. Ensure your token or cookie string is correct.");
   }
 }
 
 /**
  * Fetches the user's HH.ru profile and analytics (applications count) by scraping the web UI.
  */
-export async function fetchHHProfile(cookieString: string): Promise<{ name: string | null, avatar: string | null, totalApplications: number }> {
+export async function fetchHHProfile(
+  cookieString: string
+): Promise<{ name: string | null; avatar: string | null; totalApplications: number }> {
   try {
-    let cleanCookie = cookieString.replace(/^['"]|['"]$/g, '').trim();
+    const formattedCookies = formatHHCookies(cookieString);
+    if (!formattedCookies) {
+      return { name: null, avatar: null, totalApplications: 0 };
+    }
 
-    const extractCookie = (name: string) => {
-      const match = cleanCookie.match(new RegExp(`(?:^|;\\s*)${name}=([^;]+)`));
-      return match ? `${name}=${match[1]}` : null;
-    };
-    const minimalCookies = [extractCookie("hhtoken"), extractCookie("hhuid"), extractCookie("_xsrf")].filter(Boolean).join("; ");
+    const headers = getWebHeaders(formattedCookies);
 
     // Fetch resumes page for profile info
     const resResumes = await axios.get("https://hh.ru/applicant/resumes", {
-      headers: { 
-        "User-Agent": USER_AGENT, 
-        "Cookie": minimalCookies, 
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" 
-      },
+      headers,
+      timeout: 15000,
+      validateStatus: () => true,
     });
-    const $1 = cheerio.load(resResumes.data);
-    const name = $1('[data-qa="profile-activator-fullname"]').text().trim() || null;
-    const avatar = $1('[data-qa="profile-avatar-image"]').attr('src') || null;
+
+    const htmlResumes = String(resResumes.data);
+    const $1 = cheerio.load(htmlResumes);
+
+    let name = $1('[data-qa="profile-activator-fullname"]').text().trim() || null;
+    let avatar = $1('[data-qa="profile-avatar-image"]').attr("src") || null;
+
+    // Check SSR state fallback for profile
+    const stateResumes = extractHHInitialState(htmlResumes);
+    if (stateResumes?.applicantInfo) {
+      if (!name && stateResumes.applicantInfo.fullName) {
+        name = stateResumes.applicantInfo.fullName;
+      }
+      if (!avatar && stateResumes.applicantInfo.smallAvatarUrl) {
+        avatar = stateResumes.applicantInfo.smallAvatarUrl;
+      }
+    }
 
     // Fetch negotiations page for applications count
     const resNeg = await axios.get("https://hh.ru/applicant/negotiations", {
-      headers: { 
-        "User-Agent": USER_AGENT, 
-        "Cookie": minimalCookies, 
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" 
-      },
+      headers,
+      timeout: 15000,
+      validateStatus: () => true,
     });
-    const $2 = cheerio.load(resNeg.data);
-    
-    // Find count from a badge or pagination. If "All 51" badge exists, we can extract it.
+
+    const htmlNeg = String(resNeg.data);
+    const $2 = cheerio.load(htmlNeg);
+
     let totalApplications = 0;
-    const allBadgeText = $2('[data-qa="negotiations-nav-item_all"] [data-qa="negotiations-nav-item-count"]').text().trim() 
-                      || $2('.bloko-tabs-item_current').text().trim();
-    const countMatch = allBadgeText.match(/\d+/);
-    if (countMatch) {
-      totalApplications = parseInt(countMatch[0], 10);
+
+    // Check SSR state for negotiations total
+    const stateNeg = extractHHInitialState(htmlNeg);
+    if (typeof stateNeg?.applicantNegotiations?.total === "number") {
+      totalApplications = stateNeg.applicantNegotiations.total;
     } else {
-      // Fallback: count items on first page
-      $2('[data-qa]').each((i, el) => {
-        if ($2(el).attr('data-qa') === 'negotiations-item') totalApplications++;
-      });
+      // DOM extraction
+      const allBadgeText =
+        $2('[data-qa="negotiations-nav-item_all"] [data-qa="negotiations-nav-item-count"]').text().trim() ||
+        $2('.bloko-tabs-item_current').text().trim();
+      const countMatch = allBadgeText.match(/\d+/);
+      if (countMatch) {
+        totalApplications = parseInt(countMatch[0], 10);
+      } else {
+        totalApplications = $2('[data-qa="negotiations-item"]').length;
+      }
     }
 
     return { name, avatar, totalApplications };
@@ -201,29 +261,29 @@ function parseHHDate(dateStr: string): Date {
   const now = new Date();
   if (!dateStr) return now;
   const lower = dateStr.toLowerCase();
-  
-  if (lower.includes('сегодня') || lower.includes('today')) {
+
+  if (lower.includes("сегодня") || lower.includes("today")) {
     return now;
   }
-  if (lower.includes('вчера') || lower.includes('yesterday')) {
+  if (lower.includes("вчера") || lower.includes("yesterday")) {
     const d = new Date(now);
     d.setDate(d.getDate() - 1);
     return d;
   }
-  
+
   const ruMonths: Record<string, number> = {
-    'янв': 0, 'фев': 1, 'мар': 2, 'апр': 3, 'май': 4, 'мая': 4, 'июн': 5,
-    'июл': 6, 'авг': 7, 'сен': 8, 'окт': 9, 'ноя': 10, 'дек': 11,
-    'jan': 0, 'feb': 1, 'mar': 2, 'apr': 3, 'may': 4, 'jun': 5,
-    'jul': 6, 'aug': 7, 'sep': 8, 'oct': 9, 'nov': 10, 'dec': 11
+    янв: 0, фев: 1, мар: 2, апр: 3, май: 4, мая: 4, июн: 5,
+    июл: 6, авг: 7, сен: 8, окт: 9, ноя: 10, дек: 11,
+    jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
+    jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11,
   };
-  
+
   const match = lower.match(/(\d+)\s+([а-яa-z]+)(?:\s+(\d{4}))?/);
   if (match) {
     const day = parseInt(match[1], 10);
     const monthStr = match[2];
     const yearStr = match[3];
-    
+
     let month = now.getMonth();
     for (const [key, val] of Object.entries(ruMonths)) {
       if (monthStr.startsWith(key)) {
@@ -231,72 +291,107 @@ function parseHHDate(dateStr: string): Date {
         break;
       }
     }
-    
+
     const year = yearStr ? parseInt(yearStr, 10) : now.getFullYear();
     return new Date(year, month, day);
   }
-  
+
   return now;
 }
 
 /**
- * Scrapes all history of applications from HH.ru
+ * Scrapes all history of applications from HH.ru.
  */
-export async function syncHHHistory(cookieString: string) {
+export async function syncHHHistory(cookieString: string): Promise<{ success: boolean; history: any[] }> {
   const history: any[] = [];
   try {
-    let cleanCookie = cookieString.replace(/^['"]|['"]$/g, '').trim();
-    const extractCookie = (name: string) => {
-      const match = cleanCookie.match(new RegExp(`(?:^|;\\s*)${name}=([^;]+)`));
-      return match ? `${name}=${match[1]}` : null;
-    };
-    const minimalCookies = [extractCookie("hhtoken"), extractCookie("hhuid"), extractCookie("_xsrf")].filter(Boolean).join("; ");
+    const formattedCookies = formatHHCookies(cookieString);
+    if (!formattedCookies) {
+      return { success: false, history: [] };
+    }
 
+    const headers = getWebHeaders(formattedCookies);
     let page = 0;
     let hasMore = true;
 
-    while (hasMore && page < 20) { // arbitrary limit 20 pages (400 items)
+    while (hasMore && page < 15) {
       const res = await axios.get(`https://hh.ru/applicant/negotiations?page=${page}`, {
-        headers: { 
-          "User-Agent": USER_AGENT, 
-          "Cookie": minimalCookies, 
-          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" 
-        },
+        headers,
+        timeout: 15000,
+        validateStatus: () => true,
       });
-      
-      const $ = cheerio.load(res.data);
-      const items = $('[data-qa="negotiations-item"]');
-      
-      if (items.length === 0) {
-        console.log("[DEBUG] No items found on page", page, "Title:", $('title').text(), "HTML snippet:", res.data.substring(0, 500));
+
+      if (res.status !== 200) {
+        break;
+      }
+
+      const html = String(res.data);
+      const state = extractHHInitialState(html);
+      let pageFoundCount = 0;
+
+      // Method A: Extract structured topics from HH-Lux-InitialState
+      if (state?.applicantNegotiations?.topicList && Array.isArray(state.applicantNegotiations.topicList)) {
+        for (const topic of state.applicantNegotiations.topicList) {
+          const vacancyId = topic.vacancyId;
+          const url = vacancyId ? `https://hh.ru/vacancy/${vacancyId}` : "";
+          const appliedAt = topic.creationTime ? new Date(topic.creationTime) : new Date();
+          const status = topic.lastState || "applied";
+
+          history.push({
+            title: `Vacancy #${vacancyId || topic.id}`,
+            company: String(topic.employerId || "Employer"),
+            status,
+            url,
+            appliedAt,
+          });
+          pageFoundCount++;
+        }
+      }
+
+      // Method B: Cheerio DOM fallback if topicList is empty
+      if (pageFoundCount === 0) {
+        const $ = cheerio.load(html);
+        const items = $('[data-qa="negotiations-item"]');
+
+        items.each((_, el) => {
+          const item = $(el);
+          const title = item.find('[data-qa="negotiations-item-vacancy"]').text().trim();
+          const company = item.find('[data-qa="negotiations-item-company"]').text().trim();
+          const status =
+            item.find('[data-qa*="negotiations-item-"]').text().trim() ||
+            item.find('[data-qa*="negotiations-tag"]').text().trim() ||
+            "applied";
+          const dateText =
+            item.find('[data-qa="negotiations-item-date"]').text().trim() ||
+            item.find('.bloko-text_tertiary').text().trim();
+          const appliedAt = parseHHDate(dateText);
+
+          let url = item.find('[data-qa="negotiations-item-vacancy"]').closest("a").attr("href") || "";
+          if (url && !url.startsWith("http")) url = `https://hh.ru${url}`;
+
+          if (title) {
+            history.push({ title, company, status, url, appliedAt });
+            pageFoundCount++;
+          }
+        });
+      }
+
+      if (pageFoundCount === 0) {
         hasMore = false;
         break;
       }
 
-      items.each((_, el) => {
-        const item = $(el);
-        const titleElem = item.find('[data-qa="negotiations-item-vacancy"]');
-        const title = titleElem.text().trim();
-        const url = titleElem.attr('href') || "";
-        const company = item.find('[data-qa="negotiations-item-company"]').text().trim();
-        const status = item.find('[data-qa="negotiations-item-status"]').text().trim();
-        const dateText = item.find('[data-qa="negotiations-item-date"]').text().trim() || item.find('.bloko-text_tertiary').text().trim();
-        const appliedAt = parseHHDate(dateText);
-        
-        if (title) {
-          history.push({ title, company, status, url, appliedAt });
-        }
-      });
-
-      // Check if there's a next page button
+      // Check pagination
+      const $ = cheerio.load(html);
       const nextBtn = $('[data-qa="pager-next"]');
       if (nextBtn.length === 0) {
         hasMore = false;
       } else {
         page++;
-        await new Promise(r => setTimeout(r, 1000)); // be nice to HH
+        await new Promise((r) => setTimeout(r, 800));
       }
     }
+
     return { success: true, history };
   } catch (error: any) {
     console.error("[HH Private] Failed to sync history:", error.message);
@@ -304,4 +399,71 @@ export async function syncHHHistory(cookieString: string) {
   }
 }
 
-// header fix
+/**
+ * Applies to a vacancy on HH.ru.
+ */
+export async function applyToVacancy(
+  tokenOrCookie: string,
+  resumeId: string,
+  vacancyId: string,
+  message: string
+): Promise<boolean> {
+  const clean = formatHHCookies(tokenOrCookie);
+
+  // If token is an official OAuth Bearer token
+  if (!clean.includes(";") && clean.length > 40 && !clean.includes("hhtoken=")) {
+    try {
+      const params = new URLSearchParams();
+      params.append("vacancy_id", vacancyId);
+      params.append("resume_id", resumeId);
+      params.append("message", message);
+
+      const res = await axios.post("https://api.hh.ru/negotiations", params, {
+        headers: {
+          "User-Agent": API_USER_AGENT,
+          Authorization: `Bearer ${clean}`,
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        timeout: 10000,
+      });
+
+      return res.status === 201 || res.status === 200;
+    } catch (error: any) {
+      if (error.response?.status === 400 && error.response?.data?.description?.includes("already")) {
+        throw new Error("You have already applied to this vacancy.");
+      }
+      throw new Error(error.response?.data?.description || "Failed to apply via HH.ru REST API.");
+    }
+  }
+
+  // Attempt apply via web form
+  try {
+    const params = new URLSearchParams();
+    params.append("vacancy_id", vacancyId);
+    params.append("resume_id", resumeId);
+    params.append("letter", message);
+
+    const res = await axios.post("https://hh.ru/applicant/vacancy_response", params, {
+      headers: {
+        ...getWebHeaders(clean),
+        "Content-Type": "application/x-www-form-urlencoded",
+        Origin: "https://hh.ru",
+        Referer: `https://hh.ru/vacancy/${vacancyId}`,
+      },
+      timeout: 10000,
+      validateStatus: () => true,
+    });
+
+    if (res.status === 200 || res.status === 302 || res.status === 201) {
+      return true;
+    }
+
+    if (res.status === 400 || res.status === 403) {
+      throw new Error("HH.ru requires an employer questionnaire or direct browser response. Please use the vacancy link to submit.");
+    }
+
+    return true;
+  } catch (error: any) {
+    throw new Error(error.message || "Failed to submit application via HH.ru.");
+  }
+}

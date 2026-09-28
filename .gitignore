@@ -1,48 +1,73 @@
-# dependencies
+# ============================================================
+# Git Ignore Configuration
+# ============================================================
+
+# Dependencies
+node_modules
 node_modules/
+**/node_modules/**
+.pnp
+.pnp.js
 
-# next.js
+# Next.js build outputs & cache
+.next
 .next/
+**/.next/**
 out/
+build/
+dist/
+.turbo/
+.turbo
 
-# env files
+# Local environment & secret files
 .env
 .env.local
 .env.*.local
+.env.development.local
+.env.test.local
+.env.production.local
 
-# build
-dist/
-build/
+# Vercel
+.vercel
 
-# misc
-.DS_Store
+# Editor & AI Extensions
+.qodo/
+.idea/
+.vscode/
 *.tsbuildinfo
 next-env.d.ts
 
-# replit (legacy)
-.replit
-.replit.nix
+# Cache & Legacy
 .cache/
 .upm/
+.replit*
 replit.md
 
-# project specific
+# Operating System files
+.DS_Store
+Thumbs.db
+desktop.ini
+*.pem
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Project specific media / local scratch folders
+revisi/
 /revisi
+vc low code/
 /vc low code
 
-test-email.js
-check-page.js
-
-# test files
-*test*.js
-test*.js
-scratch*.js
-check-*.js
-create-test*.js
-find-tel.js
-reset-data.js
-
-# HTML tests and outputs
-*test*.html
-test*.html
-*.log
+# Test scripts & scratch files
+*test*.*
+test*.*
+scratch*.*
+check-*.*
+create-test*.*
+find-tel.*
+send-test.*

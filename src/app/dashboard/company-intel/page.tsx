@@ -459,8 +459,6 @@ function CompanyIntelContent() {
 
   const fetchIntels = useCallback(async () => {
     try {
-      // Artificial delay so skeleton is visible (user requested)
-      await new Promise(r => setTimeout(r, 1200));
       const res = await fetch("/api/company-intel");
       const json = await res.json();
       if (json.success) setIntels(json.data);
@@ -487,9 +485,6 @@ function CompanyIntelContent() {
     }
 
     try {
-      // Artificial delay so skeleton is visible (user requested)
-      await new Promise(r => setTimeout(r, 1500));
-      
       const res = await fetch("/api/company-intel/search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

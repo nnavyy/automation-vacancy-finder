@@ -22,21 +22,20 @@ export async function POST(req: NextRequest) {
         let vacancyIdMatch = item.url.match(/vacancy\/(\d+)/);
         let vacancyId = vacancyIdMatch ? vacancyIdMatch[1] : `manual-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
         
-        // Skip if already in DB
-        const exists = await prisma.vacancy.findUnique({
-          where: { id: vacancyId }
+        // Check if already in DB for this user
+        const exists = await prisma.vacancy.findFirst({
+          where: { hhId: vacancyId, userId: user.id }
         });
         
         if (!exists) {
-          await prisma.vacancy.create({
+          const created = await prisma.vacancy.create({
             data: {
-              id: vacancyId,
-              userId: user.id, // Required by schema
-              hhId: vacancyId, // Required by schema
+              userId: user.id,
+              hhId: vacancyId,
               title: item.title,
               company: item.company,
               url: item.url ? (item.url.startsWith('http') ? item.url : `https://hh.ru${item.url}`) : "",
-              status: "applied_manual", // matches the status used in the Applied tab
+              status: "applied_manual",
               sourceKeyword: "HH.ru Sync",
               createdAt: item.appliedAt,
               updatedAt: item.appliedAt,
@@ -45,7 +44,7 @@ export async function POST(req: NextRequest) {
           
           await prisma.applicationLog.create({
             data: {
-              vacancyId: vacancyId,
+              vacancyId: created.id,
               action: "HH.ru Sync",
               notes: `Status on HH: ${item.status}`
             }

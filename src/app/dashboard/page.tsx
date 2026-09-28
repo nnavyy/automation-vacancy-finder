@@ -74,7 +74,6 @@ function StatCard({
 // ── Page ──────────────────────────────────────────────────────
 
 export default async function DashboardPage() {
-  await new Promise(r => setTimeout(r, 800));
   const user = await requireUser();
   let all: any[] = [];
   let total = 0;
@@ -118,7 +117,7 @@ export default async function DashboardPage() {
     throw err;
   }
 
-  const applied = all.filter((v) => v.status === "applied_manual").length;
+  const applied = all.filter((v) => v.status === "applied_manual" || v.status === "applied_hh").length;
   const skipped = all.filter((v) => v.status === "skipped").length;
   const saved = all.filter((v) => v.status === "saved").length;
   const aiPending = all.filter(
