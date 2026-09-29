@@ -9,9 +9,14 @@ import { requireUser } from "@/lib/auth-helpers";
 import { callAI } from "@/lib/aiProviderRouter";
 
 export async function POST(req: NextRequest) {
-  const user = await requireUser();
-
   try {
+    let user;
+    try {
+      user = await requireUser();
+    } catch {
+      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = await req.json().catch(() => ({}));
     const {
       contactName,
@@ -71,7 +76,7 @@ Output only the email body text.`;
       prompt,
       systemPrompt,
       requestType: "outreach_email",
-      maxTokens: 400,
+      maxTokens: 800,
     });
 
     if (result.isRateLimited || !result.content.trim()) {

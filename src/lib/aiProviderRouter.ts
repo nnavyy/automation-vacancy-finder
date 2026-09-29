@@ -19,14 +19,23 @@ import prisma from "@/lib/db";
 
 // ── Model Defaults (overridable via env) ─────────────────────
 
-const GROQ_MODEL =
-  process.env.AI_MODEL_GROQ ?? process.env.GROQ_MODEL ?? "openai/gpt-oss-120b";
+export function getGroqModel(): string {
+  const m = process.env.AI_MODEL_GROQ ?? process.env.GROQ_MODEL;
+  if (!m || m.includes("gpt-oss")) return "qwen/qwen3.8-27b";
+  return m.replace(/^"|"$/g, "");
+}
 
-const GEMINI_MODEL =
-  process.env.AI_MODEL_GEMINI ?? process.env.GEMINI_MODEL ?? "gemini-1.5-flash";
+export function getGeminiModel(): string {
+  const m = process.env.AI_MODEL_GEMINI ?? process.env.GEMINI_MODEL;
+  if (!m || m.includes("1.5") || m.includes("2.0")) return "gemini-3.8-flash";
+  return m.replace(/^"|"$/g, "");
+}
 
-const OPENROUTER_MODEL =
-  process.env.AI_MODEL_OPENROUTER ?? process.env.OPENROUTER_MODEL ?? "meta-llama/llama-3.1-8b-instruct:free";
+export function getOpenRouterModel(): string {
+  const m = process.env.AI_MODEL_OPENROUTER ?? process.env.OPENROUTER_MODEL;
+  if (!m || m.includes(":free")) return "meta-llama/llama-3.1-8b-instruct";
+  return m.replace(/^"|"$/g, "");
+}
 
 // ── Public Types ──────────────────────────────────────────────
 
@@ -79,16 +88,22 @@ export async function callGroq(options: CallAIOptions): Promise<string> {
   }
   messages.push({ role: "user", content: options.prompt });
 
+  const modelName = getGroqModel();
   const completion = await client.chat.completions.create({
-    model: GROQ_MODEL,
+    model: modelName,
     // The Groq SDK accepts the same message shape as OpenAI
     messages: messages as Parameters<typeof client.chat.completions.create>[0]["messages"],
-    max_tokens: options.maxTokens ?? 2000,
+    max_tokens: Math.max(500, options.maxTokens ?? 2000),
     temperature: 0.3,       // Lower temperature for more deterministic JSON output
     stream: false,
   });
 
-  return completion.choices[0]?.message?.content ?? "";
+  const message = completion.choices[0]?.message;
+  let content = message?.content?.trim() ?? "";
+  if (!content && (message as any)?.reasoning) {
+    content = (message as any).reasoning.trim();
+  }
+  return content;
 }
 
 /**
@@ -105,11 +120,12 @@ export async function callGemini(options: CallAIOptions): Promise<string> {
   if (!apiKey) throw new Error("GEMINI_API_KEY environment variable is not set");
 
   const genAI = new GoogleGenerativeAI(apiKey);
+  const modelName = getGeminiModel();
   const model = genAI.getGenerativeModel({
-    model: GEMINI_MODEL,
+    model: modelName,
     generationConfig: {
       temperature: 0.3,
-      maxOutputTokens: options.maxTokens ?? 2000,
+      maxOutputTokens: Math.max(500, options.maxTokens ?? 2000),
     },
   });
 
@@ -141,6 +157,7 @@ export async function callOpenRouter(options: CallAIOptions): Promise<string> {
   }
   messages.push({ role: "user", content: options.prompt });
 
+  const modelName = getOpenRouterModel();
   const response = await fetch(
     "https://openrouter.ai/api/v1/chat/completions",
     {
@@ -154,9 +171,9 @@ export async function callOpenRouter(options: CallAIOptions): Promise<string> {
         "X-Title": "Nanda AI Job Assistant",
       },
       body: JSON.stringify({
-        model: OPENROUTER_MODEL,
+        model: modelName,
         messages,
-        max_tokens: options.maxTokens ?? 2000,
+        max_tokens: Math.max(500, options.maxTokens ?? 2000),
         temperature: 0.3,
       }),
     }
@@ -239,14 +256,14 @@ export async function callAI(options: CallAIOptions): Promise<AICallResult> {
     (process.env.AI_PROVIDER_FALLBACK_2 as AIProvider | undefined) ?? "openrouter",
   ];
 
-  // Map each provider name to its caller function and model string
+  // Map each provider name to its caller function and model resolver
   const providerRegistry: Record<
     string,
-    { call: (opts: CallAIOptions) => Promise<string>; model: string }
+    { call: (opts: CallAIOptions) => Promise<string>; getModel: () => string }
   > = {
-    groq:        { call: callGroq,        model: GROQ_MODEL },
-    gemini:      { call: callGemini,      model: GEMINI_MODEL },
-    openrouter:  { call: callOpenRouter,  model: OPENROUTER_MODEL },
+    groq:        { call: callGroq,        getModel: getGroqModel },
+    gemini:      { call: callGemini,      getModel: getGeminiModel },
+    openrouter:  { call: callOpenRouter,  getModel: getOpenRouterModel },
   };
 
   for (const provider of providerOrder) {
@@ -257,21 +274,28 @@ export async function callAI(options: CallAIOptions): Promise<AICallResult> {
       continue;
     }
 
+    const model = entry.getModel();
+
     try {
       console.log(
-        `[AI Router] Attempting provider "${provider}" (model: ${entry.model})…`
+        `[AI Router] Attempting provider "${provider}" (model: ${model})…`
       );
 
-      const content = await entry.call(options);
+      const rawContent = await entry.call(options);
+      const content = rawContent?.trim() ?? "";
+
+      if (!content) {
+        throw new Error(`Provider "${provider}" returned empty response`);
+      }
 
       // Log successful call
-      await logAIUsage(provider, entry.model, options.requestType, "success");
+      await logAIUsage(provider, model, options.requestType, "success");
 
       console.log(`[AI Router] Success from provider "${provider}".`);
       return {
         content,
         provider,
-        model: entry.model,
+        model,
         isRateLimited: false,
       };
     } catch (error: unknown) {
