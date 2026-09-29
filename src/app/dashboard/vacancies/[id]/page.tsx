@@ -17,6 +17,7 @@ import {
   Building2,
   Check,
   AlertCircle,
+  Calendar,
 } from "lucide-react";
 import Badge from "@/components/ui/Badge";
 import ScoreBar from "@/components/ui/ScoreBar";
@@ -91,6 +92,21 @@ function formatSalary(salary: unknown): string {
     return `${s.from.toLocaleString()} – ${s.to.toLocaleString()} ${s.currency ?? "RUR"}`;
   if (s.from) return `from ${s.from.toLocaleString()} ${s.currency ?? "RUR"}`;
   return `up to ${s.to!.toLocaleString()} ${s.currency ?? "RUR"}`;
+}
+
+function formatVacancyDate(dateStr?: string | Date): string {
+  if (!dateStr) return "";
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return "";
+    return d.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  } catch {
+    return "";
+  }
 }
 
 function statusVariant(s: string): "green" | "yellow" | "red" | "blue" | "gray" {
@@ -205,7 +221,7 @@ export default async function VacancyDetailPage({
               {vacancy.title}
             </h1>
 
-            {/* Company / area / salary */}
+            {/* Company / area / salary / date */}
             <div className="flex items-center gap-2 mt-2 text-xs text-zinc-400 flex-wrap">
               {vacancy.company && (
                 <span className="text-zinc-200 font-medium">
@@ -215,6 +231,12 @@ export default async function VacancyDetailPage({
               {vacancy.area       && <span className="text-zinc-500">· {vacancy.area}</span>}
               {salary             && (
                 <span className="text-emerald-400 font-medium">· {salary}</span>
+              )}
+              {vacancy.createdAt  && (
+                <span className="text-zinc-400 inline-flex items-center gap-1">
+                  · <Calendar size={12} className="text-zinc-500" />
+                  {formatVacancyDate(vacancy.createdAt)}
+                </span>
               )}
             </div>
 

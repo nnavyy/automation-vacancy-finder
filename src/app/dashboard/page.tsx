@@ -325,32 +325,23 @@ export default async function DashboardPage() {
         <div className="lg:col-span-5 bg-zinc-900/60 border border-zinc-800/80 rounded-2xl p-5 backdrop-blur-sm space-y-4 flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between mb-4">
-              <span className="text-xs font-semibold text-zinc-300 flex items-center gap-1.5">
+              <span className="text-xs font-semibold text-zinc-200 flex items-center gap-1.5">
                 <Bot className="w-4 h-4 text-emerald-400" />
                 Hunter Engine
               </span>
-              <div className="flex items-center gap-1.5 text-xs text-emerald-400 font-mono">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                LOOP RUNNING
-              </div>
             </div>
 
             <SyncCadenceTimer initialLastSyncedAt={lastSyncIso} />
 
-            <div className="space-y-1.5 pt-2">
-              <span className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">
+            <div className="space-y-1 pt-3">
+              <span className="text-[10px] font-semibold text-zinc-500 uppercase tracking-wider block">
                 Tracked Queries
               </span>
-              <div className="flex flex-wrap gap-1.5">
-                {targetRoles.slice(0, 3).map((role: string, idx: number) => (
-                  <span
-                    key={idx}
-                    className="px-2 py-1 rounded bg-zinc-800 border border-zinc-700/80 text-[11px] text-zinc-300"
-                  >
-                    {role}
-                  </span>
-                ))}
-              </div>
+              <p className="text-xs text-zinc-300 font-mono leading-relaxed">
+                {targetRoles.length > 0
+                  ? targetRoles.slice(0, 3).join(" · ")
+                  : "None configured"}
+              </p>
             </div>
           </div>
 

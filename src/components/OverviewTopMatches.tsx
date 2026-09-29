@@ -15,6 +15,7 @@ import {
   ArrowRight,
   ShieldCheck,
   Check,
+  Calendar,
 } from "lucide-react";
 import RecruiterDossierModal, { RecruiterDossierData } from "@/components/RecruiterDossierModal";
 
@@ -38,6 +39,21 @@ export interface TopMatchVacancy {
 
 interface OverviewTopMatchesProps {
   vacancies: TopMatchVacancy[];
+}
+
+function formatVacancyDate(dateStr?: string): string {
+  if (!dateStr) return "";
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return "";
+    return d.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  } catch {
+    return "";
+  }
 }
 
 function formatSalary(salary: unknown): string {
@@ -142,12 +158,22 @@ export default function OverviewTopMatches({ vacancies }: OverviewTopMatchesProp
                       </span>
                     )}
                   </div>
-                  <p className="text-xs text-zinc-400">
+                  <p className="text-xs text-zinc-400 flex items-center gap-1.5 flex-wrap">
                     <span className="text-zinc-300 font-medium">{v.company}</span>
-                    {v.area ? ` · ${v.area}` : ""} ·{" "}
+                    {v.area && <span>· {v.area}</span>}
+                    <span>·</span>
                     <span className="font-mono text-zinc-300">
                       {formatSalary(v.salary)}
                     </span>
+                    {v.createdAt && (
+                      <>
+                        <span>·</span>
+                        <span className="text-zinc-400 inline-flex items-center gap-1">
+                          <Calendar className="w-3 h-3 text-zinc-500" />
+                          {formatVacancyDate(v.createdAt)}
+                        </span>
+                      </>
+                    )}
                   </p>
                 </div>
               </div>

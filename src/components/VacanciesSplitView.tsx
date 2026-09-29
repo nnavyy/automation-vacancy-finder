@@ -27,6 +27,7 @@ import {
   CheckCheck,
   Languages,
   RotateCcw,
+  Calendar,
 } from "lucide-react";
 import RecruiterDossierModal, { RecruiterDossierData } from "@/components/RecruiterDossierModal";
 
@@ -62,6 +63,21 @@ interface VacanciesSplitViewProps {
   initialVacancies: VacancyItem[];
   totalCount: number;
   hasProfile: boolean;
+}
+
+function formatVacancyDate(dateStr?: string): string {
+  if (!dateStr) return "";
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return "";
+    return d.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  } catch {
+    return "";
+  }
 }
 
 function formatSalary(salary: unknown): string {
@@ -486,6 +502,15 @@ export default function VacanciesSplitView({
                         <span className="text-zinc-300 font-mono">
                           {formatSalary(v.salary)}
                         </span>
+                        {v.createdAt && (
+                          <>
+                            <span>·</span>
+                            <span className="text-zinc-400 inline-flex items-center gap-1">
+                              <Calendar className="w-3 h-3 text-zinc-500" />
+                              {formatVacancyDate(v.createdAt)}
+                            </span>
+                          </>
+                        )}
                       </div>
 
                       {/* Tags row */}
@@ -589,6 +614,15 @@ export default function VacanciesSplitView({
                   <span className="font-mono text-zinc-200 font-medium">
                     {formatSalary(selectedVacancy.salary)}
                   </span>
+                  {selectedVacancy.createdAt && (
+                    <>
+                      <span>·</span>
+                      <span className="flex items-center gap-1 text-zinc-400">
+                        <Calendar className="w-3.5 h-3.5 text-zinc-500" />
+                        {formatVacancyDate(selectedVacancy.createdAt)}
+                      </span>
+                    </>
+                  )}
                   <span>·</span>
                   <a
                     href={selectedVacancy.url || `https://hh.ru/vacancy/${selectedVacancy.hhId}`}
