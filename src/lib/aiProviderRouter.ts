@@ -319,7 +319,7 @@ export async function callAI(options: CallAIOptions): Promise<AICallResult> {
       // Log the failure
       await logAIUsage(
         provider,
-        entry.model,
+        model,
         options.requestType,
         isRateLimit ? "rate_limited" : "error",
         errMsg.slice(0, 500)
