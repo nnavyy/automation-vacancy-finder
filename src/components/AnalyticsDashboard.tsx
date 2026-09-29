@@ -142,7 +142,7 @@ export default function AnalyticsDashboard({
             Analytics & Pipeline Intelligence
           </h1>
           <p className="text-zinc-400 text-sm max-w-2xl leading-relaxed">
-            Algorithmic performance across {activeTotal.toLocaleString()} tracked vacancies from HeadHunter. Insights derived from autonomous skill indexing, match vector calculations, and recruiter response tracking.
+            Algorithmic performance across {activeTotal.toLocaleString("en-US")} tracked vacancies from HeadHunter. Insights derived from autonomous skill indexing, match vector calculations, and recruiter response tracking.
           </p>
         </div>
 
@@ -195,7 +195,7 @@ export default function AnalyticsDashboard({
           </div>
           <div className="flex items-baseline gap-2">
             <span className="text-3xl font-black text-zinc-100 tabular-nums">
-              {activeTotal.toLocaleString()}
+              {activeTotal.toLocaleString("en-US")}
             </span>
             <span className="text-[11px] font-semibold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.2 rounded">
               Active
@@ -300,7 +300,7 @@ export default function AnalyticsDashboard({
             </div>
             <div className="space-y-1">
               <span className="text-2xl font-black text-zinc-100 tabular-nums">
-                {activeTotal.toLocaleString()}
+                {activeTotal.toLocaleString("en-US")}
               </span>
               <div className="w-full bg-zinc-800 rounded-full h-1.5 overflow-hidden">
                 <div className="bg-zinc-400 h-full rounded-full w-full" />

@@ -89,9 +89,9 @@ function formatSalary(salary: unknown): string {
   const s = salary as { from?: number; to?: number; currency?: string };
   if (!s.from && !s.to) return "";
   if (s.from && s.to)
-    return `${s.from.toLocaleString()} – ${s.to.toLocaleString()} ${s.currency ?? "RUR"}`;
-  if (s.from) return `from ${s.from.toLocaleString()} ${s.currency ?? "RUR"}`;
-  return `up to ${s.to!.toLocaleString()} ${s.currency ?? "RUR"}`;
+    return `${s.from.toLocaleString("en-US")} – ${s.to.toLocaleString("en-US")} ${s.currency ?? "RUR"}`;
+  if (s.from) return `from ${s.from.toLocaleString("en-US")} ${s.currency ?? "RUR"}`;
+  return `up to ${s.to!.toLocaleString("en-US")} ${s.currency ?? "RUR"}`;
 }
 
 function formatVacancyDate(dateStr?: string | Date): string {

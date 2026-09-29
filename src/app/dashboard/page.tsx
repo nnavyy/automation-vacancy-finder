@@ -181,7 +181,7 @@ export default async function DashboardPage() {
           </div>
           <div className="flex items-baseline gap-2">
             <span className="text-2xl sm:text-3xl font-bold text-zinc-100 tabular-nums">
-              {total.toLocaleString()}
+              {total.toLocaleString("en-US")}
             </span>
             <span className="text-[11px] font-semibold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.2 rounded">
               +12%
