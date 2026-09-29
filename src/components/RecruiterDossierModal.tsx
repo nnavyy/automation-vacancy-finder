@@ -66,7 +66,6 @@ export default function RecruiterDossierModal({
   const [generatedPitch, setGeneratedPitch] = useState("");
   const [pitchCopied, setPitchCopied] = useState(false);
   const [showPitchBox, setShowPitchBox] = useState(false);
-  const [phoneRevealed, setPhoneRevealed] = useState(false);
 
   if (!isOpen || !data) return null;
 
@@ -205,59 +204,53 @@ export default function RecruiterDossierModal({
               {/* Email */}
               <div className="p-3 bg-zinc-900/50 border border-zinc-800 rounded-xl flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2.5 min-w-0">
-                  <Mail className="w-4 h-4 text-violet-400 shrink-0" />
+                  <Mail className={`w-4 h-4 shrink-0 ${data.email ? "text-violet-400" : "text-zinc-500"}`} />
                   <div className="min-w-0">
                     <p className="text-[11px] text-zinc-500">Corporate Email</p>
-                    <p className="text-xs font-mono text-zinc-200 truncate">
-                      {data.email || `contact@${data.companyName.toLowerCase().replace(/[^a-z0-9]/g, "")}.com`}
+                    <p className={`text-xs truncate ${data.email ? "font-mono text-zinc-200" : "text-zinc-500 italic"}`}>
+                      {data.email ? data.email : "Not publicly listed"}
                     </p>
                   </div>
                 </div>
-                <button
-                  onClick={() =>
-                    copyToClipboard(
-                      data.email || `contact@${data.companyName.toLowerCase().replace(/[^a-z0-9]/g, "")}.com`,
-                      "email"
-                    )
-                  }
-                  className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 transition-colors"
-                  title="Copy email"
-                >
-                  {copiedField === "email" ? (
-                    <CheckCheck className="w-3.5 h-3.5 text-emerald-400" />
-                  ) : (
-                    <Copy className="w-3.5 h-3.5" />
-                  )}
-                </button>
+                {data.email ? (
+                  <button
+                    onClick={() => copyToClipboard(data.email!, "email")}
+                    className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 transition-colors"
+                    title="Copy email"
+                  >
+                    {copiedField === "email" ? (
+                      <CheckCheck className="w-3.5 h-3.5 text-emerald-400" />
+                    ) : (
+                      <Copy className="w-3.5 h-3.5" />
+                    )}
+                  </button>
+                ) : null}
               </div>
 
               {/* Telegram */}
               <div className="p-3 bg-zinc-900/50 border border-zinc-800 rounded-xl flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2.5 min-w-0">
-                  <Send className="w-4 h-4 text-sky-400 shrink-0" />
+                  <Send className={`w-4 h-4 shrink-0 ${data.telegram ? "text-sky-400" : "text-zinc-500"}`} />
                   <div className="min-w-0">
                     <p className="text-[11px] text-zinc-500">Telegram Direct</p>
-                    <p className="text-xs font-mono text-zinc-200 truncate">
-                      {data.telegram || `@${data.name.toLowerCase().replace(/\s+/g, "_")}`}
+                    <p className={`text-xs truncate ${data.telegram ? "font-mono text-zinc-200" : "text-zinc-500 italic"}`}>
+                      {data.telegram ? data.telegram : "Not publicly listed"}
                     </p>
                   </div>
                 </div>
-                <button
-                  onClick={() =>
-                    copyToClipboard(
-                      data.telegram || `@${data.name.toLowerCase().replace(/\s+/g, "_")}`,
-                      "telegram"
-                    )
-                  }
-                  className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 transition-colors"
-                  title="Copy Telegram handle"
-                >
-                  {copiedField === "telegram" ? (
-                    <CheckCheck className="w-3.5 h-3.5 text-emerald-400" />
-                  ) : (
-                    <Copy className="w-3.5 h-3.5" />
-                  )}
-                </button>
+                {data.telegram ? (
+                  <button
+                    onClick={() => copyToClipboard(data.telegram!, "telegram")}
+                    className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 transition-colors"
+                    title="Copy Telegram handle"
+                  >
+                    {copiedField === "telegram" ? (
+                      <CheckCheck className="w-3.5 h-3.5 text-emerald-400" />
+                    ) : (
+                      <Copy className="w-3.5 h-3.5" />
+                    )}
+                  </button>
+                ) : null}
               </div>
 
               {/* LinkedIn */}
@@ -304,28 +297,17 @@ export default function RecruiterDossierModal({
               {/* Phone / Corporate Comms */}
               <div className="p-3 bg-zinc-900/50 border border-zinc-800 rounded-xl flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2.5 min-w-0">
-                  <Phone className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <Phone className={`w-4 h-4 shrink-0 ${data.phone ? "text-emerald-400" : "text-zinc-500"}`} />
                   <div className="min-w-0">
                     <p className="text-[11px] text-zinc-500">Corporate Line / WhatsApp</p>
-                    <p className="text-xs font-mono text-zinc-300 truncate">
-                      {phoneRevealed
-                        ? data.phone || "+7 (999) 514-42-18"
-                        : "+7 (999) •••-••-••"}
+                    <p className={`text-xs truncate ${data.phone ? "font-mono text-zinc-300" : "text-zinc-500 italic"}`}>
+                      {data.phone ? data.phone : "Not publicly listed"}
                     </p>
                   </div>
                 </div>
-                {!phoneRevealed ? (
+                {data.phone ? (
                   <button
-                    onClick={() => setPhoneRevealed(true)}
-                    className="text-xs text-emerald-400 hover:text-emerald-300 font-medium px-2 py-1 rounded bg-emerald-500/10 hover:bg-emerald-500/20 transition-colors"
-                  >
-                    Reveal
-                  </button>
-                ) : (
-                  <button
-                    onClick={() =>
-                      copyToClipboard(data.phone || "+7 (999) 514-42-18", "phone")
-                    }
+                    onClick={() => copyToClipboard(data.phone!, "phone")}
                     className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 transition-colors"
                   >
                     {copiedField === "phone" ? (
@@ -334,7 +316,7 @@ export default function RecruiterDossierModal({
                       <Copy className="w-3.5 h-3.5" />
                     )}
                   </button>
-                )}
+                ) : null}
               </div>
             </div>
           </div>

@@ -291,7 +291,6 @@ function CompanyIntelContent() {
       email: contact.email,
       emailVerified: contact.emailVerified,
       linkedinUrl: contact.linkedinUrl,
-      telegram: `@${contact.name.toLowerCase().replace(/\s+/g, "_")}`,
       synergyScore: contact.seniority === "C-Level" ? 96 : 89,
     });
     setDossierOpen(true);

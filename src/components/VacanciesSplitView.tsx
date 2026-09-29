@@ -279,15 +279,26 @@ export default function VacanciesSplitView({
   };
 
   const openRecruiterModal = (vacancy: VacancyItem) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const raw = (vacancy as any)?.rawData;
+    const hhContacts = raw?.contacts;
+    const phoneObj = hhContacts?.phones?.[0];
+    const directPhone = phoneObj
+      ? `+${phoneObj.country || ""}${phoneObj.city ? ` (${phoneObj.city})` : ""} ${phoneObj.number || ""}`.trim()
+      : undefined;
+    const directEmail = hhContacts?.email || undefined;
+    const directName = hhContacts?.name || `Hiring Authority · ${vacancy.company}`;
+
     setDossierData({
-      name: `Hiring Authority · ${vacancy.company}`,
-      role: "Lead Technical Recruiter / Talent Acquisition",
+      name: directName,
+      role: hhContacts?.name ? "Talent Acquisition / Contact Person" : "Lead Technical Recruiter / Talent Acquisition",
       companyName: vacancy.company,
       department: "Engineering Recruitment",
-      email: `careers@${vacancy.company.toLowerCase().replace(/[^a-z0-9]/g, "")}.com`,
-      emailVerified: true,
+      email: directEmail,
+      emailVerified: Boolean(directEmail),
+      phone: directPhone,
       synergyScore: vacancy.analysis?.matchScore ?? 88,
-      preferredChannel: "Telegram & Corporate Email",
+      preferredChannel: directEmail ? "Corporate Email" : "Direct Application / HH Portal",
       responseWindow: "Active window 10:00 - 18:00 MSK",
       historyLogs: [
         {
