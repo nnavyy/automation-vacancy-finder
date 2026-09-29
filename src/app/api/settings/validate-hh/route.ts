@@ -43,6 +43,8 @@ export async function POST(req: NextRequest) {
         where: { id: pref.id },
         data: {
           hhToken: cleanToken,
+          hhSessionStatus: "active",
+          hhLastVerifiedAt: new Date(),
           hhProfileName: profile.name,
           hhProfileAvatar: profile.avatar,
           hhTotalApplications: profile.totalApplications,

@@ -117,6 +117,7 @@ export async function POST(req: NextRequest) {
       "coverLetterLanguage", "resumeText", "isActive", "portfolioUrl",
       "hhToken", "hhResumeId", "hhResumeTitle",
       "hhProfileName", "hhProfileAvatar", "hhTotalApplications",
+      "hhSessionStatus", "hhLastVerifiedAt", "hhExpiresAt",
     ]);
 
     // JSON array fields

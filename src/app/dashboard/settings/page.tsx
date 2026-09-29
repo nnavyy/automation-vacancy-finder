@@ -22,7 +22,15 @@ import {
   FileText,
   MessageSquare,
   Copy,
-  Check
+  Check,
+  Globe,
+  Clock,
+  AlertTriangle,
+  CheckCircle2,
+  XCircle,
+  ChevronDown,
+  ChevronUp,
+  ShieldCheck
 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────
@@ -53,6 +61,9 @@ interface FormState {
   hhProfileName:         string;
   hhProfileAvatar:       string;
   hhTotalApplications:   number;
+  hhSessionStatus:       string;
+  hhLastVerifiedAt:      string;
+  hhExpiresAt:           string;
 }
 
 interface Msg {
@@ -87,6 +98,9 @@ const DEFAULT_FORM: FormState = {
   hhProfileName:          "",
   hhProfileAvatar:        "",
   hhTotalApplications:    0,
+  hhSessionStatus:        "unknown",
+  hhLastVerifiedAt:       "",
+  hhExpiresAt:            "",
 };
 
 const EXPERIENCE_OPTIONS = [
@@ -113,6 +127,30 @@ function toComma(arr: any): string {
 function fromComma(str: any): string[] {
   if (typeof str !== "string") return [];
   return str.split(",").map((s) => s.trim()).filter(Boolean);
+}
+
+function formatExpDate(dateStr?: string | Date | null): string {
+  if (!dateStr) return "Sesi Aktif (~30 hari)";
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return "Sesi Aktif (~30 hari)";
+  const now = new Date();
+  const diffDays = Math.ceil((d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+  const dateFormatted = d.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" });
+  if (diffDays <= 0) return `${dateFormatted} (Sudah Expired)`;
+  return `${dateFormatted} (${diffDays} hari lagi)`;
+}
+
+function formatRelativeTime(dateStr?: string | Date | null): string {
+  if (!dateStr) return "Belum pernah";
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return "Belum pernah";
+  const diffMs = Date.now() - d.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  if (diffMins < 1) return "Baru saja";
+  if (diffMins < 60) return `${diffMins} menit lalu`;
+  const diffHours = Math.floor(diffMins / 60);
+  if (diffHours < 24) return `${diffHours} jam lalu`;
+  return d.toLocaleDateString("id-ID", { day: "numeric", month: "short" });
 }
 
 // ── Sub-components ────────────────────────────────────────────
@@ -224,6 +262,9 @@ export default function SettingsPage() {
   const [validatingHH, setValidatingHH] = useState(false);
   const [syncingHH, setSyncingHH] = useState(false);
   const [hhResumes, setHhResumes] = useState<any[]>([]);
+  const [browserLoggingIn, setBrowserLoggingIn] = useState(false);
+  const [checkingSession, setCheckingSession] = useState(false);
+  const [showManualCookie, setShowManualCookie] = useState(false);
 
   // ── Load current settings ────────────────────────────────
   useEffect(() => {
@@ -260,6 +301,9 @@ export default function SettingsPage() {
               hhProfileName:          d.hhProfileName                  ?? "",
               hhProfileAvatar:        d.hhProfileAvatar                ?? "",
               hhTotalApplications:    d.hhTotalApplications            ?? 0,
+              hhSessionStatus:        d.hhSessionStatus                ?? "unknown",
+              hhLastVerifiedAt:       d.hhLastVerifiedAt               ? String(d.hhLastVerifiedAt) : "",
+              hhExpiresAt:            d.hhExpiresAt                    ? String(d.hhExpiresAt) : "",
             });
           }
         } else if (res.status === 404) {
@@ -321,6 +365,12 @@ export default function SettingsPage() {
         hhToken:                form.hhToken,
         hhResumeId:             form.hhResumeId,
         hhResumeTitle:          form.hhResumeTitle,
+        hhProfileName:          form.hhProfileName,
+        hhProfileAvatar:        form.hhProfileAvatar,
+        hhTotalApplications:    form.hhTotalApplications,
+        hhSessionStatus:        form.hhSessionStatus,
+        hhLastVerifiedAt:       form.hhLastVerifiedAt ? new Date(form.hhLastVerifiedAt) : null,
+        hhExpiresAt:            form.hhExpiresAt ? new Date(form.hhExpiresAt) : null,
       };
 
       const res  = await fetch("/api/settings", {
@@ -654,18 +704,125 @@ export default function SettingsPage() {
         if (json.profile) {
           setForm(prev => ({
             ...prev,
+            hhSessionStatus: "active",
+            hhLastVerifiedAt: new Date().toISOString(),
             hhProfileName: json.profile.name || "",
             hhProfileAvatar: json.profile.avatar || "",
             hhTotalApplications: json.profile.totalApplications || 0,
           }));
+        } else {
+          setForm(prev => ({
+            ...prev,
+            hhSessionStatus: "active",
+            hhLastVerifiedAt: new Date().toISOString(),
+          }));
         }
       } else {
+        setForm(prev => ({ ...prev, hhSessionStatus: "expired" }));
         setMsg({ text: json.error ?? "Failed to validate token.", type: "error" });
       }
     } catch {
       setMsg({ text: "Failed to reach the validation API.", type: "error" });
     } finally {
       setValidatingHH(false);
+    }
+  };
+
+  const handleBrowserLogin = async () => {
+    setBrowserLoggingIn(true);
+    setMsg({
+      text: "Membuka jendela browser Chrome/Edge... Silakan login ke akun HeadHunter kamu di jendela yang muncul.",
+      type: "warn",
+    });
+    try {
+      const res = await fetch("/api/settings/hh-browser-login", {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (data.success) {
+        setForm((prev) => ({
+          ...prev,
+          hhToken: data.cookieString,
+          hhSessionStatus: "active",
+          hhLastVerifiedAt: new Date().toISOString(),
+          hhExpiresAt: data.expiresAt ? String(data.expiresAt) : "",
+          hhProfileName: data.profile.name || prev.hhProfileName,
+          hhProfileAvatar: data.profile.avatar || prev.hhProfileAvatar,
+          hhTotalApplications: data.profile.totalApplications || prev.hhTotalApplications,
+          ...(data.resumes.length > 0 && !prev.hhResumeId ? {
+            hhResumeId: data.resumes[0].id,
+            hhResumeTitle: data.resumes[0].title,
+          } : {}),
+        }));
+        if (data.resumes) setHhResumes(data.resumes);
+        setMsg({
+          text: `Berhasil terhubung ke akun HeadHunter: ${data.profile.name || "Akun Kamu"}! Sesi aktif dan tersimpan.`,
+          type: "success",
+        });
+      } else {
+        setMsg({
+          text: data.error || "Gagal melakukan login via browser.",
+          type: "error",
+        });
+      }
+    } catch {
+      setMsg({
+        text: "Koneksi ke browser login gagal atau jendela browser ditutup sebelum login selesai.",
+        type: "error",
+      });
+    } finally {
+      setBrowserLoggingIn(false);
+    }
+  };
+
+  const handleCheckSession = async () => {
+    setCheckingSession(true);
+    setMsg(null);
+    try {
+      const res = await fetch("/api/settings/check-hh-session", {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (data.success) {
+        if (data.status === "active") {
+          setForm((prev) => ({
+            ...prev,
+            hhSessionStatus: "active",
+            hhLastVerifiedAt: data.lastVerifiedAt ? String(data.lastVerifiedAt) : new Date().toISOString(),
+            ...(data.profile?.name ? {
+              hhProfileName: data.profile.name,
+              hhProfileAvatar: data.profile.avatar,
+              hhTotalApplications: data.profile.totalApplications,
+            } : {}),
+          }));
+          if (data.resumes) setHhResumes(data.resumes);
+          setMsg({
+            text: "Status sesi HeadHunter AKTIF dan terverifikasi!",
+            type: "success",
+          });
+        } else if (data.status === "expired") {
+          setForm((prev) => ({
+            ...prev,
+            hhSessionStatus: "expired",
+            hhLastVerifiedAt: data.lastVerifiedAt ? String(data.lastVerifiedAt) : new Date().toISOString(),
+          }));
+          setMsg({
+            text: "Sesi HeadHunter kamu EXPIRED / logout! Silakan klik 'Login Otomatis via Browser'.",
+            type: "error",
+          });
+        } else {
+          setMsg({
+            text: data.message || "Belum ada token/cookie yang dikonfigurasi.",
+            type: "warn",
+          });
+        }
+      } else {
+        setMsg({ text: data.error || "Gagal memeriksa sesi.", type: "error" });
+      }
+    } catch {
+      setMsg({ text: "Gagal menghubungi server untuk cek status sesi.", type: "error" });
+    } finally {
+      setCheckingSession(false);
     }
   };
 
@@ -804,34 +961,125 @@ export default function SettingsPage() {
           />
         </FormCard>
 
-        {/* ── HH.ru Account Integration ── */}
-        <FormCard title="HH.ru Account Integration" icon={Bot}>
-          <div className="space-y-4">
-            <div className="flex gap-3 items-end">
-              <div className="flex-1">
-                <TextField
-                  label="Full Cookie String"
-                  value={form.hhToken}
-                  onChange={(v) => setForm((p) => ({ ...p, hhToken: v }))}
-                  placeholder="hhtoken=...; hhuid=...; _xsrf=..."
-                  hint="Go to Network tab, refresh hh.ru, click a request, copy 'Cookie' from Request Headers"
-                />
+        {/* ── HH.ru Account Integration & Session Health ── */}
+        <FormCard title="HH.ru Account & Session Sync" icon={Bot}>
+          <div className="space-y-5">
+            {/* Live Session Status Banner */}
+            <div className={`p-4 rounded-xl border transition-all ${
+              form.hhSessionStatus === "active"
+                ? "bg-emerald-950/20 border-emerald-500/30 text-emerald-300"
+                : form.hhSessionStatus === "expired"
+                ? "bg-red-950/20 border-red-500/30 text-red-300"
+                : "bg-zinc-900/60 border-zinc-800 text-zinc-400"
+            }`}>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
+                    form.hhSessionStatus === "active"
+                      ? "bg-emerald-500/20 text-emerald-400"
+                      : form.hhSessionStatus === "expired"
+                      ? "bg-red-500/20 text-red-400"
+                      : "bg-zinc-800 text-zinc-400"
+                  }`}>
+                    {form.hhSessionStatus === "active" ? (
+                      <CheckCircle2 size={20} />
+                    ) : form.hhSessionStatus === "expired" ? (
+                      <AlertTriangle size={20} />
+                    ) : (
+                      <Globe size={20} />
+                    )}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-sm text-zinc-100">
+                        {form.hhSessionStatus === "active"
+                          ? "Sesi HeadHunter: Aktif & Terhubung"
+                          : form.hhSessionStatus === "expired"
+                          ? "Sesi HeadHunter: Kadaluarsa / Logout"
+                          : "Status Sesi: Belum Terhubung"}
+                      </span>
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium uppercase tracking-wider ${
+                        form.hhSessionStatus === "active"
+                          ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
+                          : form.hhSessionStatus === "expired"
+                          ? "bg-red-500/20 text-red-400 border border-red-500/30"
+                          : "bg-zinc-800 text-zinc-400 border border-zinc-700"
+                      }`}>
+                        {form.hhSessionStatus === "active" ? "Connected" : form.hhSessionStatus === "expired" ? "Expired" : "Idle"}
+                      </span>
+                    </div>
+                    <p className="text-xs text-zinc-400 mt-0.5">
+                      {form.hhSessionStatus === "active"
+                        ? `Akun: ${form.hhProfileName || "Terhubung"} • Kadaluarsa: ${formatExpDate(form.hhExpiresAt)}`
+                        : form.hhSessionStatus === "expired"
+                        ? "Sesi ditolak oleh HH.ru (403 / Logout). Otomasi dijeda sampai kamu login kembali."
+                        : "Hubungkan akun HeadHunter untuk sinkronisasi riwayat lamaran dan 1-click apply."}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 self-start sm:self-center">
+                  <button
+                    type="button"
+                    onClick={handleCheckSession}
+                    disabled={checkingSession || !form.hhToken}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-medium text-zinc-200 transition-colors border border-zinc-700/60 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Cek apakah sesi cookie di HH.ru masih aktif atau sudah expired"
+                  >
+                    <RefreshCw size={12} className={checkingSession ? "animate-spin text-emerald-400" : "text-zinc-400"} />
+                    {checkingSession ? "Memeriksa..." : "Cek Status Sesi"}
+                  </button>
+                </div>
               </div>
-              <button
-                type="button"
-                onClick={handleValidateHH}
-                disabled={validatingHH || !form.hhToken}
-                className="flex items-center gap-2 px-4 py-2 mb-[22px] rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
-              >
-                {validatingHH ? <RefreshCw size={14} className="animate-spin" /> : <Check size={14} />}
-                {validatingHH ? "Loading Resumes..." : "Load Resumes"}
-              </button>
+
+              {form.hhLastVerifiedAt && (
+                <div className="mt-3 pt-3 border-t border-zinc-800/80 flex items-center justify-between text-[11px] text-zinc-500">
+                  <span className="flex items-center gap-1.5">
+                    <Clock size={12} /> Terakhir diverifikasi: {formatRelativeTime(form.hhLastVerifiedAt)}
+                  </span>
+                  <span>
+                    Masa aktif: {formatExpDate(form.hhExpiresAt)}
+                  </span>
+                </div>
+              )}
             </div>
 
+            {/* Quick Action: Browser Auto-Login */}
+            <div className="bg-gradient-to-r from-emerald-950/30 to-teal-950/20 border border-emerald-500/20 rounded-xl p-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h4 className="text-sm font-semibold text-zinc-100 flex items-center gap-2">
+                    <Globe size={16} className="text-emerald-400" />
+                    Login Otomatis via Browser (Chrome / Edge)
+                  </h4>
+                  <p className="text-xs text-zinc-400 mt-1 max-w-xl">
+                    Klik tombol di samping untuk membuka browser resmi di komputermu. Kamu cukup login seperti biasa di jendela tersebut, dan sistem akan <strong>otomatis menangkap cookie &amp; tanggal kadaluarsa</strong> tanpa perlu buka DevTools.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleBrowserLogin}
+                  disabled={browserLoggingIn}
+                  className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium transition-all shadow-sm shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {browserLoggingIn ? <RefreshCw size={15} className="animate-spin" /> : <Globe size={15} />}
+                  {browserLoggingIn ? "Menunggu Login..." : "Buka Browser Login"}
+                </button>
+              </div>
+
+              {browserLoggingIn && (
+                <div className="mt-3 p-3 rounded-lg bg-zinc-900/90 border border-emerald-500/30 text-xs text-emerald-300 flex items-center gap-2 animate-pulse">
+                  <RefreshCw size={14} className="animate-spin text-emerald-400 shrink-0" />
+                  <span>Jendela browser sedang dibuka. Silakan lakukan login ke akun HeadHunter kamu di jendela browser tersebut...</span>
+                </div>
+              )}
+            </div>
+
+            {/* Resume Selection */}
             {hhResumes.length > 0 && (
               <div>
                 <label htmlFor="hh-resume-select" className="block text-xs text-zinc-400 mb-1.5 font-medium cursor-pointer">
-                  Select Resume for Auto-Apply
+                  Pilih Resume untuk Auto-Apply
                 </label>
                 <select
                   id="hh-resume-select"
@@ -842,7 +1090,7 @@ export default function SettingsPage() {
                   }}
                   className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:border-emerald-500/60 focus:ring-1 focus:ring-emerald-500/30 focus:outline-none transition-all"
                 >
-                  <option value="" disabled>Select a resume...</option>
+                  <option value="" disabled>Pilih salah satu resume...</option>
                   {hhResumes.map(r => (
                     <option key={r.id} value={r.id}>{r.title} ({r.status?.name || "Active"})</option>
                   ))}
@@ -851,9 +1099,46 @@ export default function SettingsPage() {
             )}
             {form.hhResumeTitle && hhResumes.length === 0 && (
               <p className="text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 p-2.5 rounded-lg flex items-center gap-1.5">
-                <Check size={13} /> Connected to Resume: <strong>{form.hhResumeTitle}</strong>
+                <Check size={13} /> Terhubung ke Resume: <strong>{form.hhResumeTitle}</strong>
               </p>
             )}
+
+            {/* Collapsible Manual Cookie Option */}
+            <div className="pt-2 border-t border-zinc-800/80">
+              <button
+                type="button"
+                onClick={() => setShowManualCookie(!showManualCookie)}
+                className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-zinc-200 transition-colors"
+              >
+                {showManualCookie ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                <span>Opsi Lanjutan: Input String Cookie Manual</span>
+              </button>
+
+              {showManualCookie && (
+                <div className="mt-3 space-y-3 pt-2">
+                  <div className="flex gap-3 items-end">
+                    <div className="flex-1">
+                      <TextField
+                        label="Full Cookie String"
+                        value={form.hhToken}
+                        onChange={(v) => setForm((p) => ({ ...p, hhToken: v }))}
+                        placeholder="hhtoken=...; hhuid=...; _xsrf=..."
+                        hint="Atau copy header Cookie dari browser DevTools (Network tab)"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleValidateHH}
+                      disabled={validatingHH || !form.hhToken}
+                      className="flex items-center gap-2 px-4 py-2 mb-[22px] rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed border border-zinc-700"
+                    >
+                      {validatingHH ? <RefreshCw size={14} className="animate-spin" /> : <Check size={14} />}
+                      {validatingHH ? "Loading..." : "Load Resumes"}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </FormCard>
 
@@ -1199,8 +1484,24 @@ export default function SettingsPage() {
               </div>
               <h3 className="mt-3 text-lg font-bold text-zinc-100">{form.hhProfileName}</h3>
               <p className="text-sm text-zinc-400">HeadHunter Profile</p>
+
+              <div className="mt-2 flex items-center justify-center gap-1.5">
+                <span className={`w-2 h-2 rounded-full ${
+                  form.hhSessionStatus === "active" ? "bg-emerald-400 animate-pulse" : form.hhSessionStatus === "expired" ? "bg-red-400" : "bg-zinc-500"
+                }`} />
+                <span className={`text-xs font-medium ${
+                  form.hhSessionStatus === "active" ? "text-emerald-400" : form.hhSessionStatus === "expired" ? "text-red-400" : "text-zinc-400"
+                }`}>
+                  {form.hhSessionStatus === "active" ? "Sesi Aktif" : form.hhSessionStatus === "expired" ? "Sesi Expired" : "Belum Dicek"}
+                </span>
+              </div>
+              {form.hhExpiresAt && (
+                <p className="text-[10px] text-zinc-500 mt-0.5">
+                  {formatExpDate(form.hhExpiresAt)}
+                </p>
+              )}
               
-              <div className="mt-6 pt-5 border-t border-zinc-800/80 grid grid-cols-2 gap-4">
+              <div className="mt-5 pt-4 border-t border-zinc-800/80 grid grid-cols-2 gap-4">
                 <div className="text-center">
                   <div className="text-2xl font-black tabular-nums tracking-tight text-emerald-400">{form.hhTotalApplications || 0}</div>
                   <div className="text-[10px] text-zinc-500 uppercase tracking-wider mt-1 font-semibold">Total Responses</div>
@@ -1211,22 +1512,32 @@ export default function SettingsPage() {
                 </div>
               </div>
 
-              <div className="mt-6">
+              <div className="mt-6 space-y-2">
+                <button
+                  type="button"
+                  onClick={handleCheckSession}
+                  disabled={checkingSession || !form.hhToken}
+                  className="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700/80 text-xs font-medium text-zinc-200 transition-colors disabled:opacity-50 border border-zinc-700/80"
+                >
+                  <RefreshCw size={13} className={checkingSession ? "animate-spin text-emerald-400" : "text-zinc-400"} />
+                  {checkingSession ? "Memeriksa Sesi..." : "Cek Status Sesi"}
+                </button>
+
                 <button
                   type="button"
                   onClick={handleSyncHistory}
                   disabled={syncingHH}
-                  className="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700/80 text-sm font-medium text-zinc-100 transition-colors disabled:opacity-50 border border-zinc-700/80"
+                  className="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 text-xs font-medium transition-colors disabled:opacity-50 border border-emerald-500/30"
                 >
                   {syncingHH ? (
-                    <RefreshCw size={16} className="animate-spin text-emerald-400" />
+                    <RefreshCw size={13} className="animate-spin text-emerald-400" />
                   ) : (
-                    <RefreshCw size={16} className="text-zinc-400" />
+                    <RefreshCw size={13} className="text-emerald-400" />
                   )}
                   {syncingHH ? "Syncing History..." : "Sync History to Database"}
                 </button>
-                <p className="text-[11px] text-zinc-500 mt-2 text-center">
-                  Imports past HH.ru applications into the local database.
+                <p className="text-[11px] text-zinc-500 text-center">
+                  Tarik riwayat lamaran HeadHunter ke database lokal.
                 </p>
               </div>
             </div>

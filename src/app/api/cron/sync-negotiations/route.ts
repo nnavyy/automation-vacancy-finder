@@ -24,38 +24,66 @@ export async function GET(req: Request) {
       if (!pref.hhToken) continue;
       
       const result = await syncHHHistory(pref.hhToken);
-      if (result.success && result.history.length > 0) {
-        for (const item of result.history) {
-          let vacancyIdMatch = item.url.match(/vacancy\/(\d+)/);
-          let vacancyId = vacancyIdMatch ? vacancyIdMatch[1] : `manual-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
-          
-          const exists = await prisma.vacancy.findFirst({
-            where: { hhId: vacancyId, userId: pref.userId }
-          });
-          
-          if (!exists) {
-            const created = await prisma.vacancy.create({
-              data: {
-                userId: pref.userId,
-                hhId: vacancyId,
-                title: item.title,
-                company: item.company,
-                url: item.url ? (item.url.startsWith('http') ? item.url : `https://hh.ru${item.url}`) : "",
-                status: "applied_manual",
-                sourceKeyword: "HH.ru Cron Sync",
-                createdAt: item.appliedAt,
-                updatedAt: item.appliedAt,
-              }
+      if (result.success) {
+        await prisma.searchPreference.update({
+          where: { id: pref.id },
+          data: { hhSessionStatus: "active", hhLastVerifiedAt: new Date() },
+        });
+
+        if (result.history.length > 0) {
+          for (const item of result.history) {
+            let vacancyIdMatch = item.url.match(/vacancy\/(\d+)/);
+            let vacancyId = vacancyIdMatch ? vacancyIdMatch[1] : `manual-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+            
+            const exists = await prisma.vacancy.findFirst({
+              where: { hhId: vacancyId, userId: pref.userId }
             });
             
-            await prisma.applicationLog.create({
-              data: {
-                vacancyId: created.id,
-                action: "HH.ru Cron Sync",
-                notes: `Status on HH: ${item.status}`
-              }
-            });
-            totalSynced++;
+            if (!exists) {
+              const created = await prisma.vacancy.create({
+                data: {
+                  userId: pref.userId,
+                  hhId: vacancyId,
+                  title: item.title,
+                  company: item.company,
+                  url: item.url ? (item.url.startsWith('http') ? item.url : `https://hh.ru${item.url}`) : "",
+                  status: "applied_manual",
+                  sourceKeyword: "HH.ru Cron Sync",
+                  createdAt: item.appliedAt,
+                  updatedAt: item.appliedAt,
+                }
+              });
+              
+              await prisma.applicationLog.create({
+                data: {
+                  vacancyId: created.id,
+                  action: "HH.ru Cron Sync",
+                  notes: `Status on HH: ${item.status}`
+                }
+              });
+              totalSynced++;
+            }
+          }
+        }
+      } else {
+        // Failed / 403
+        if (pref.hhSessionStatus === "active") {
+          await prisma.searchPreference.update({
+            where: { id: pref.id },
+            data: { hhSessionStatus: "expired", hhLastVerifiedAt: new Date() },
+          });
+
+          // Notify via Telegram
+          const tgLink = await prisma.telegramLink.findFirst({
+            where: { userId: pref.userId, isActive: true },
+          });
+          if (tgLink?.telegramChatId) {
+            const { sendMessage } = await import("@/lib/telegram");
+            await sendMessage(
+              `⚠️ <b>[HH.ru Session Alert]</b>\n\nSesi akun HeadHunter kamu telah <b>kadaluarsa / logout</b>!\n\nFitur sinkronisasi riwayat lamaran & auto-apply dihentikan sementara. Silakan buka Dashboard Settings untuk menghubungkan kembali.`,
+              undefined,
+              tgLink.telegramChatId
+            ).catch(() => {});
           }
         }
       }

@@ -467,3 +467,41 @@ export async function applyToVacancy(
     throw new Error(error.message || "Failed to submit application via HH.ru.");
   }
 }
+
+export interface HHSessionCheckResult {
+  active: boolean;
+  error?: string;
+  resumes?: HHResume[];
+  profile?: {
+    name: string | null;
+    avatar: string | null;
+    totalApplications: number;
+  };
+}
+
+/**
+ * Checks whether the current HeadHunter session cookies are active and valid.
+ */
+export async function checkHHSession(cookieString: string): Promise<HHSessionCheckResult> {
+  try {
+    const formatted = formatHHCookies(cookieString);
+    if (!formatted) {
+      return { active: false, error: "No cookie/token configured." };
+    }
+
+    const resumes = await fetchMyResumes(formatted);
+    const profile = await fetchHHProfile(formatted);
+
+    return {
+      active: true,
+      resumes,
+      profile,
+    };
+  } catch (error: any) {
+    return {
+      active: false,
+      error: error.message || "Session expired or invalid.",
+    };
+  }
+}
+

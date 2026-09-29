@@ -133,6 +133,9 @@ export interface SearchPreferenceData {
   hhProfileName?: string | null;
   hhProfileAvatar?: string | null;
   hhTotalApplications?: number | null;
+  hhSessionStatus?: string | null;
+  hhLastVerifiedAt?: string | Date | null;
+  hhExpiresAt?: string | Date | null;
 }
 
 // ------------------------------------------------------------

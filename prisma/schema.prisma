@@ -66,6 +66,9 @@ model SearchPreference {
   hhProfileName          String?
   hhProfileAvatar        String?
   hhTotalApplications    Int?      @default(0)
+  hhSessionStatus        String?   @default("unknown")
+  hhLastVerifiedAt       DateTime?
+  hhExpiresAt            DateTime?
 
   collectionStatus       Json?   // { running: boolean, analyzed: number, total: number, startedAt: string }
   isActive               Boolean @default(true)
