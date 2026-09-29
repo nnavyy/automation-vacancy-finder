@@ -130,27 +130,27 @@ function fromComma(str: any): string[] {
 }
 
 function formatExpDate(dateStr?: string | Date | null): string {
-  if (!dateStr) return "Sesi Aktif (~30 hari)";
+  if (!dateStr) return "Active Session (~30 days)";
   const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return "Sesi Aktif (~30 hari)";
+  if (isNaN(d.getTime())) return "Active Session (~30 days)";
   const now = new Date();
   const diffDays = Math.ceil((d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-  const dateFormatted = d.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" });
-  if (diffDays <= 0) return `${dateFormatted} (Sudah Expired)`;
-  return `${dateFormatted} (${diffDays} hari lagi)`;
+  const dateFormatted = d.toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" });
+  if (diffDays <= 0) return `${dateFormatted} (Expired)`;
+  return `${dateFormatted} (${diffDays} days left)`;
 }
 
 function formatRelativeTime(dateStr?: string | Date | null): string {
-  if (!dateStr) return "Belum pernah";
+  if (!dateStr) return "Never";
   const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return "Belum pernah";
+  if (isNaN(d.getTime())) return "Never";
   const diffMs = Date.now() - d.getTime();
   const diffMins = Math.floor(diffMs / 60000);
-  if (diffMins < 1) return "Baru saja";
-  if (diffMins < 60) return `${diffMins} menit lalu`;
+  if (diffMins < 1) return "Just now";
+  if (diffMins < 60) return `${diffMins}m ago`;
   const diffHours = Math.floor(diffMins / 60);
-  if (diffHours < 24) return `${diffHours} jam lalu`;
-  return d.toLocaleDateString("id-ID", { day: "numeric", month: "short" });
+  if (diffHours < 24) return `${diffHours}h ago`;
+  return d.toLocaleDateString("en-US", { day: "numeric", month: "short" });
 }
 
 // ── Sub-components ────────────────────────────────────────────
@@ -731,7 +731,7 @@ export default function SettingsPage() {
   const handleBrowserLogin = async () => {
     setBrowserLoggingIn(true);
     setMsg({
-      text: "Membuka jendela browser Chrome/Edge... Silakan login ke akun HeadHunter kamu di jendela yang muncul.",
+      text: "Opening browser window... Please sign in to your HeadHunter account in the opened window.",
       type: "warn",
     });
     try {
@@ -756,18 +756,18 @@ export default function SettingsPage() {
         }));
         if (data.resumes) setHhResumes(data.resumes);
         setMsg({
-          text: `Berhasil terhubung ke akun HeadHunter: ${data.profile.name || "Akun Kamu"}! Sesi aktif dan tersimpan.`,
+          text: `Successfully linked HeadHunter account: ${data.profile.name || "Connected"}! Session active and saved.`,
           type: "success",
         });
       } else {
         setMsg({
-          text: data.error || "Gagal melakukan login via browser.",
+          text: data.error || "Failed to complete browser login.",
           type: "error",
         });
       }
     } catch {
       setMsg({
-        text: "Koneksi ke browser login gagal atau jendela browser ditutup sebelum login selesai.",
+        text: "Browser login failed or window was closed before completing login.",
         type: "error",
       });
     } finally {
@@ -797,7 +797,7 @@ export default function SettingsPage() {
           }));
           if (data.resumes) setHhResumes(data.resumes);
           setMsg({
-            text: "Status sesi HeadHunter AKTIF dan terverifikasi!",
+            text: "HeadHunter session is ACTIVE and verified!",
             type: "success",
           });
         } else if (data.status === "expired") {
@@ -807,20 +807,20 @@ export default function SettingsPage() {
             hhLastVerifiedAt: data.lastVerifiedAt ? String(data.lastVerifiedAt) : new Date().toISOString(),
           }));
           setMsg({
-            text: "Sesi HeadHunter kamu EXPIRED / logout! Silakan klik 'Login Otomatis via Browser'.",
+            text: "HeadHunter session is EXPIRED or logged out. Click 'Launch Browser Login' to reconnect.",
             type: "error",
           });
         } else {
           setMsg({
-            text: data.message || "Belum ada token/cookie yang dikonfigurasi.",
+            text: data.message || "No HeadHunter token/cookie configured yet.",
             type: "warn",
           });
         }
       } else {
-        setMsg({ text: data.error || "Gagal memeriksa sesi.", type: "error" });
+        setMsg({ text: data.error || "Failed to check session.", type: "error" });
       }
     } catch {
-      setMsg({ text: "Gagal menghubungi server untuk cek status sesi.", type: "error" });
+      setMsg({ text: "Failed to reach server to verify session status.", type: "error" });
     } finally {
       setCheckingSession(false);
     }
@@ -993,10 +993,10 @@ export default function SettingsPage() {
                     <div className="flex items-center gap-2">
                       <span className="font-semibold text-sm text-zinc-100">
                         {form.hhSessionStatus === "active"
-                          ? "Sesi HeadHunter: Aktif & Terhubung"
+                          ? "HeadHunter Session: Active & Connected"
                           : form.hhSessionStatus === "expired"
-                          ? "Sesi HeadHunter: Kadaluarsa / Logout"
-                          : "Status Sesi: Belum Terhubung"}
+                          ? "HeadHunter Session: Expired / Logged Out"
+                          : "Session Status: Not Connected"}
                       </span>
                       <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium uppercase tracking-wider ${
                         form.hhSessionStatus === "active"
@@ -1010,10 +1010,10 @@ export default function SettingsPage() {
                     </div>
                     <p className="text-xs text-zinc-400 mt-0.5">
                       {form.hhSessionStatus === "active"
-                        ? `Akun: ${form.hhProfileName || "Terhubung"} • Kadaluarsa: ${formatExpDate(form.hhExpiresAt)}`
+                        ? `Account: ${form.hhProfileName || "Connected"} • Expires: ${formatExpDate(form.hhExpiresAt)}`
                         : form.hhSessionStatus === "expired"
-                        ? "Sesi ditolak oleh HH.ru (403 / Logout). Otomasi dijeda sampai kamu login kembali."
-                        : "Hubungkan akun HeadHunter untuk sinkronisasi riwayat lamaran dan 1-click apply."}
+                        ? "Session was rejected by HH.ru (403 / Logged out). Automation is paused until you reconnect."
+                        : "Connect your HeadHunter account to sync application history and enable 1-click apply."}
                     </p>
                   </div>
                 </div>
@@ -1024,10 +1024,10 @@ export default function SettingsPage() {
                     onClick={handleCheckSession}
                     disabled={checkingSession || !form.hhToken}
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-medium text-zinc-200 transition-colors border border-zinc-700/60 disabled:opacity-50 disabled:cursor-not-allowed"
-                    title="Cek apakah sesi cookie di HH.ru masih aktif atau sudah expired"
+                    title="Verify if the current session cookie is valid on HH.ru"
                   >
                     <RefreshCw size={12} className={checkingSession ? "animate-spin text-emerald-400" : "text-zinc-400"} />
-                    {checkingSession ? "Memeriksa..." : "Cek Status Sesi"}
+                    {checkingSession ? "Checking..." : "Check Session"}
                   </button>
                 </div>
               </div>
@@ -1035,10 +1035,10 @@ export default function SettingsPage() {
               {form.hhLastVerifiedAt && (
                 <div className="mt-3 pt-3 border-t border-zinc-800/80 flex items-center justify-between text-[11px] text-zinc-500">
                   <span className="flex items-center gap-1.5">
-                    <Clock size={12} /> Terakhir diverifikasi: {formatRelativeTime(form.hhLastVerifiedAt)}
+                    <Clock size={12} /> Last verified: {formatRelativeTime(form.hhLastVerifiedAt)}
                   </span>
                   <span>
-                    Masa aktif: {formatExpDate(form.hhExpiresAt)}
+                    Session lifetime: {formatExpDate(form.hhExpiresAt)}
                   </span>
                 </div>
               )}
@@ -1050,10 +1050,10 @@ export default function SettingsPage() {
                 <div>
                   <h4 className="text-sm font-semibold text-zinc-100 flex items-center gap-2">
                     <Globe size={16} className="text-emerald-400" />
-                    Login Otomatis via Browser (Chrome / Edge)
+                    Automatic Browser Login (Chrome / Edge)
                   </h4>
                   <p className="text-xs text-zinc-400 mt-1 max-w-xl">
-                    Klik tombol di samping untuk membuka browser resmi di komputermu. Kamu cukup login seperti biasa di jendela tersebut, dan sistem akan <strong>otomatis menangkap cookie &amp; tanggal kadaluarsa</strong> tanpa perlu buka DevTools.
+                    Opens an official browser window on your machine. Simply sign in to HeadHunter as usual, and the system will <strong>automatically capture your session cookies &amp; expiry date</strong> without needing DevTools.
                   </p>
                 </div>
                 <button
@@ -1063,14 +1063,14 @@ export default function SettingsPage() {
                   className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium transition-all shadow-sm shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {browserLoggingIn ? <RefreshCw size={15} className="animate-spin" /> : <Globe size={15} />}
-                  {browserLoggingIn ? "Menunggu Login..." : "Buka Browser Login"}
+                  {browserLoggingIn ? "Waiting for Login..." : "Launch Browser Login"}
                 </button>
               </div>
 
               {browserLoggingIn && (
                 <div className="mt-3 p-3 rounded-lg bg-zinc-900/90 border border-emerald-500/30 text-xs text-emerald-300 flex items-center gap-2 animate-pulse">
                   <RefreshCw size={14} className="animate-spin text-emerald-400 shrink-0" />
-                  <span>Jendela browser sedang dibuka. Silakan lakukan login ke akun HeadHunter kamu di jendela browser tersebut...</span>
+                  <span>Browser window is opening. Please sign in to your HeadHunter account in the opened window...</span>
                 </div>
               )}
             </div>
@@ -1079,7 +1079,7 @@ export default function SettingsPage() {
             {hhResumes.length > 0 && (
               <div>
                 <label htmlFor="hh-resume-select" className="block text-xs text-zinc-400 mb-1.5 font-medium cursor-pointer">
-                  Pilih Resume untuk Auto-Apply
+                  Select Resume for Auto-Apply
                 </label>
                 <select
                   id="hh-resume-select"
@@ -1090,7 +1090,7 @@ export default function SettingsPage() {
                   }}
                   className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:border-emerald-500/60 focus:ring-1 focus:ring-emerald-500/30 focus:outline-none transition-all"
                 >
-                  <option value="" disabled>Pilih salah satu resume...</option>
+                  <option value="" disabled>Select a resume...</option>
                   {hhResumes.map(r => (
                     <option key={r.id} value={r.id}>{r.title} ({r.status?.name || "Active"})</option>
                   ))}
@@ -1099,7 +1099,7 @@ export default function SettingsPage() {
             )}
             {form.hhResumeTitle && hhResumes.length === 0 && (
               <p className="text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 p-2.5 rounded-lg flex items-center gap-1.5">
-                <Check size={13} /> Terhubung ke Resume: <strong>{form.hhResumeTitle}</strong>
+                <Check size={13} /> Connected to Resume: <strong>{form.hhResumeTitle}</strong>
               </p>
             )}
 
@@ -1111,7 +1111,7 @@ export default function SettingsPage() {
                 className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-zinc-200 transition-colors"
               >
                 {showManualCookie ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                <span>Opsi Lanjutan: Input String Cookie Manual</span>
+                <span>Advanced: Manual Cookie String Input</span>
               </button>
 
               {showManualCookie && (
@@ -1123,7 +1123,7 @@ export default function SettingsPage() {
                         value={form.hhToken}
                         onChange={(v) => setForm((p) => ({ ...p, hhToken: v }))}
                         placeholder="hhtoken=...; hhuid=...; _xsrf=..."
-                        hint="Atau copy header Cookie dari browser DevTools (Network tab)"
+                        hint="Or copy 'Cookie' from browser DevTools Request Headers (Network tab)"
                       />
                     </div>
                     <button
@@ -1492,7 +1492,7 @@ export default function SettingsPage() {
                 <span className={`text-xs font-medium ${
                   form.hhSessionStatus === "active" ? "text-emerald-400" : form.hhSessionStatus === "expired" ? "text-red-400" : "text-zinc-400"
                 }`}>
-                  {form.hhSessionStatus === "active" ? "Sesi Aktif" : form.hhSessionStatus === "expired" ? "Sesi Expired" : "Belum Dicek"}
+                  {form.hhSessionStatus === "active" ? "Session Active" : form.hhSessionStatus === "expired" ? "Session Expired" : "Not Checked"}
                 </span>
               </div>
               {form.hhExpiresAt && (
@@ -1520,7 +1520,7 @@ export default function SettingsPage() {
                   className="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700/80 text-xs font-medium text-zinc-200 transition-colors disabled:opacity-50 border border-zinc-700/80"
                 >
                   <RefreshCw size={13} className={checkingSession ? "animate-spin text-emerald-400" : "text-zinc-400"} />
-                  {checkingSession ? "Memeriksa Sesi..." : "Cek Status Sesi"}
+                  {checkingSession ? "Checking Session..." : "Check Session Status"}
                 </button>
 
                 <button
@@ -1537,7 +1537,7 @@ export default function SettingsPage() {
                   {syncingHH ? "Syncing History..." : "Sync History to Database"}
                 </button>
                 <p className="text-[11px] text-zinc-500 text-center">
-                  Tarik riwayat lamaran HeadHunter ke database lokal.
+                  Imports past HeadHunter applications into local database.
                 </p>
               </div>
             </div>

@@ -50,9 +50,12 @@ export interface HHLoginResult {
  * Automatically waits for login completion, grabs all cookies (with expiration date),
  * extracts resumes and profile, and closes the browser.
  */
+import os from "os";
+
 export async function performBrowserLogin(timeoutMs: number = 180000): Promise<HHLoginResult> {
   const executablePath = findBrowserExecutable();
-  const profileDir = path.join(process.cwd(), ".hh_browser_profile");
+  const profileDir = path.join(os.tmpdir(), `hh_login_session_${Date.now()}`);
+  fs.mkdirSync(profileDir, { recursive: true });
 
   let browser: Browser | null = null;
 
@@ -63,18 +66,29 @@ export async function performBrowserLogin(timeoutMs: number = 180000): Promise<H
       userDataDir: profileDir,
       defaultViewport: null,
       args: [
-        "--start-maximized",
+        "--new-window",
+        "--window-position=80,60",
+        "--window-size=1260,860",
         "--disable-blink-features=AutomationControlled",
+        "--no-first-run",
         "--no-default-browser-check",
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
       ],
     });
 
     const pages = await browser.pages();
     const page = pages[0] || (await browser.newPage());
+    await page.bringToFront().catch(() => {});
 
-    await page.goto("https://hh.ru/account/login?backurl=%2Fapplicant%2Fresumes", {
-      waitUntil: "domcontentloaded",
-    });
+    try {
+      await page.goto("https://hh.ru/account/login?backurl=%2Fapplicant%2Fresumes", {
+        waitUntil: "domcontentloaded",
+        timeout: 25000,
+      });
+    } catch {
+      // If initial domcontentloaded takes longer, page remains open and responsive in browser window
+    }
 
     const startTime = Date.now();
     let loginDetected = false;
@@ -86,22 +100,29 @@ export async function performBrowserLogin(timeoutMs: number = 180000): Promise<H
         throw new Error("Browser window was closed before login was completed.");
       }
 
-      // Check current cookies
-      const cookies = await page.cookies("https://hh.ru", "https://api.hh.ru");
-      const hhtokenCookie = cookies.find((c) => c.name === "hhtoken");
-      const currentUrl = page.url();
+      try {
+        const currentPages = await browser.pages();
+        const activePage = currentPages[0] || page;
+        const currentUrl = activePage.url();
 
-      // Check if logged in: hhtoken present AND not on the login/otp page
-      if (
-        hhtokenCookie &&
-        hhtokenCookie.value &&
-        !currentUrl.includes("/account/login") &&
-        !currentUrl.includes("/account/signup") &&
-        !currentUrl.includes("/account/verification")
-      ) {
-        loginDetected = true;
-        targetCookies = cookies;
-        break;
+        // Check current cookies
+        const cookies = await activePage.cookies("https://hh.ru", "https://api.hh.ru");
+        const hhtokenCookie = cookies.find((c) => c.name === "hhtoken");
+
+        // Check if logged in: hhtoken present AND not on the login/otp page
+        if (
+          hhtokenCookie &&
+          hhtokenCookie.value &&
+          !currentUrl.includes("/account/login") &&
+          !currentUrl.includes("/account/signup") &&
+          !currentUrl.includes("/account/verification")
+        ) {
+          loginDetected = true;
+          targetCookies = cookies;
+          break;
+        }
+      } catch {
+        // Transient CDP / frame navigation error while user is submitting forms, ignore and continue polling
       }
 
       await new Promise((r) => setTimeout(r, 1000));
@@ -112,8 +133,10 @@ export async function performBrowserLogin(timeoutMs: number = 180000): Promise<H
     }
 
     // Ensure we are on applicant/resumes so we can extract profile & resumes directly
-    if (!page.url().includes("/applicant/resumes")) {
-      await page.goto("https://hh.ru/applicant/resumes", {
+    const currentPages = await browser.pages();
+    const activePage = currentPages[0] || page;
+    if (!activePage.url().includes("/applicant/resumes")) {
+      await activePage.goto("https://hh.ru/applicant/resumes", {
         waitUntil: "domcontentloaded",
         timeout: 15000,
       }).catch(() => {});
@@ -123,7 +146,7 @@ export async function performBrowserLogin(timeoutMs: number = 180000): Promise<H
     await new Promise((r) => setTimeout(r, 2000));
 
     // Refresh cookies list to get all updated session & security cookies
-    targetCookies = await page.cookies("https://hh.ru", "https://api.hh.ru");
+    targetCookies = await activePage.cookies("https://hh.ru", "https://api.hh.ru");
 
     // Format cookie string: "name1=val1; name2=val2"
     const cookieString = targetCookies.map((c) => `${c.name}=${c.value}`).join("; ");
@@ -192,5 +215,10 @@ export async function performBrowserLogin(timeoutMs: number = 180000): Promise<H
     if (browser) {
       await browser.close().catch(() => {});
     }
+    try {
+      if (fs.existsSync(profileDir)) {
+        fs.rmSync(profileDir, { recursive: true, force: true });
+      }
+    } catch {}
   }
 }

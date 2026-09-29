@@ -480,7 +480,7 @@ export interface HHSessionCheckResult {
 }
 
 /**
- * Checks whether the current HeadHunter session cookies are active and valid.
+ * Checks whether the current HeadHunter session cookies are active and valid using a fast single request.
  */
 export async function checkHHSession(cookieString: string): Promise<HHSessionCheckResult> {
   try {
@@ -489,19 +489,87 @@ export async function checkHHSession(cookieString: string): Promise<HHSessionChe
       return { active: false, error: "No cookie/token configured." };
     }
 
-    const resumes = await fetchMyResumes(formatted);
-    const profile = await fetchHHProfile(formatted);
+    const res = await axios.get("https://hh.ru/applicant/resumes", {
+      headers: getWebHeaders(formatted),
+      timeout: 8000,
+      validateStatus: () => true,
+    });
+
+    if (res.status === 403 || res.status === 401) {
+      return { active: false, error: "Access denied by HH.ru (Session expired / 403)." };
+    }
+
+    const text = String(res.data);
+    if (text.includes('data-qa="login-input-username"') || text.includes("/account/login")) {
+      return { active: false, error: "Session expired or logged out." };
+    }
+
+    const resumes: HHResume[] = [];
+    const seenIds = new Set<string>();
+
+    const state = extractHHInitialState(text);
+    let name: string | null = null;
+    let avatar: string | null = null;
+
+    if (state?.applicantInfo) {
+      name = state.applicantInfo.fullName || null;
+      avatar = state.applicantInfo.smallAvatarUrl || null;
+    }
+
+    if (state && Array.isArray(state.resumes)) {
+      for (const r of state.resumes) {
+        if (r.id && !seenIds.has(r.id)) {
+          seenIds.add(r.id);
+          resumes.push({
+            id: r.id,
+            title: r.title || "Resume",
+            updated_at: r.updatedAt || new Date().toISOString(),
+            url: `https://hh.ru/resume/${r.id}`,
+            status: { id: r.status?.id || "published", name: r.status?.name || "Active" },
+          });
+        }
+      }
+    }
+
+    const $ = cheerio.load(text);
+    if (!name) name = $('[data-qa="profile-activator-fullname"]').text().trim() || null;
+    if (!avatar) avatar = $('[data-qa="profile-avatar-image"]').attr("src") || null;
+
+    if (resumes.length === 0) {
+      $('a[href*="/resume/"]').each((_, el) => {
+        const href = $(el).attr("href") || "";
+        const match = href.match(/\/resume\/([a-f0-9]+)/i);
+        if (match && !seenIds.has(match[1])) {
+          const title = $(el).text().trim();
+          if (title && title.length < 100) {
+            seenIds.add(match[1]);
+            resumes.push({
+              id: match[1],
+              title,
+              updated_at: new Date().toISOString(),
+              url: `https://hh.ru/resume/${match[1]}`,
+              status: { id: "published", name: "Active" },
+            });
+          }
+        }
+      });
+    }
 
     return {
       active: true,
       resumes,
-      profile,
+      profile: {
+        name,
+        avatar,
+        totalApplications: 0,
+      },
     };
   } catch (error: any) {
     return {
       active: false,
-      error: error.message || "Session expired or invalid.",
+      error: error.message || "Failed to connect to HH.ru.",
     };
   }
 }
+
 

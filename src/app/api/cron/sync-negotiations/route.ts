@@ -80,7 +80,7 @@ export async function GET(req: Request) {
           if (tgLink?.telegramChatId) {
             const { sendMessage } = await import("@/lib/telegram");
             await sendMessage(
-              `⚠️ <b>[HH.ru Session Alert]</b>\n\nSesi akun HeadHunter kamu telah <b>kadaluarsa / logout</b>!\n\nFitur sinkronisasi riwayat lamaran & auto-apply dihentikan sementara. Silakan buka Dashboard Settings untuk menghubungkan kembali.`,
+              `⚠️ <b>[HH.ru Session Alert]</b>\n\nYour HeadHunter session has <b>expired or logged out</b>!\n\nApplication history sync and auto-apply have been paused. Please open Dashboard Settings to reconnect via Browser Login.`,
               undefined,
               tgLink.telegramChatId
             ).catch(() => {});

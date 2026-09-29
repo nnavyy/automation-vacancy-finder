@@ -7,16 +7,19 @@ async function main() {
   console.log("=================================================");
   console.log("");
 
-  const user = await prisma.user.findFirst({
-    orderBy: { createdAt: "asc" },
+  const pref = await prisma.searchPreference.findFirst({
+    where: { isActive: true },
+    include: { user: true },
   });
+
+  const user = pref?.user || (await prisma.user.findFirst({ orderBy: { createdAt: "asc" } }));
 
   if (!user) {
     console.error("Error: No user found in database. Please register in the web app first.");
     process.exit(1);
   }
 
-  console.log(`Target User: ${user.name} (${user.email})`);
+  console.log(`Target User: ${user.name || user.email} (${user.email})`);
   console.log("Opening browser window for HeadHunter login...");
   console.log("Please log in with your phone/email/password or SMS in the opened browser.");
   console.log("Waiting for login completion...");

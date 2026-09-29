@@ -71,3 +71,4 @@ check-*.*
 create-test*.*
 find-tel.*
 send-test.*
+.hh_browser_profile/

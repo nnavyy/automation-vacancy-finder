@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
         });
         if (tgLink?.telegramChatId) {
           await sendMessage(
-            `⚠️ <b>[HH.ru Session Alert]</b>\n\nSesi akun HeadHunter kamu telah <b>kadaluarsa / logout</b>!\n\nFitur auto-apply & sinkronisasi lowongan dihentikan sementara. Silakan buka Dashboard Settings untuk menghubungkan kembali via Browser Login.`,
+            `⚠️ <b>[HH.ru Session Alert]</b>\n\nYour HeadHunter session has <b>expired or logged out</b>!\n\nAuto-apply and vacancy synchronization have been paused. Please open Dashboard Settings to reconnect via Browser Login.`,
             undefined,
             tgLink.telegramChatId
           ).catch(() => {});
