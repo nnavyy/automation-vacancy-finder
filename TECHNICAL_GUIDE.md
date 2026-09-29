@@ -1,206 +1,244 @@
-# Nanda AI Job Assistant - Technical Documentation
+# Technical Reference — Nanda AI Job Assistant
 
-> **Note:** For a guide on what this application does and its features, please see [README.md](./README.md).
+> For a product overview, features, and usage guide, see [README.md](./README.md).
 
-This document outlines the technical architecture, technology stack, and local installation instructions for the Nanda AI Job Assistant. This project is a Next.js (App Router) application that integrates with external APIs, PostgreSQL, and background task schedulers.
+This document covers the technical architecture, project structure, environment variables, database schema, and production deployment considerations.
 
 ---
 
-## System Architecture
+## Table of Contents
 
-The application is built on a modern, serverless-first architecture:
-
-1. **Frontend / Backend:** Next.js 15 (App Router) providing React Server Components (RSC) and API Routes.
-2. **Database:** PostgreSQL hosted on NeonDB, managed via Prisma ORM.
-3. **AI Layer:** Groq (LLaMA-3 70B) for high-speed primary analysis, with fallback to Google Gemini.
-4. **Background Scheduler:** Local `n8n` instance for automated cron jobs (e.g., fetching from HH.ru every 3 hours).
-5. **Notifications:** Telegram Bot API via standard webhook integrations.
-6. **OSINT Engine:** Hybrid contact scraper using Hunter.io, Apollo.io, and a custom HTML-parsing proxy (Cheerio).
+- [Tech Stack](#tech-stack)
+- [Project Structure](#project-structure)
+- [Database Schema](#database-schema)
+- [API Reference](#api-reference)
+- [AI Provider Router](#ai-provider-router)
+- [Background Collection Pipeline](#background-collection-pipeline)
+- [Local Environment Setup](#local-environment-setup)
+- [Production Deployment](#production-deployment)
 
 ---
 
 ## Tech Stack
 
-| Component | Technology |
-|---|---|
-| **Framework** | Next.js 15 (React 19) |
-| **Language** | TypeScript |
-| **Styling** | Tailwind CSS + Lucide Icons |
-| **Database** | PostgreSQL (NeonDB) |
-| **ORM** | Prisma |
-| **Workflow Automation** | n8n |
-| **Web Scraping** | Cheerio |
+| Component | Technology | Version |
+|---|---|---|
+| Framework | Next.js (App Router) | 15.x |
+| Language | TypeScript | 5.x |
+| Styling | Tailwind CSS | 3.x |
+| UI Components | Lucide React | 0.468+ |
+| Animation | Framer Motion | 12.x |
+| Database | PostgreSQL (NeonDB) | — |
+| ORM | Prisma | 5.x |
+| Authentication | NextAuth.js v5 (beta) | 5.0.0-beta |
+| Primary AI | Groq SDK (LLaMA-3 70B) | 0.7.x |
+| Fallback AI | Google Generative AI (Gemini) | 0.21.x |
+| Web Scraping | Cheerio | 1.x |
+| Workflow Automation | n8n (self-hosted) | 1.x |
+| HTTP Client | Axios | 1.7.x |
+| Date Utilities | date-fns | 4.x |
 
 ---
 
-## Detailed Project Structure
-
-Below is the complete overview of the codebase and the purpose of each directory and file:
+## Project Structure
 
 ```text
-automation-vacancy-finder/
+nanda-ai-job-assistant/
 ├── prisma/
-│   └── schema.prisma             ← Database schema definitions and relationships
+│   └── schema.prisma              Database schema: models, relations, enums
+│
+├── n8n/
+│   ├── README.md                  n8n-specific setup instructions
+│   └── workflows/                 Exported n8n workflow JSON files
+│
 ├── src/
-│   ├── app/                      ← Next.js App Router (Frontend Pages & Backend APIs)
-│   │   ├── api/                  ← Backend API Endpoints
-│   │   │   ├── auth/             ← NextAuth.js authentication endpoints
-│   │   │   ├── company-intel/    ← Endpoints for OSINT scraping (Bing, Apollo, Hunter)
-│   │   │   ├── cron/             ← Webhooks triggered by n8n for automated scraping
-│   │   │   ├── settings/         ← Endpoints for user settings and HH sync
-│   │   │   ├── telegram/         ← Webhook for Telegram bot interactions
-│   │   │   └── vacancies/        ← Endpoints for CRUD operations on vacancies
-│   │   ├── dashboard/            ← Authenticated user dashboard pages
-│   │   │   ├── analytics/        ← Analytics and conversion rate page
-│   │   │   ├── applied/          ← Jobs the user has applied to
-│   │   │   ├── company-intel/    ← Company OSINT and contact search page
-│   │   │   ├── saved/            ← Bookmarked vacancies
-│   │   │   ├── settings/         ← Account and API key settings
-│   │   │   └── vacancies/        ← Main vacancy feed and AI scoring results
-│   │   ├── login/                ← Authentication UI (Login)
-│   │   ├── register/             ← Authentication UI (Registration)
-│   │   └── globals.css           ← Global Tailwind CSS styles
-│   ├── components/               ← Reusable React Components
-│   │   ├── ui/                   ← Base UI components (Buttons, Inputs, Skeletons)
-│   │   ├── SidebarNav.tsx        ← Dashboard sidebar navigation
-│   │   ├── VacancyCard.tsx       ← Component to display vacancy details
-│   │   └── ...                   ← Other UI elements
-│   ├── lib/                      ← Core Business Logic and Utilities
-│   │   ├── aiAnalyzer.ts         ← AI prompt engineering and Groq/Gemini integration
-│   │   ├── auth-helpers.ts       ← Helper functions for session management
-│   │   ├── collectionPipeline.ts ← Logic for fetching and normalizing HH.ru data
-│   │   ├── companyIntel.ts       ← OSINT logic for Bing/Apollo/Hunter scraping
-│   │   ├── db.ts                 ← Prisma database singleton client
-│   │   ├── hhPrivateClient.ts    ← Private HH.ru API client (for negotiations sync)
-│   │   ├── hhPublicVacancyClient.ts ← Public HH.ru API client (for job search)
-│   │   ├── redFlags.ts           ← Regex lists for identifying toxic job posts
-│   │   ├── rules.ts              ← Hardcoded keyword rules for initial pre-screening
-│   │   ├── scoring.ts            ← Math logic for final AI scoring
-│   │   └── telegram.ts           ← Utility for sending Telegram messages
-│   └── types/                    ← Global TypeScript interfaces
-└── n8n/                          ← Automation workflows
-    ├── README.md                 ← n8n specific setup instructions
-    └── workflows/                ← Exported n8n JSON workflows
+│   ├── app/                       Next.js App Router
+│   │   ├── api/                   Backend API routes
+│   │   │   ├── account/           Account management endpoints
+│   │   │   ├── auth/              NextAuth.js authentication handlers
+│   │   │   ├── company-intel/     OSINT contact-finding endpoints
+│   │   │   ├── cron/              Webhook endpoints triggered by n8n
+│   │   │   │   ├── collect-vacancies/   Fetches and stores new HH.ru vacancies
+│   │   │   │   └── analyze-pending/     Runs AI scoring on unanalyzed vacancies
+│   │   │   ├── dashboard/         Dashboard data aggregation endpoints
+│   │   │   ├── settings/          User settings CRUD + HH.ru token validation
+│   │   │   ├── telegram/          Telegram bot webhook + token linking
+│   │   │   ├── translate/         Text translation via AI provider router
+│   │   │   └── vacancies/         Vacancy CRUD: fetch, update, hide, apply
+│   │   │
+│   │   ├── dashboard/             Authenticated dashboard pages
+│   │   │   ├── analytics/         Funnel analytics with time-range filtering
+│   │   │   ├── applied/           Applied vacancies tracker
+│   │   │   ├── company-intel/     Company OSINT search interface
+│   │   │   ├── saved/             Bookmarked vacancy list
+│   │   │   ├── settings/          Profile, matching config, legal links
+│   │   │   └── vacancies/         Main vacancy split-view
+│   │   │
+│   │   ├── legal/
+│   │   │   ├── terms/             Terms of Service page
+│   │   │   └── privacy/           Privacy Policy page
+│   │   │
+│   │   ├── login/                 Authentication: login screen
+│   │   ├── register/              Authentication: registration screen
+│   │   └── globals.css            Global CSS reset and Tailwind base
+│   │
+│   ├── components/                Shared React components
+│   │   ├── AnalyticsDashboard.tsx Client-side analytics with filter state
+│   │   ├── RecruiterDossierModal.tsx  OSINT contact detail modal
+│   │   ├── SidebarNav.tsx         Dashboard navigation sidebar
+│   │   ├── SyncCadenceTimer.tsx   Live countdown and last-sync display
+│   │   ├── VacanciesSplitView.tsx Main vacancy browse + detail panel
+│   │   └── ui/                    Base primitives (buttons, skeletons, etc.)
+│   │
+│   └── lib/                       Core business logic
+│       ├── aiAnalyzer.ts          AI prompt construction and scoring logic
+│       ├── aiProviderRouter.ts    Provider abstraction with automatic fallback
+│       ├── auth-helpers.ts        Session retrieval and auth utilities
+│       ├── collectionPipeline.ts  HH.ru fetch, normalize, dedup, store pipeline
+│       ├── companyIntel.ts        Hunter / Apollo / Bing OSINT orchestrator
+│       ├── db.ts                  Prisma client singleton
+│       ├── hhPrivateClient.ts     Cookie-auth HH.ru client (negotiations)
+│       ├── hhPublicVacancyClient.ts  Public HH.ru search API client
+│       ├── redFlags.ts            Regex library for toxic job-post detection
+│       ├── rules.ts               Hardcoded pre-screening keyword rules
+│       ├── scoring.ts             Numeric scoring aggregation logic
+│       └── telegram.ts            Telegram message dispatch utility
+│
+└── public/                        Static assets
 ```
+
+---
+
+## Database Schema
+
+The Prisma schema is located at `prisma/schema.prisma`. Key models:
+
+| Model | Purpose |
+|---|---|
+| `UserProfile` | Stores all user preferences: skills, keywords, thresholds, HH.ru token, resume text |
+| `Vacancy` | Stores scraped job postings: title, employer, description, source URL, status |
+| `VacancyAnalysis` | One-to-one relation with Vacancy: AI score, pros, cons, red flags, generated pitch |
+| `AppliedVacancy` | Tracks vacancies the user has applied to with HH.ru negotiation status |
+| `TelegramLink` | Maps a Telegram chat ID to the local user account via a one-time token |
+| `Account`, `Session`, `User` | NextAuth.js standard adapter tables |
+
+---
+
+## API Reference
+
+All API routes are under `/api/`. Routes marked as `[CRON]` are intended to be called by n8n and require the `Authorization: Bearer <CRON_SECRET>` header.
+
+| Route | Method | Description |
+|---|---|---|
+| `/api/cron/collect-vacancies` | POST | `[CRON]` Fetches new vacancies from HH.ru and stores them |
+| `/api/cron/analyze-pending` | POST | `[CRON]` Runs AI scoring on vacancies without an analysis record |
+| `/api/vacancies` | GET | Returns paginated vacancy list with analysis data |
+| `/api/vacancies/[id]` | PATCH | Updates vacancy status (hidden, saved, applied) |
+| `/api/settings` | GET / POST | Retrieves and saves UserProfile preferences |
+| `/api/settings/validate-hh` | POST | Validates HH.ru cookie and returns available resumes |
+| `/api/settings/sync-history` | POST | Imports HH.ru negotiation history into the database |
+| `/api/translate` | POST | Translates text via the AI provider router |
+| `/api/company-intel/search` | POST | Runs OSINT search for a given company |
+| `/api/dashboard/collect-status` | GET | Returns last sync time and interval metadata |
+| `/api/telegram/link` | GET / POST | Generates and retrieves Telegram linking tokens |
+| `/api/account` | GET / DELETE | Account data and deletion |
+
+---
+
+## AI Provider Router
+
+`src/lib/aiProviderRouter.ts` provides a unified `callAI(prompt, options)` function that abstracts provider selection behind a priority queue.
+
+**Default order:** Groq > Google Gemini > OpenRouter
+
+If the primary provider returns an error or is rate-limited, the router automatically retries with the next provider in the queue. The active order is persisted in `UserProfile.aiProviderOrder` and displayed (read-only) in the Settings page.
+
+---
+
+## Background Collection Pipeline
+
+`src/lib/collectionPipeline.ts` orchestrates the full vacancy ingestion flow:
+
+1. **Keyword search** — Calls the HH.ru public API with each configured English and Russian keyword.
+2. **Deduplication** — Checks existing vacancy `externalId` values before inserting.
+3. **Exclusion filter** — Applies `excludeKeywords` from the user profile; matching vacancies are skipped immediately.
+4. **Storage** — Saves new vacancies with status `PENDING_ANALYSIS`.
+5. **AI analysis trigger** — The separate `/api/cron/analyze-pending` webhook picks up `PENDING_ANALYSIS` vacancies and runs the AI scoring pipeline.
+6. **Notification** — Vacancies scoring above `minimumScoreToNotify` trigger a Telegram message.
 
 ---
 
 ## Local Environment Setup
 
-Follow these instructions to set up the development environment on your local Windows/macOS/Linux machine.
-
 ### Prerequisites
 
-Ensure you have the following installed:
-- **Node.js:** v18.x or v20.x (Recommended)
-- **Git:** For version control
-- **PostgreSQL Database:** We recommend a free tier account at [Neon.tech](https://neon.tech)
-- **API Keys:**
-  - [Groq API Key](https://console.groq.com) (Free)
-  - [Telegram Bot Token](https://t.me/BotFather) (Free)
-  - [Hunter.io API Key](https://hunter.io) (Optional, Free tier)
-  - [Apollo.io API Key](https://apollo.io) (Optional, Free tier)
+- Node.js v18.x or v20.x
+- A PostgreSQL database (NeonDB free tier is sufficient for development)
+- n8n (run locally via `npx n8n`)
 
-### 1. Clone the Repository
+### Step-by-Step
+
+**1. Clone**
 
 ```bash
-git clone <your-repo-url>
-cd "automation vacancy finder"
+git clone https://github.com/your-username/nanda-ai-job-assistant.git
+cd nanda-ai-job-assistant
 ```
 
-### 2. Install Dependencies
-
-Install all required Node.js packages using npm:
+**2. Install**
 
 ```bash
 npm install
 ```
 
-*(Note: Ensure you have installed specific packages like `cheerio` if you recently updated the codebase: `npm install cheerio`)*
-
-### 3. Configure Environment Variables
-
-Duplicate the example environment file:
+**3. Environment**
 
 ```bash
-cp .env.example .env.local
+cp .env.example .env
 ```
 
-Open `.env.local` in your editor and configure the following critical variables:
+Fill in `DATABASE_URL`, `NEXTAUTH_SECRET`, `GROQ_API_KEY`, `GEMINI_API_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, and `CRON_SECRET`. See the full reference in [README.md](./README.md#configuration).
 
-```ini
-# Database (NeonDB)
-DATABASE_URL="postgresql://user:password@ep-host.region.aws.neon.tech/neondb?sslmode=require"
-DIRECT_URL="postgresql://user:password@ep-host.region.aws.neon.tech/neondb?sslmode=require"
-
-# AI Configuration
-GROQ_API_KEY="gsk_..."
-GEMINI_API_KEY="AIzaSy..."
-
-# Telegram Integrations
-TELEGRAM_BOT_TOKEN="123456789:ABCDefghIJKLmnop..."
-TELEGRAM_CHAT_ID="123456789"
-
-# Security
-CRON_SECRET="your_random_secure_string"
-NEXT_PUBLIC_APP_URL="http://localhost:3000"
-
-# OSINT API Keys (Optional but recommended)
-HUNTER_API_KEY="..."
-APOLLO_API_KEY="..."
-```
-
-### 4. Database Initialization
-
-Push the Prisma schema to your PostgreSQL database and generate the client:
+**4. Database**
 
 ```bash
 npx prisma db push
 npx prisma generate
 ```
 
-*(Optional)* Seed the database with default preferences if you have a `seed.ts` file configured:
-```bash
-npm run db:seed
-```
-
-### 5. Running the Application
-
-Start the Next.js development server:
+**5. Run**
 
 ```bash
-npm run dev
+npm run dev        # Development server at http://localhost:3000
+npx n8n            # n8n scheduler at http://localhost:5678
 ```
-
-The application will be accessible at:
-- **Main App:** `http://localhost:3000`
-- **Dashboard:** `http://localhost:3000/dashboard`
 
 ---
 
-## Background Automation (n8n Setup)
+## Production Deployment
 
-The application relies on **n8n** to run background tasks like polling the HH.ru API automatically.
+### Vercel / Railway / Render
 
-1. **Start n8n Locally:**
-   Open a separate terminal window and run:
-   ```bash
-   npx n8n
-   ```
-2. **Access n8n Dashboard:**
-   Navigate to `http://localhost:5678` in your browser.
-3. **Configure n8n Environment:**
-   Go to Settings > Environment Variables in n8n and add:
-   - `CRON_SECRET` (matching your `.env.local`)
-   - `TELEGRAM_BOT_TOKEN`
-4. **Import Workflows:**
-   Import the JSON workflow files located in the `n8n/workflows/` directory of this repository and activate them.
+- Set all environment variables in the platform's dashboard.
+- The `build` script (`prisma generate && next build`) is already configured in `package.json`.
+- **Database connections:** Serverless functions can exhaust PostgreSQL connection limits quickly. For NeonDB, append `?pgbouncer=true&connection_limit=1` to `DATABASE_URL`.
+
+### n8n
+
+n8n cannot run on serverless platforms. Options:
+
+| Option | Notes |
+|---|---|
+| VPS (Hetzner, DigitalOcean, Linode) | Most control; cheapest for always-on workloads |
+| [n8n Cloud](https://n8n.io/cloud) | Managed hosting; no self-management required |
+| Railway / Render (container) | Use the official n8n Docker image |
+
+After deploying, update the webhook URLs in your n8n workflows from `http://localhost:3000` to your production domain, and ensure `CRON_SECRET` matches between your application and n8n environment variables.
+
+### HTTPS and Telegram Webhooks
+
+If you expose the application publicly, configure HTTPS. The Telegram bot receives updates via webhook (`/api/telegram/webhook`); this endpoint must be accessible over HTTPS. Update the webhook URL via the Telegram BotFather API after deployment.
 
 ---
 
-## Production & Deployment Considerations
-
-If deploying to production (e.g., Vercel, Railway, Render):
-- **Database Pooling:** Next.js Serverless functions exhaust database connections quickly. Append `?pgbouncer=true&connection_limit=1` to your `DATABASE_URL` if using NeonDB.
-- **Webhooks:** Ensure your Telegram Webhook URL is updated from localhost/ngrok to your actual production domain.
-- **n8n Hosting:** You cannot run `npx n8n` on serverless platforms like Vercel. You will need to host n8n on a VPS (e.g., DigitalOcean, Hetzner) or use n8n Cloud.
+> For feature documentation and usage instructions, see [README.md](./README.md).

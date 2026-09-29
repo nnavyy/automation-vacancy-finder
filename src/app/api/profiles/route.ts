@@ -44,30 +44,111 @@ export async function POST(req: NextRequest) {
 
     if (action === "switch") {
       if (!id) return NextResponse.json({ success: false, error: "ID required" }, { status: 400 });
-      await prisma.searchPreference.updateMany({ where: { userId: user.id, isActive: true }, data: { isActive: false } });
-      await prisma.searchPreference.update({ where: { id }, data: { isActive: true } });
+
+      const target = await prisma.searchPreference.findFirst({
+        where: { id, userId: user.id },
+      });
+
+      if (!target) {
+        return NextResponse.json({ success: false, error: "Profile not found or access denied." }, { status: 404 });
+      }
+
+      await prisma.$transaction([
+        prisma.searchPreference.updateMany({
+          where: { userId: user.id, isActive: true },
+          data: { isActive: false },
+        }),
+        prisma.searchPreference.update({
+          where: { id: target.id },
+          data: { isActive: true },
+        }),
+      ]);
+
       return NextResponse.json({ success: true });
     }
 
     if (action === "create") {
-      await prisma.searchPreference.updateMany({ where: { userId: user.id, isActive: true }, data: { isActive: false } });
-      const newProfile = await prisma.searchPreference.create({
-        data: { ...PREF_DEFAULTS, userId: user.id, name: name || "New Profile" },
+      const trimmedName = (name || "New Profile").trim();
+      const newProfile = await prisma.$transaction(async (tx) => {
+        await tx.searchPreference.updateMany({
+          where: { userId: user.id, isActive: true },
+          data: { isActive: false },
+        });
+
+        return tx.searchPreference.create({
+          data: {
+            ...PREF_DEFAULTS,
+            userId: user.id,
+            name: trimmedName,
+            isActive: true,
+          },
+        });
       });
+
       return NextResponse.json({ success: true, data: newProfile });
+    }
+
+    if (action === "rename") {
+      if (!id || !name?.trim()) {
+        return NextResponse.json({ success: false, error: "ID and name are required." }, { status: 400 });
+      }
+
+      const target = await prisma.searchPreference.findFirst({
+        where: { id, userId: user.id },
+      });
+
+      if (!target) {
+        return NextResponse.json({ success: false, error: "Profile not found." }, { status: 404 });
+      }
+
+      const updated = await prisma.searchPreference.update({
+        where: { id: target.id },
+        data: { name: name.trim() },
+      });
+
+      return NextResponse.json({ success: true, data: updated });
     }
 
     if (action === "delete") {
       if (!id) return NextResponse.json({ success: false, error: "ID required" }, { status: 400 });
-      const target = await prisma.searchPreference.findFirst({ where: { id, userId: user.id } });
-      if (!target) return NextResponse.json({ success: false, error: "Not found" }, { status: 404 });
 
-      await prisma.searchPreference.delete({ where: { id } });
+      const totalProfiles = await prisma.searchPreference.count({
+        where: { userId: user.id },
+      });
 
-      if (target.isActive) {
-        const first = await prisma.searchPreference.findFirst({ where: { userId: user.id } });
-        if (first) await prisma.searchPreference.update({ where: { id: first.id }, data: { isActive: true } });
+      if (totalProfiles <= 1) {
+        return NextResponse.json(
+          { success: false, error: "Cannot delete the only profile. An account must have at least one profile." },
+          { status: 400 }
+        );
       }
+
+      const target = await prisma.searchPreference.findFirst({
+        where: { id, userId: user.id },
+      });
+
+      if (!target) {
+        return NextResponse.json({ success: false, error: "Profile not found." }, { status: 404 });
+      }
+
+      await prisma.$transaction(async (tx) => {
+        await tx.searchPreference.delete({ where: { id: target.id } });
+
+        if (target.isActive) {
+          const nextActive = await tx.searchPreference.findFirst({
+            where: { userId: user.id },
+            orderBy: { updatedAt: "desc" },
+          });
+
+          if (nextActive) {
+            await tx.searchPreference.update({
+              where: { id: nextActive.id },
+              data: { isActive: true },
+            });
+          }
+        }
+      });
+
       return NextResponse.json({ success: true });
     }
 

@@ -1,6 +1,13 @@
 import type { Metadata } from "next";
+import { Inter } from "next/font/google";
 import NextTopLoader from "nextjs-toploader";
 import "./globals.css";
+
+const inter = Inter({
+  subsets: ["latin", "cyrillic"],
+  variable: "--font-inter",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: "Nanda AI Job Assistant",
@@ -13,9 +20,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <body className="bg-gray-950 text-white min-h-screen flex flex-col">
-        <NextTopLoader color="#4ade80" showSpinner={false} />
+    <html lang="en" className={inter.variable}>
+      <body className="bg-zinc-950 text-zinc-100 font-sans antialiased min-h-screen flex flex-col selection:bg-emerald-500/20 selection:text-emerald-300">
+        <NextTopLoader color="#10b981" showSpinner={false} />
         <main className="flex-1 flex flex-col w-full h-full">
           {children}
         </main>

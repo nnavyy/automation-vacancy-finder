@@ -60,8 +60,15 @@ export interface PipelineResult {
 
 /**
  * Runs the full vacancy collection + analysis pipeline for a specific user.
+ * Includes time-budget guard to prevent serverless execution timeouts.
  */
-export async function runCollectionPipeline(userId: string): Promise<PipelineResult> {
+export async function runCollectionPipeline(
+  userId: string,
+  options?: { maxDurationMs?: number }
+): Promise<PipelineResult> {
+  const maxDurationMs = options?.maxDurationMs ?? 240_000;
+  const deadline = Date.now() + maxDurationMs;
+
   // ── Step 1: Load user's active SearchPreference ───────────
   const prefRaw = await prisma.searchPreference.findFirst({
     where: { userId, isActive: true },
@@ -76,6 +83,23 @@ export async function runCollectionPipeline(userId: string): Promise<PipelineRes
 
   const pref = toSearchPrefData(prefRaw);
 
+  // Pre-fetch candidate's portfolio text once for the entire batch
+  if (pref.portfolioUrl) {
+    try {
+      const res = await fetch(pref.portfolioUrl, { signal: AbortSignal.timeout(4000) });
+      if (res.ok) {
+        const html = await res.text();
+        (pref as any).cachedPortfolioContent = html
+          .replace(/<[^>]*>?/gm, " ")
+          .replace(/\s\s+/g, " ")
+          .trim()
+          .slice(0, 1500);
+      }
+    } catch (err) {
+      console.warn("[Pipeline] Failed to pre-fetch portfolio URL:", err);
+    }
+  }
+
   // Get user's linked Telegram chatId for notifications
   const telegramLink = await prisma.telegramLink.findFirst({
     where: { userId, isActive: true, telegramChatId: { not: null } },
@@ -88,55 +112,59 @@ export async function runCollectionPipeline(userId: string): Promise<PipelineRes
   // Mark status as running
   await prisma.searchPreference.update({
     where: { id: prefRaw.id },
-    data: { collectionStatus: { running: true, analyzed: 0, total: 0, startedAt } }
+    data: { collectionStatus: { running: true, analyzed: 0, total: 0, startedAt } },
   });
 
-  // ── Step 2: Collect vacancies from HH API ─────────────────
-  let vacancies: NormalizedVacancy[];
+  let vacancies: NormalizedVacancy[] = [];
+
   try {
-    vacancies = await collectAllVacancies(pref);
-  } catch (err) {
-    console.error("[Pipeline] collectAllVacancies failed:", err);
-    await prisma.searchPreference.update({
-      where: { id: prefRaw.id },
-      data: { collectionStatus: { running: false, analyzed: 0, total: 0, startedAt } }
-    });
-    return {
-      success: false,
-      error: `Failed to collect vacancies: ${err instanceof Error ? err.message : String(err)}`,
-    };
-  }
-
-  console.log(`[Pipeline] Collected ${vacancies.length} vacancies for user ${userId}`);
-
-  // Update total count
-  await prisma.searchPreference.update({
-    where: { id: prefRaw.id },
-    data: { collectionStatus: { running: true, analyzed: 0, total: vacancies.length, startedAt } }
-  });
-
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
-
-  let todayNotifiedCount = await prisma.vacancy.count({
-    where: { userId, status: "notified", updatedAt: { gte: todayStart } },
-  });
-
-  // ── Step 3: Per-vacancy pipeline ──────────────────────────
-  for (let i = 0; i < vacancies.length; i++) {
-    const vacancy = vacancies[i];
-    summary.processed++;
-
-    // Update status every 5 vacancies to avoid spamming DB
-    if (i % 5 === 0) {
-      await prisma.searchPreference.update({
-        where: { id: prefRaw.id },
-        data: { collectionStatus: { running: true, analyzed: i, total: vacancies.length, startedAt } }
-      });
+    // ── Step 2: Collect vacancies from HH API ─────────────────
+    try {
+      vacancies = await collectAllVacancies(pref);
+    } catch (err) {
+      console.error("[Pipeline] collectAllVacancies failed:", err);
+      return {
+        success: false,
+        error: `Failed to collect vacancies: ${err instanceof Error ? err.message : String(err)}`,
+      };
     }
 
-    try {
-      let dbVacancyId: string;
+    console.log(`[Pipeline] Collected ${vacancies.length} vacancies for user ${userId}`);
+
+    // Update total count
+    await prisma.searchPreference.update({
+      where: { id: prefRaw.id },
+      data: { collectionStatus: { running: true, analyzed: 0, total: vacancies.length, startedAt } },
+    });
+
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+
+    let todayNotifiedCount = await prisma.vacancy.count({
+      where: { userId, status: "notified", updatedAt: { gte: todayStart } },
+    });
+
+    // ── Step 3: Per-vacancy pipeline ──────────────────────────
+    for (let i = 0; i < vacancies.length; i++) {
+      // Guard against serverless function timeout
+      if (Date.now() > deadline) {
+        console.warn(`[Pipeline] Execution time budget (${maxDurationMs}ms) reached. Yielding gracefully at vacancy ${i}/${vacancies.length}.`);
+        break;
+      }
+
+      const vacancy = vacancies[i];
+      summary.processed++;
+
+      // Update status every 5 vacancies to avoid spamming DB
+      if (i % 5 === 0) {
+        await prisma.searchPreference.update({
+          where: { id: prefRaw.id },
+          data: { collectionStatus: { running: true, analyzed: i, total: vacancies.length, startedAt } },
+        });
+      }
+
+      try {
+        let dbVacancyId: string;
 
       const existing = await prisma.vacancy.findFirst({
         where: { hhId: vacancy.hhId, userId },
@@ -289,13 +317,24 @@ export async function runCollectionPipeline(userId: string): Promise<PipelineRes
     }
   }
 
-  console.log("[Pipeline] Done —", summary);
-
-  // Mark status as finished
-  await prisma.searchPreference.update({
-    where: { id: prefRaw.id },
-    data: { collectionStatus: { running: false, analyzed: summary.analyzed, total: vacancies.length, startedAt } }
-  });
-
-  return { success: true, data: summary };
+    console.log("[Pipeline] Done —", summary);
+    return { success: true, data: summary };
+  } finally {
+    try {
+      await prisma.searchPreference.update({
+        where: { id: prefRaw.id },
+        data: {
+          collectionStatus: {
+            running: false,
+            analyzed: summary.analyzed,
+            total: vacancies.length,
+            startedAt,
+            finishedAt: new Date().toISOString(),
+          },
+        },
+      });
+    } catch (cleanupErr) {
+      console.error("[Pipeline] Failed to update final collectionStatus:", cleanupErr);
+    }
+  }
 }

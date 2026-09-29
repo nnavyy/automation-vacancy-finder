@@ -64,13 +64,36 @@ function serializePref(pref: any) {
 export async function GET() {
   const user = await requireUser();
   try {
-    const pref = await prisma.searchPreference.findFirst({
+    let pref = await prisma.searchPreference.findFirst({
       where:   { userId: user.id, isActive: true },
       orderBy: { updatedAt: "desc" },
     });
 
+    // Auto-recover if user has profiles but none marked active
     if (!pref) {
-      return NextResponse.json({ success: false, error: "No settings found" }, { status: 404 });
+      pref = await prisma.searchPreference.findFirst({
+        where:   { userId: user.id },
+        orderBy: { updatedAt: "desc" },
+      });
+
+      if (pref) {
+        await prisma.searchPreference.update({
+          where: { id: pref.id },
+          data: { isActive: true },
+        });
+      }
+    }
+
+    // Auto-bootstrap default profile if account has none
+    if (!pref) {
+      pref = await prisma.searchPreference.create({
+        data: {
+          ...PREF_DEFAULTS,
+          userId: user.id,
+          name: "Default Profile",
+          isActive: true,
+        },
+      });
     }
 
     return NextResponse.json({ success: true, data: serializePref(pref) });
@@ -85,7 +108,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   const user = await requireUser();
   try {
-    const body = (await req.json().catch(() => ({}))) as Partial<SearchPreferenceData>;
+    const body = (await req.json().catch(() => ({}))) as Partial<SearchPreferenceData> & { id?: string };
 
     // Scalar fields
     const scalarFields = pick(body, [
@@ -110,9 +133,18 @@ export async function POST(req: NextRequest) {
 
     const safeData = { ...scalarFields, ...jsonFields };
 
-    const existing = await prisma.searchPreference.findFirst({
-      where: { userId: user.id, isActive: true },
-    });
+    let existing = null;
+    if (body.id) {
+      existing = await prisma.searchPreference.findFirst({
+        where: { id: body.id, userId: user.id },
+      });
+    }
+
+    if (!existing) {
+      existing = await prisma.searchPreference.findFirst({
+        where: { userId: user.id, isActive: true },
+      });
+    }
 
     if (existing) {
       const updated = await prisma.searchPreference.update({

@@ -15,6 +15,8 @@ import {
   Cpu,
   Users,
   Building2,
+  Check,
+  AlertCircle,
 } from "lucide-react";
 import Badge from "@/components/ui/Badge";
 import ScoreBar from "@/components/ui/ScoreBar";
@@ -124,9 +126,9 @@ function severityVariant(sev: string): "red" | "yellow" | "gray" {
 }
 
 function scoreColorClass(score: number): string {
-  if (score >= 75) return "text-green-400";
-  if (score >= 50) return "text-yellow-400";
-  return "text-red-400";
+  if (score >= 75) return "text-emerald-400";
+  if (score >= 50) return "text-amber-400";
+  return "text-rose-400";
 }
 
 // ── Page ──────────────────────────────────────────────────────
@@ -158,34 +160,31 @@ export default async function VacancyDetailPage({
     }
   } catch (err) {
     console.error("[VacancyDetail] Database error:", err);
-    // Re-throw so the error.tsx boundary shows a proper error page
     throw err;
   }
 
-  // Vacancy not found — trigger the not-found.tsx page
   if (!vacancy) {
     notFound();
   }
-
 
   const a      = vacancy.analysis;
   const salary = formatSalary(vacancy.salary);
 
   return (
-    <div className="max-w-4xl space-y-5">
+    <div className="max-w-4xl space-y-5 pb-12">
 
       {/* ── Back navigation ── */}
       <Link
         href="/dashboard/vacancies"
-        className="inline-flex items-center gap-1.5 text-sm text-gray-400 hover:text-white transition-colors"
+        className="inline-flex items-center gap-1.5 text-xs text-zinc-400 hover:text-zinc-200 transition-colors"
       >
-        <ChevronLeft size={15} /> Back to Vacancies
+        <ChevronLeft size={14} /> Back to Vacancies
       </Link>
 
       {/* ═══════════════════════════════════════════════════
           1 · HEADER CARD
       ═══════════════════════════════════════════════════ */}
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-6">
+      <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-xl p-6 backdrop-blur-sm shadow-sm">
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div className="flex-1 min-w-0">
             {/* Status + recommendation badges */}
@@ -202,30 +201,30 @@ export default async function VacancyDetailPage({
               )}
             </div>
 
-            <h1 className="text-2xl font-bold text-white leading-snug">
+            <h1 className="text-xl font-semibold text-zinc-100 leading-snug">
               {vacancy.title}
             </h1>
 
             {/* Company / area / salary */}
-            <div className="flex items-center gap-2 mt-2 text-sm text-gray-400 flex-wrap">
+            <div className="flex items-center gap-2 mt-2 text-xs text-zinc-400 flex-wrap">
               {vacancy.company && (
-                <span className="text-gray-200 font-medium">
+                <span className="text-zinc-200 font-medium">
                   {vacancy.company}
                 </span>
               )}
-              {vacancy.area       && <span>• {vacancy.area}</span>}
+              {vacancy.area       && <span className="text-zinc-500">· {vacancy.area}</span>}
               {salary             && (
-                <span className="text-green-400 font-medium">• {salary}</span>
+                <span className="text-emerald-400 font-medium">· {salary}</span>
               )}
             </div>
 
             {/* Employment meta */}
-            <div className="flex items-center gap-2 mt-1.5 text-xs text-gray-500 flex-wrap">
+            <div className="flex items-center gap-2 mt-1.5 text-xs text-zinc-500 flex-wrap">
               {vacancy.experience && (
                 <span>Experience: {vacancy.experience}</span>
               )}
-              {vacancy.schedule   && <span>• {vacancy.schedule}</span>}
-              {vacancy.employment && <span>• {vacancy.employment}</span>}
+              {vacancy.schedule   && <span>· {vacancy.schedule}</span>}
+              {vacancy.employment && <span>· {vacancy.employment}</span>}
             </div>
           </div>
 
@@ -235,9 +234,9 @@ export default async function VacancyDetailPage({
               href={vacancy.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-200 text-sm font-medium transition-colors shrink-0"
+              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700/80 border border-zinc-700/80 text-zinc-200 text-xs font-medium transition-colors shrink-0"
             >
-              <ExternalLink size={14} />
+              <ExternalLink size={13} />
               Open Vacancy
             </a>
           )}
@@ -245,17 +244,17 @@ export default async function VacancyDetailPage({
 
         {/* Company Intel Banner */}
         {vacancy.company && (
-          <div className="mt-4 pt-4 border-t border-gray-800 flex items-center justify-between gap-3 flex-wrap">
-            <div className="flex items-center gap-2 text-sm">
-              <Building2 size={14} className="text-gray-500 shrink-0" />
-              <span className="text-gray-400">Company:</span>
-              <span className="text-gray-200 font-medium">{vacancy.company}</span>
+          <div className="mt-4 pt-4 border-t border-zinc-800/80 flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex items-center gap-2 text-xs">
+              <Building2 size={13} className="text-zinc-500 shrink-0" />
+              <span className="text-zinc-400">Company:</span>
+              <span className="text-zinc-200 font-medium">{vacancy.company}</span>
             </div>
             <Link
               href={`/dashboard/company-intel?company=${encodeURIComponent(vacancy.company)}`}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-violet-500/10 hover:bg-violet-500/20 border border-violet-500/20 text-xs font-medium text-violet-400 hover:text-violet-300 transition-all duration-150"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700/80 border border-zinc-700/80 text-xs font-medium text-zinc-200 transition-all duration-150"
             >
-              <Users size={12} />
+              <Users size={12} className="text-zinc-400" />
               Find Contacts at {vacancy.company}
             </Link>
           </div>
@@ -273,10 +272,10 @@ export default async function VacancyDetailPage({
           2 · AI ANALYSIS CARD
       ═══════════════════════════════════════════════════ */}
       {a && (
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-6 space-y-5">
+        <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-xl p-6 space-y-5 backdrop-blur-sm shadow-sm">
           <div className="flex items-center gap-2 flex-wrap">
-            <Cpu size={16} className="text-green-400" />
-            <h2 className="text-base font-semibold text-white">AI Analysis</h2>
+            <Cpu size={16} className="text-emerald-400" />
+            <h2 className="text-sm font-semibold text-zinc-100">AI Screening Analysis</h2>
             <Badge
               label={a.aiStatus.replace(/_/g, " ")}
               variant={aiStatusVariant(a.aiStatus)}
@@ -286,23 +285,23 @@ export default async function VacancyDetailPage({
           {/* Big score + bar */}
           <div className="flex items-center gap-6 flex-wrap">
             <div className="text-center">
-              <span className={`text-6xl font-black tabular-nums leading-none ${scoreColorClass(a.matchScore)}`}>
+              <span className={`text-5xl font-black tabular-nums leading-none ${scoreColorClass(a.matchScore)}`}>
                 {a.matchScore}
               </span>
-              <p className="text-xs text-gray-500 mt-1">Match Score</p>
+              <p className="text-xs text-zinc-500 mt-1">Match Score</p>
             </div>
             <div className="flex-1 min-w-[160px] space-y-2">
               <ScoreBar score={a.matchScore} />
-              <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-gray-500">
-                {a.aiProvider   && <span>Provider: <span className="text-gray-300">{a.aiProvider}</span></span>}
+              <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs text-zinc-500">
+                {a.aiProvider   && <span>Provider: <span className="text-zinc-300">{a.aiProvider}</span></span>}
                 {a.aiModel      && (
-                  <span>Model: <span className="text-gray-300 max-w-[220px] truncate inline-block align-bottom">{a.aiModel}</span></span>
+                  <span>Model: <span className="text-zinc-300 max-w-[220px] truncate inline-block align-bottom">{a.aiModel}</span></span>
                 )}
                 {a.confidence !== undefined && (
-                  <span>Confidence: <span className="text-gray-300">{a.confidence}%</span></span>
+                  <span>Confidence: <span className="text-zinc-300 tabular-nums">{a.confidence}%</span></span>
                 )}
                 {a.bestLanguage && (
-                  <span>Language: <span className="text-gray-300 capitalize">{a.bestLanguage}</span></span>
+                  <span>Language: <span className="text-zinc-300 capitalize">{a.bestLanguage}</span></span>
                 )}
               </div>
             </div>
@@ -311,8 +310,8 @@ export default async function VacancyDetailPage({
           {/* Summary */}
           {a.summary && (
             <div>
-              <p className="text-xs text-gray-500 uppercase tracking-widest mb-2">Summary</p>
-              <p className="text-gray-200 text-sm leading-relaxed">{a.summary}</p>
+              <p className="text-xs text-zinc-400 font-medium uppercase tracking-wider mb-2">Summary</p>
+              <p className="text-zinc-300 text-sm leading-relaxed">{a.summary}</p>
             </div>
           )}
         </div>
@@ -326,14 +325,14 @@ export default async function VacancyDetailPage({
 
           {/* Match Reasons */}
           {a.matchReasons && a.matchReasons.length > 0 && (
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-              <h2 className="flex items-center gap-2 text-xs font-semibold text-green-400 uppercase tracking-widest mb-4">
+            <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-xl p-5 backdrop-blur-sm shadow-sm">
+              <h2 className="flex items-center gap-2 text-xs font-semibold text-emerald-400 uppercase tracking-wider mb-4">
                 <CheckCircle size={13} /> Match Reasons
               </h2>
               <ul className="space-y-2.5">
                 {a.matchReasons.map((reason, i) => (
-                  <li key={i} className="flex items-start gap-2 text-sm text-gray-300">
-                    <span className="text-green-400 shrink-0 mt-0.5 font-bold">✓</span>
+                  <li key={i} className="flex items-start gap-2 text-sm text-zinc-300">
+                    <Check size={14} className="text-emerald-400 shrink-0 mt-0.5" />
                     {reason}
                   </li>
                 ))}
@@ -343,14 +342,14 @@ export default async function VacancyDetailPage({
 
           {/* Missing Requirements */}
           {a.missingRequirements && a.missingRequirements.length > 0 && (
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-              <h2 className="flex items-center gap-2 text-xs font-semibold text-yellow-400 uppercase tracking-widest mb-4">
+            <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-xl p-5 backdrop-blur-sm shadow-sm">
+              <h2 className="flex items-center gap-2 text-xs font-semibold text-amber-400 uppercase tracking-wider mb-4">
                 <AlertTriangle size={13} /> Missing Requirements
               </h2>
               <ul className="space-y-2.5">
                 {a.missingRequirements.map((req, i) => (
-                  <li key={i} className="flex items-start gap-2 text-sm text-gray-300">
-                    <span className="text-yellow-400 shrink-0 mt-0.5">⚠</span>
+                  <li key={i} className="flex items-start gap-2 text-sm text-zinc-300">
+                    <AlertCircle size={14} className="text-amber-400 shrink-0 mt-0.5" />
                     {req}
                   </li>
                 ))}
@@ -364,22 +363,22 @@ export default async function VacancyDetailPage({
           4 · RED FLAGS
       ═══════════════════════════════════════════════════ */}
       {a?.redFlags && a.redFlags.length > 0 && (
-        <div className="bg-gray-900 border border-red-400/20 rounded-xl p-5">
-          <h2 className="flex items-center gap-2 text-xs font-semibold text-red-400 uppercase tracking-widest mb-4">
+        <div className="bg-zinc-900/60 border border-rose-500/20 rounded-xl p-5 backdrop-blur-sm shadow-sm">
+          <h2 className="flex items-center gap-2 text-xs font-semibold text-rose-400 uppercase tracking-wider mb-4">
             <XCircle size={13} /> Red Flags ({a.redFlags.length})
           </h2>
           <div className="space-y-3">
             {a.redFlags.map((flag, i) => (
               <div
                 key={i}
-                className="flex items-start gap-3 p-3.5 rounded-lg bg-red-400/5 border border-red-400/20"
+                className="flex items-start gap-3 p-3.5 rounded-lg bg-rose-500/5 border border-rose-500/20"
               >
                 <Badge label={flag.severity} variant={severityVariant(flag.severity)} />
                 <div className="min-w-0">
-                  <p className="font-mono text-red-300 text-xs mb-1">
+                  <p className="font-mono text-rose-300 text-xs mb-1">
                     &ldquo;{flag.trigger_text}&rdquo;
                   </p>
-                  <p className="text-xs text-gray-400 leading-relaxed">
+                  <p className="text-xs text-zinc-400 leading-relaxed">
                     {flag.reason}
                   </p>
                 </div>
@@ -393,16 +392,15 @@ export default async function VacancyDetailPage({
           5 · COVER LETTER
       ═══════════════════════════════════════════════════ */}
       {a?.coverLetter && (
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-          <h2 className="text-xs font-semibold text-white uppercase tracking-widest mb-4">
-            ✍️ Cover Letter
+        <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-xl p-5 backdrop-blur-sm shadow-sm">
+          <h2 className="text-xs font-semibold text-zinc-300 uppercase tracking-wider mb-4">
+            Cover Letter
           </h2>
-          <div className="bg-gray-950 border border-gray-800 rounded-lg p-5 mb-4">
-            <p className="text-gray-200 text-sm leading-relaxed whitespace-pre-wrap">
+          <div className="bg-zinc-950 border border-zinc-800 rounded-lg p-5 mb-4">
+            <p className="text-zinc-200 text-sm leading-relaxed whitespace-pre-wrap">
               {a.coverLetter}
             </p>
           </div>
-          {/* Action buttons include copy + regenerate */}
           <VacancyActions
             vacancyId={vacancy.id}
             currentStatus={vacancy.status}
@@ -415,14 +413,14 @@ export default async function VacancyDetailPage({
           6 · QUESTIONS TO RECRUITER
       ═══════════════════════════════════════════════════ */}
       {a?.questionsToRecruiter && a.questionsToRecruiter.length > 0 && (
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-          <h2 className="flex items-center gap-2 text-xs font-semibold text-blue-400 uppercase tracking-widest mb-4">
+        <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-xl p-5 backdrop-blur-sm shadow-sm">
+          <h2 className="flex items-center gap-2 text-xs font-semibold text-sky-400 uppercase tracking-wider mb-4">
             <MessageSquare size={13} /> Questions to Ask Recruiter
           </h2>
           <ol className="space-y-2.5">
             {a.questionsToRecruiter.map((q, i) => (
-              <li key={i} className="flex items-start gap-3 text-sm text-gray-300">
-                <span className="text-blue-400 font-semibold shrink-0 tabular-nums">
+              <li key={i} className="flex items-start gap-3 text-sm text-zinc-300">
+                <span className="text-sky-400 font-semibold shrink-0 tabular-nums">
                   {i + 1}.
                 </span>
                 {q}
@@ -436,8 +434,8 @@ export default async function VacancyDetailPage({
           7 · ACTION BUTTONS (shown standalone if no cover letter section)
       ═══════════════════════════════════════════════════ */}
       {!a?.coverLetter && (
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-          <h2 className="text-xs font-semibold text-white uppercase tracking-widest mb-4">
+        <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-xl p-5 backdrop-blur-sm shadow-sm">
+          <h2 className="text-xs font-semibold text-zinc-300 uppercase tracking-wider mb-4">
             Actions
           </h2>
           <VacancyActions
@@ -451,27 +449,27 @@ export default async function VacancyDetailPage({
           8 · APPLICATION HISTORY
       ═══════════════════════════════════════════════════ */}
       {vacancy.logs && vacancy.logs.length > 0 && (
-        <div className="bg-gray-900 border border-gray-800 rounded-xl p-5">
-          <h2 className="text-xs font-semibold text-white uppercase tracking-widest mb-4">
-            📋 Application History
+        <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-xl p-5 backdrop-blur-sm shadow-sm">
+          <h2 className="text-xs font-semibold text-zinc-300 uppercase tracking-wider mb-4">
+            Application History
           </h2>
           <div className="space-y-2.5">
             {vacancy.logs.map((log) => (
               <div
                 key={log.id}
-                className="flex items-start gap-3 p-3 rounded-lg bg-gray-800"
+                className="flex items-start gap-3 p-3 rounded-lg bg-zinc-800/60 border border-zinc-800"
               >
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm text-gray-200 font-medium capitalize">
+                  <p className="text-xs text-zinc-200 font-medium capitalize">
                     {log.action.replace(/_/g, " ")}
                   </p>
                   {log.note && (
-                    <p className="text-xs text-gray-400 mt-0.5 leading-relaxed">
+                    <p className="text-xs text-zinc-400 mt-0.5 leading-relaxed">
                       {log.note}
                     </p>
                   )}
                 </div>
-                <time className="text-xs text-gray-500 shrink-0 whitespace-nowrap">
+                <time className="text-xs text-zinc-500 shrink-0 tabular-nums">
                   {new Date(log.createdAt).toLocaleDateString("en-US", {
                     month: "short",
                     day:   "numeric",

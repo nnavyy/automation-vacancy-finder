@@ -65,15 +65,18 @@ export async function buildAnalysisPrompt(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   pref?: any
 ): Promise<string> {
-  // ── Fetch Portfolio ───────────────────────────────────────
+  // ── Fetch / Use Cached Portfolio ─────────────────────────
   let portfolioContent = "";
-  if (pref?.portfolioUrl) {
+  if (pref?.cachedPortfolioContent) {
+    portfolioContent = `\n\nCandidate's Portfolio/Website Content (Use this to understand their skills/projects deeply):\n${pref.cachedPortfolioContent}`;
+  } else if (pref?.portfolioUrl) {
     try {
       const res = await fetch(pref.portfolioUrl, { signal: AbortSignal.timeout(5000) });
       if (res.ok) {
         const html = await res.text();
-        const text = html.replace(/<[^>]*>?/gm, " ").replace(/\s\s+/g, " ").trim();
-        portfolioContent = `\n\nCandidate's Portfolio/Website Content (Use this to understand their skills/projects deeply):\n${text.slice(0, 1500)}`;
+        const text = html.replace(/<[^>]*>?/gm, " ").replace(/\s\s+/g, " ").trim().slice(0, 1500);
+        pref.cachedPortfolioContent = text;
+        portfolioContent = `\n\nCandidate's Portfolio/Website Content (Use this to understand their skills/projects deeply):\n${text}`;
       }
     } catch (err) {
       console.warn("[Analyzer] Failed to fetch portfolio URL:", pref.portfolioUrl, err);

@@ -35,10 +35,22 @@ export async function GET(req: NextRequest) {
     }
 
     const results: Record<string, unknown> = {};
+    const cronDeadline = Date.now() + 250_000; // 250s max to safely return before 300s gateway timeout
 
-    for (const { userId } of activePrefs) {
-      console.log(`[Cron] Running pipeline for user ${userId}...`);
-      const result = await runCollectionPipeline(userId);
+    for (let i = 0; i < activePrefs.length; i++) {
+      const { userId } = activePrefs[i];
+      const remainingTime = cronDeadline - Date.now();
+      if (remainingTime < 15_000) {
+        console.warn(`[Cron] Approaching cron timeout. Scheduled remaining ${activePrefs.length - i} users for next run.`);
+        results[userId] = { skipped: true, reason: "cron_timeout_budget" };
+        break;
+      }
+
+      const usersLeft = activePrefs.length - i;
+      const budgetForUser = Math.min(180_000, Math.max(30_000, Math.floor(remainingTime / usersLeft)));
+
+      console.log(`[Cron] Running pipeline for user ${userId} with budget ${budgetForUser}ms...`);
+      const result = await runCollectionPipeline(userId, { maxDurationMs: budgetForUser });
       results[userId] = result;
     }
 

@@ -89,18 +89,18 @@ export default function SidebarNav({ onNavigate }: { onNavigate?: () => void }) 
   const activeProfile = profiles.find(p => p.isActive);
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full bg-zinc-900">
       {/* Logo / Profile Switcher */}
-      <div className="px-5 py-5 border-b border-gray-800">
+      <div className="px-5 py-5 border-b border-zinc-800/80">
         <div className="flex items-center gap-2.5 mb-3">
-          <div className="w-7 h-7 rounded-lg bg-green-600 flex items-center justify-center shrink-0">
+          <div className="w-7 h-7 rounded-lg bg-emerald-600 flex items-center justify-center shrink-0 shadow-sm">
             <Cpu size={14} className="text-white" />
           </div>
           <div>
-            <p className="text-sm font-semibold text-white leading-tight">
-              wingkiiy Job AI
+            <p className="text-sm font-semibold text-zinc-100 leading-tight">
+              Nanda AI Job Assistant
             </p>
-            <p className="text-xs text-gray-500 leading-tight">
+            <p className="text-xs text-zinc-500 leading-tight">
               HH.ru Assistant
             </p>
           </div>
@@ -110,12 +110,13 @@ export default function SidebarNav({ onNavigate }: { onNavigate?: () => void }) 
         {!loading && profiles.length > 0 && (
           <div className="relative group">
             <select
+              aria-label="Select active profile"
               value={activeProfile?.id || ""}
               onChange={(e) => {
                 if (e.target.value === "new") handleCreateProfile();
                 else handleSwitchProfile(e.target.value);
               }}
-              className="w-full appearance-none bg-gray-900 border border-gray-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-green-400/60 cursor-pointer"
+              className="w-full appearance-none bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-1.5 text-xs text-zinc-200 focus:outline-none focus:border-emerald-500/60 focus:ring-1 focus:ring-emerald-500/30 cursor-pointer transition-colors"
             >
               {profiles.map(p => (
                 <option key={p.id} value={p.id}>
@@ -124,15 +125,15 @@ export default function SidebarNav({ onNavigate }: { onNavigate?: () => void }) 
               ))}
               <option value="new">+ Create New Profile</option>
             </select>
-            <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none">
-              <ChevronDown size={14} className="text-gray-500" />
+            <div className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none">
+              <ChevronDown size={13} className="text-zinc-500" />
             </div>
           </div>
         )}
       </div>
 
       {/* Nav links */}
-      <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
+      <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto custom-scrollbar">
         {NAV_ITEMS.map(({ icon: Icon, label, href }) => {
           const isActive =
             href === "/dashboard"
@@ -144,16 +145,16 @@ export default function SidebarNav({ onNavigate }: { onNavigate?: () => void }) 
               key={href}
               href={href}
               onClick={() => onNavigate && onNavigate()}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-150 ${
+              className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150 ${
                 isActive
-                  ? "bg-green-500/10 text-green-400"
-                  : "text-gray-400 hover:text-gray-200 hover:bg-gray-800/60"
+                  ? "bg-emerald-500/10 text-emerald-400"
+                  : "text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800/60"
               }`}
             >
               <Icon
                 size={16}
                 strokeWidth={isActive ? 2.2 : 1.8}
-                className={isActive ? "text-green-400" : "text-gray-500"}
+                className={isActive ? "text-emerald-400" : "text-zinc-500"}
               />
               <span>{label}</span>
             </Link>
@@ -162,32 +163,32 @@ export default function SidebarNav({ onNavigate }: { onNavigate?: () => void }) 
       </nav>
 
       {/* Footer — User Email + Version */}
-      <div className="p-4 border-t border-gray-800 space-y-3">
+      <div className="p-4 border-t border-zinc-800/80 space-y-3">
         {userEmail && (
           <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-full bg-green-500/15 border border-green-500/25 flex items-center justify-center shrink-0">
-              <span className="text-[11px] font-bold text-green-400 uppercase">
+            <div className="w-7 h-7 rounded-full bg-emerald-500/15 border border-emerald-500/25 flex items-center justify-center shrink-0">
+              <span className="text-[11px] font-bold text-emerald-400 uppercase">
                 {(userName || userEmail)[0]}
               </span>
             </div>
             <div className="flex-1 min-w-0">
               {userName && (
-                <p className="text-xs text-gray-300 font-medium truncate leading-tight">{userName}</p>
+                <p className="text-xs text-zinc-200 font-medium truncate leading-tight">{userName}</p>
               )}
-              <p className="text-[10px] text-gray-500 truncate leading-tight">{userEmail}</p>
+              <p className="text-[10px] text-zinc-500 truncate leading-tight">{userEmail}</p>
             </div>
             <button
               onClick={() => {
                 window.location.href = "/api/auth/signout";
               }}
-              className="p-1 rounded hover:bg-gray-800 transition-colors group"
+              className="p-1 rounded hover:bg-zinc-800 transition-colors group"
               title="Sign out"
             >
-              <LogOut size={13} className="text-gray-600 group-hover:text-red-400 transition-colors" />
+              <LogOut size={13} className="text-zinc-500 group-hover:text-rose-400 transition-colors" />
             </button>
           </div>
         )}
-        <p className="text-xs text-gray-700 text-center select-none">v0.1.0</p>
+        <p className="text-[11px] text-zinc-600 text-center select-none font-mono">v0.1.0</p>
       </div>
     </div>
   );

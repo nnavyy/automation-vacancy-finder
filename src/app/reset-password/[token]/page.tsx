@@ -2,7 +2,8 @@
 
 import { useState, use } from "react";
 import { useRouter } from "next/navigation";
-import { Lock, ArrowRight, Loader2, CheckCircle, XCircle } from "lucide-react";
+import Link from "next/link";
+import { Lock, ArrowRight, Loader2, CheckCircle, AlertTriangle, ArrowLeft } from "lucide-react";
 
 export default function ResetPasswordPage({ params }: { params: Promise<{ token: string }> }) {
   const router = useRouter();
@@ -22,8 +23,8 @@ export default function ResetPasswordPage({ params }: { params: Promise<{ token:
       return;
     }
 
-    if (password.length < 6) {
-      setMsg({ text: "Password must be at least 6 characters.", type: "error" });
+    if (password.length < 8) {
+      setMsg({ text: "Password must be at least 8 characters.", type: "error" });
       return;
     }
 
@@ -42,7 +43,7 @@ export default function ResetPasswordPage({ params }: { params: Promise<{ token:
         setMsg({ text: "Password reset successful! Redirecting to login...", type: "success" });
         setTimeout(() => {
           router.push("/login");
-        }, 2000);
+        }, 1500);
       } else {
         setMsg({ text: data.error || "Failed to reset password.", type: "error" });
       }
@@ -54,68 +55,99 @@ export default function ResetPasswordPage({ params }: { params: Promise<{ token:
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-950 p-4">
-      <div className="w-full max-w-md bg-gray-900 border border-gray-800 rounded-2xl shadow-xl p-8 relative overflow-hidden">
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-1/2 bg-blue-500/10 blur-3xl pointer-events-none" />
+    <div className="min-h-[100dvh] flex items-center justify-center bg-zinc-950 p-4 relative overflow-hidden">
+      {/* Ambient background glow */}
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-emerald-500/10 blur-[120px] rounded-full pointer-events-none" />
 
-        <div className="relative z-10 flex flex-col items-center">
-          <div className="w-12 h-12 bg-blue-500/10 border border-blue-500/20 rounded-xl flex items-center justify-center mb-6">
-            <Lock className="text-blue-400" size={24} />
+      <div className="w-full max-w-sm relative z-10">
+        <div className="flex flex-col items-center mb-8 text-center">
+          <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mb-4 shadow-sm">
+            <Lock className="text-emerald-400" size={22} />
           </div>
 
-          <h1 className="text-2xl font-bold text-white mb-2">Create New Password</h1>
-          <p className="text-sm text-gray-400 text-center mb-8">
-            Please enter your new password below.
+          <h1 className="text-xl font-bold text-zinc-100 tracking-tight">Create New Password</h1>
+          <p className="text-xs text-zinc-400 mt-1 max-w-xs">
+            Enter your new credentials below to securely access your account.
           </p>
+        </div>
 
-          <form onSubmit={handleSubmit} className="w-full space-y-4">
+        <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-2xl p-6 backdrop-blur-xl shadow-xl">
+          <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">New Password</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                className="w-full px-4 py-3 bg-gray-950 border border-gray-800 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
-                placeholder="••••••••"
-              />
+              <label htmlFor="reset-pass" className="block text-xs font-medium text-zinc-400 mb-1.5 cursor-pointer">
+                New Password
+              </label>
+              <div className="relative">
+                <Lock size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
+                <input
+                  id="reset-pass"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-lg pl-9 pr-3.5 py-2.5 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-emerald-500/60 focus:ring-1 focus:ring-emerald-500/30 transition-colors"
+                  placeholder="Min. 8 characters"
+                />
+              </div>
             </div>
             
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">Confirm New Password</label>
-              <input
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                required
-                className="w-full px-4 py-3 bg-gray-950 border border-gray-800 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
-                placeholder="••••••••"
-              />
+              <label htmlFor="reset-confirm" className="block text-xs font-medium text-zinc-400 mb-1.5 cursor-pointer">
+                Confirm New Password
+              </label>
+              <div className="relative">
+                <Lock size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
+                <input
+                  id="reset-confirm"
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-lg pl-9 pr-3.5 py-2.5 text-sm text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-emerald-500/60 focus:ring-1 focus:ring-emerald-500/30 transition-colors"
+                  placeholder="Re-enter new password"
+                />
+              </div>
             </div>
 
             {msg && (
-              <div className={`p-3 rounded-lg text-sm flex items-center gap-2 ${msg.type === "success" ? "bg-green-500/10 text-green-400 border border-green-500/20" : "bg-red-500/10 text-red-400 border border-red-500/20"}`}>
-                {msg.type === "success" ? <CheckCircle size={16} /> : <XCircle size={16} />}
-                {msg.text}
+              <div
+                className={`p-3 rounded-lg text-xs font-medium flex items-center gap-2 border ${
+                  msg.type === "success"
+                    ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                    : "bg-rose-500/10 text-rose-400 border-rose-500/20"
+                }`}
+              >
+                {msg.type === "success" ? <CheckCircle size={14} className="shrink-0" /> : <AlertTriangle size={14} className="shrink-0" />}
+                <span>{msg.text}</span>
               </div>
             )}
 
             <button
               type="submit"
               disabled={loading || !password || !confirmPassword}
-              className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed mt-2"
+              className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white font-medium py-2.5 rounded-lg text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm shadow-emerald-950/50 mt-2"
             >
               {loading ? (
-                <Loader2 className="animate-spin" size={18} />
+                <>
+                  <Loader2 className="animate-spin" size={14} />
+                  <span>Updating password…</span>
+                </>
               ) : (
                 <>
-                  Reset Password
-                  <ArrowRight size={18} />
+                  <span>Reset Password</span>
+                  <ArrowRight size={14} />
                 </>
               )}
             </button>
           </form>
         </div>
+
+        <p className="mt-6 text-center text-xs text-zinc-500">
+          <Link href="/login" className="text-emerald-400 hover:text-emerald-300 font-medium inline-flex items-center gap-1 transition-colors">
+            <ArrowLeft size={12} />
+            Back to login
+          </Link>
+        </p>
       </div>
     </div>
   );

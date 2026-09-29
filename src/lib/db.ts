@@ -27,9 +27,7 @@ export const prisma: PrismaClient =
     datasourceUrl: process.env.DATABASE_URL,
   });
 
-if (process.env.NODE_ENV !== "production") {
-  globalForPrisma.prisma = prisma;
-}
+globalForPrisma.prisma = prisma;
 
 // ── Retry wrapper for NeonDB cold-start ──────────────────────
 

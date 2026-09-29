@@ -98,7 +98,7 @@ export default function RunCollectionButton() {
         {stale && (
           <button
             onClick={handleForceReset}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-yellow-600/20 hover:bg-yellow-600/30 border border-yellow-600/30 text-yellow-400 text-xs font-medium transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-400 text-xs font-medium transition-colors"
           >
             <RefreshCw size={12} />
             Reset Stuck
@@ -107,12 +107,12 @@ export default function RunCollectionButton() {
         <button
           onClick={handleRun}
           disabled={loading}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-green-600 hover:bg-green-700 active:bg-green-800 text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {loading ? (
-            <Loader2 size={14} className="animate-spin shrink-0" />
+            <Loader2 size={13} className="animate-spin shrink-0" />
           ) : (
-            <Play size={14} className="shrink-0" />
+            <Play size={13} className="shrink-0" />
           )}
           <span className="truncate">
             {loading ? "Collecting..." : "Run Collection"}
@@ -121,14 +121,14 @@ export default function RunCollectionButton() {
       </div>
 
       {loading && progress && (
-        <div className="text-xs text-gray-400 flex items-center gap-1.5 animate-pulse">
-          <Loader2 size={11} className="animate-spin" />
+        <div className="text-xs text-zinc-400 flex items-center gap-1.5 animate-pulse">
+          <Loader2 size={11} className="animate-spin text-emerald-400" />
           Analyzing {progress.analyzed} of {progress.total || "?"} vacancies...
         </div>
       )}
 
       {stale && (
-        <div className="text-xs text-yellow-500 flex items-center gap-1.5">
+        <div className="text-xs text-amber-400 flex items-center gap-1.5">
           <RefreshCw size={11} />
           Collection appears stuck. Click Reset Stuck to clear.
         </div>
@@ -137,7 +137,7 @@ export default function RunCollectionButton() {
       {result && !loading && (
         <div
           className={`flex items-center gap-1.5 text-xs ${
-            result.ok ? "text-green-400" : "text-red-400"
+            result.ok ? "text-emerald-400" : "text-rose-400"
           }`}
         >
           {result.ok ? <CheckCircle size={13} /> : <XCircle size={13} />}

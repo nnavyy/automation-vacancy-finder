@@ -137,10 +137,10 @@ export default function VacancyActions({
       {/* Feedback message */}
       {msg && (
         <div
-          className={`flex items-start gap-2 p-3 rounded-lg text-sm border ${
+          className={`flex items-start gap-2 p-3 rounded-lg text-xs font-medium border ${
             msg.type === "success"
-              ? "bg-green-400/10 text-green-400 border-green-400/30"
-              : "bg-red-400/10  text-red-400  border-red-400/30"
+              ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+              : "bg-rose-500/10 text-rose-400 border-rose-500/30"
           }`}
         >
           {msg.text}
@@ -148,101 +148,101 @@ export default function VacancyActions({
       )}
 
       {/* Primary action buttons */}
-      <div className="flex flex-wrap gap-3">
-        {/* 🚀 Apply via HH.ru (Auto) */}
+      <div className="flex flex-wrap gap-2.5">
+        {/* Apply via HH.ru (Auto) */}
         <button
           onClick={() => handleAction("apply_hh")}
           disabled={loading !== null || status === "applied_manual" || status === "applied_hh"}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-medium transition-colors shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
         >
           {busy("apply_hh") ? (
-            <Loader2 size={14} className="animate-spin" />
+            <Loader2 size={13} className="animate-spin" />
           ) : (
-            <Send size={14} />
+            <Send size={13} />
           )}
           {status === "applied_hh" ? "Applied on HH" : "Apply via HH.ru"}
         </button>
 
-        {/* ✅ Mark Applied */}
+        {/* Mark Applied */}
         <button
           onClick={() => handleAction("applied")}
           disabled={loading !== null || status === "applied_manual" || status === "applied_hh"}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium transition-colors shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
         >
           {busy("applied") ? (
-            <Loader2 size={14} className="animate-spin" />
+            <Loader2 size={13} className="animate-spin" />
           ) : (
-            <CheckCircle size={14} />
+            <CheckCircle size={13} />
           )}
           {status === "applied_manual" ? "Marked Applied" : "Mark Applied"}
         </button>
 
-        {/* ❌ Skip */}
+        {/* Skip */}
         <button
           onClick={() => handleAction("skip")}
           disabled={loading !== null || status === "skipped"}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-400/10 hover:bg-red-400/20 text-red-400 border border-red-400/30 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 text-xs font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         >
           {busy("skip") ? (
-            <Loader2 size={14} className="animate-spin" />
+            <Loader2 size={13} className="animate-spin" />
           ) : (
-            <XCircle size={14} />
+            <XCircle size={13} />
           )}
           {status === "skipped" ? "Skipped" : "Skip"}
         </button>
 
-        {/* 💾 Save */}
+        {/* Save */}
         <button
           onClick={() => handleAction("save")}
           disabled={loading !== null || status === "saved"}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-400/10 hover:bg-blue-400/20 text-blue-400 border border-blue-400/30 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 border border-sky-500/30 text-xs font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         >
           {busy("save") ? (
-            <Loader2 size={14} className="animate-spin" />
+            <Loader2 size={13} className="animate-spin" />
           ) : (
-            <Bookmark size={14} />
+            <Bookmark size={13} />
           )}
           {status === "saved" ? "Saved" : "Save"}
         </button>
 
-        {/* 🚫 Block Company */}
+        {/* Block Company */}
         <button
           onClick={() => handleAction("block_company")}
           disabled={loading !== null || status === "ignored"}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-orange-400/10 hover:bg-orange-400/20 text-orange-400 border border-orange-400/30 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 text-xs font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         >
           {busy("block_company") ? (
-            <Loader2 size={14} className="animate-spin" />
+            <Loader2 size={13} className="animate-spin" />
           ) : (
-            <Ban size={14} />
+            <Ban size={13} />
           )}
           {status === "ignored" ? "Company Blocked" : "Block Company"}
         </button>
 
-        {/* ✍️ Regenerate Letter */}
+        {/* Regenerate Letter */}
         <button
           onClick={() => handleAction("regenerate")}
           disabled={loading !== null}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-200 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700/80 border border-zinc-700/80 text-zinc-200 text-xs font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         >
           {busy("regenerate") ? (
-            <Loader2 size={14} className="animate-spin" />
+            <Loader2 size={13} className="animate-spin" />
           ) : (
-            <RefreshCw size={14} />
+            <RefreshCw size={13} />
           )}
           Regenerate Letter
         </button>
 
-        {/* ✈️ Send to Telegram */}
+        {/* Send to Telegram */}
         <button
           onClick={() => handleAction("telegram")}
           disabled={loading !== null}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 border border-blue-600/30 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700/80 border border-zinc-700/80 text-zinc-200 text-xs font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
         >
           {busy("telegram") ? (
-            <Loader2 size={14} className="animate-spin" />
+            <Loader2 size={13} className="animate-spin" />
           ) : (
-            <Send size={14} />
+            <Send size={13} />
           )}
           Send to Telegram
         </button>
@@ -252,17 +252,17 @@ export default function VacancyActions({
       {coverLetter && (
         <button
           onClick={handleCopy}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-sm font-medium transition-all"
+          className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700/80 border border-zinc-700/80 text-xs font-medium transition-all"
         >
           {copied ? (
             <>
-              <Check size={14} className="text-green-400" />
-              <span className="text-green-400">Copied!</span>
+              <Check size={13} className="text-emerald-400" />
+              <span className="text-emerald-400">Copied!</span>
             </>
           ) : (
             <>
-              <Copy size={14} className="text-gray-400" />
-              <span className="text-gray-200">Copy Cover Letter</span>
+              <Copy size={13} className="text-zinc-400" />
+              <span className="text-zinc-200">Copy Cover Letter</span>
             </>
           )}
         </button>

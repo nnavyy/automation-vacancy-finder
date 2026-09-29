@@ -1,42 +1,33 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Groq } from "groq-sdk";
+import { callAI } from "@/lib/aiProviderRouter";
 
 export async function POST(req: NextRequest) {
   try {
     const { text, mode = "text" } = await req.json();
-    if (!text) {
+    if (!text || typeof text !== "string") {
       return NextResponse.json({ success: false, error: "Text is required" }, { status: 400 });
     }
 
-    const apiKey = process.env.GROQ_API_KEY;
-    if (!apiKey) {
-      return NextResponse.json({ success: false, error: "GROQ_API_KEY is missing" }, { status: 500 });
-    }
+    const systemPrompt =
+      mode === "json"
+        ? "You are a professional Russian to English translator. Translate the string values in the provided JSON to English. DO NOT change JSON keys or schema. Return strictly valid JSON."
+        : "You are a professional technical Russian to English translator. Translate the provided job vacancy text accurately into fluent, professional English. Preserve paragraphs, bullet points, and key technical terminology. Do not add conversational commentary.";
 
-    const groq = new Groq({ apiKey });
-
-    const systemPrompt = mode === "json"
-      ? "You are a professional Russian to English translator. Translate the string values in the provided JSON to English. DO NOT change the JSON keys or structure. Return ONLY valid JSON, no markdown formatting."
-      : "You are a professional Russian to English translator. Translate the provided text exactly as it is, maintaining formatting and tone. Do not add any extra comments.";
-
-    const completion = await groq.chat.completions.create({
-      messages: [
-        {
-          role: "system",
-          content: systemPrompt,
-        },
-        {
-          role: "user",
-          content: text,
-        },
-      ],
-      model: "llama-3.3-70b-versatile",
-      temperature: 0.2,
+    const aiRes = await callAI({
+      prompt: text.slice(0, 12000),
+      systemPrompt,
+      requestType: "translation",
+      maxTokens: 2500,
     });
 
-    const translated = completion.choices[0]?.message?.content || "";
+    if (aiRes.isRateLimited || !aiRes.content) {
+      return NextResponse.json(
+        { success: false, error: "Translation service temporarily unavailable" },
+        { status: 503 }
+      );
+    }
 
-    return NextResponse.json({ success: true, text: translated });
+    return NextResponse.json({ success: true, text: aiRes.content.trim() });
   } catch (error) {
     console.error("Translation error:", error);
     return NextResponse.json({ success: false, error: "Translation failed" }, { status: 500 });

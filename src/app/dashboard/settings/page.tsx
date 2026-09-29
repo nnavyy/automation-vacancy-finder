@@ -6,6 +6,7 @@
 // ============================================================
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { 
   Save, 
   RefreshCw,
@@ -27,6 +28,7 @@ import {
 // ── Types ─────────────────────────────────────────────────────
 
 interface FormState {
+  id?:                   string;
   name:                  string;
   targetRoles:           string;
   searchKeywordsEn:      string;
@@ -125,9 +127,9 @@ function FormCard({
   children: React.ReactNode;
 }) {
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 space-y-4">
-      <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
-        {Icon && <Icon size={16} className="text-gray-400" />}
+    <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-xl p-5 space-y-4 backdrop-blur-sm shadow-sm transition-colors hover:border-zinc-700/60">
+      <h2 className="flex items-center gap-2 text-sm font-semibold text-zinc-200">
+        {Icon && <Icon size={16} className="text-zinc-400" />}
         {title}
       </h2>
       {children}
@@ -148,20 +150,22 @@ function TextField({
   onChange:     (v: string) => void;
   placeholder?: string;
 }) {
+  const id = `field-${label.toLowerCase().replace(/[^a-z0-9]/g, "-")}`;
   return (
     <div>
-      <label className="block text-xs text-gray-400 mb-1.5 font-medium">
+      <label htmlFor={id} className="block text-xs text-zinc-400 mb-1.5 font-medium cursor-pointer">
         {label}
       </label>
       <input
+        id={id}
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder ?? hint}
-        className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:border-green-400/60 focus:outline-none transition-colors"
+        className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 focus:border-emerald-500/60 focus:ring-1 focus:ring-emerald-500/30 focus:outline-none transition-all"
       />
       {hint && (
-        <p className="text-xs text-gray-600 mt-1">{hint}</p>
+        <p className="text-xs text-zinc-500 mt-1">{hint}</p>
       )}
     </div>
   );
@@ -182,12 +186,14 @@ function NumberField({
   max:      number;
   onChange: (v: number) => void;
 }) {
+  const id = `num-${label.toLowerCase().replace(/[^a-z0-9]/g, "-")}`;
   return (
     <div>
-      <label className="block text-xs text-gray-400 mb-1.5 font-medium">
+      <label htmlFor={id} className="block text-xs text-zinc-400 mb-1.5 font-medium cursor-pointer">
         {label}
       </label>
       <input
+        id={id}
         type="number"
         min={min}
         max={max}
@@ -195,9 +201,9 @@ function NumberField({
         onChange={(e) =>
           onChange(parseInt(e.target.value, 10) || min)
         }
-        className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-green-400/60 focus:outline-none transition-colors"
+        className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:border-emerald-500/60 focus:ring-1 focus:ring-emerald-500/30 focus:outline-none transition-all"
       />
-      {hint && <p className="text-xs text-gray-600 mt-1">{hint}</p>}
+      {hint && <p className="text-xs text-zinc-500 mt-1">{hint}</p>}
     </div>
   );
 }
@@ -229,6 +235,7 @@ export default function SettingsPage() {
           if (json.success && json.data) {
             const d = json.data;
             setForm({
+              id:                     d.id,
               name:                   d.name                           ?? "Default",
               targetRoles:            toComma(d.targetRoles            ?? []),
               searchKeywordsEn:       toComma(d.searchKeywordsEn       ?? []),
@@ -289,6 +296,7 @@ export default function SettingsPage() {
 
     try {
       const payload = {
+        id:                     form.id,
         name:                   form.name,
         targetRoles:            fromComma(form.targetRoles),
         searchKeywordsEn:       fromComma(form.searchKeywordsEn),
@@ -720,427 +728,514 @@ export default function SettingsPage() {
         {/* ── Header ── */}
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
-          <h1 className="text-2xl font-bold text-white">Settings</h1>
-          <p className="text-gray-400 text-sm mt-1">
-            Configure your job search preferences
-          </p>
-        </div>
-        <SaveButton saving={saving} onClick={handleSave} />
-      </div>
-
-      {/* ── Feedback message ── */}
-      {msg && (
-        <div
-          className={`p-4 rounded-lg text-sm border ${
-            msg.type === "success"
-              ? "bg-green-400/10 border-green-400/30 text-green-400"
-              : msg.type === "warn"
-              ? "bg-yellow-400/10 border-yellow-400/30 text-yellow-400"
-              : "bg-red-400/10 border-red-400/30 text-red-400"
-          }`}
-        >
-          {msg.text}
-        </div>
-      )}
-
-      {/* ── JSON Import ── */}
-      <FormCard title="Import Profile via JSON" icon={FileText}>
-        <div className="flex flex-col gap-3">
-          <p className="text-xs text-gray-400">
-            Upload a JSON file to auto-fill your Name, Bio, Skills, Target Roles, and Portfolio URL.
-          </p>
-          <div className="flex items-center gap-4 flex-wrap">
-            <label className="flex items-center gap-2 cursor-pointer bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm transition-colors disabled:opacity-50">
-              {translatingJson ? <RefreshCw size={14} className="animate-spin" /> : <FileText size={14} />}
-              {translatingJson ? "Processing..." : "Upload JSON"}
-              <input type="file" accept=".json" className="hidden" onChange={handleJsonUpload} disabled={translatingJson} />
-            </label>
-            {uploadedJsonName && (
-              <span className="text-xs text-green-400 flex items-center gap-1 bg-green-400/10 px-2 py-1 rounded border border-green-400/20">
-                <Check size={12} /> {uploadedJsonName}
-              </span>
-            )}
-            <label className="flex items-center gap-2 cursor-pointer ml-auto">
-              <input 
-                type="checkbox" 
-                checked={translateJsonEn} 
-                onChange={(e) => setTranslateJsonEn(e.target.checked)}
-                className="w-4 h-4 rounded accent-blue-500"
-              />
-              <span className="text-xs text-gray-300">Translate Russian to English</span>
-            </label>
-          </div>
-        </div>
-      </FormCard>
-
-      {/* ── Profile Name ── */}
-      <FormCard title="Profile Information" icon={Target}>
-        <TextField
-          label="Profile Name"
-          value={form.name}
-          onChange={(v) => setForm((p) => ({ ...p, name: v }))}
-          hint="Name of this profile (e.g. Nanda, Web Developer, Backend)"
-        />
-      </FormCard>
-
-      {/* ── HH.ru Account Integration ── */}
-      <FormCard title="HH.ru Account Integration" icon={Bot}>
-        <div className="space-y-4">
-          <div className="flex gap-3 items-end">
-            <div className="flex-1">
-              <TextField
-                label="Full Cookie String"
-                value={form.hhToken}
-                onChange={(v) => setForm((p) => ({ ...p, hhToken: v }))}
-                placeholder="hhtoken=...; hhuid=...; _xsrf=..."
-                hint="Go to Network tab, refresh hh.ru, click a request, copy 'Cookie' from Request Headers"
-              />
-            </div>
-            <button
-              onClick={handleValidateHH}
-              disabled={validatingHH || !form.hhToken}
-              className="flex items-center gap-2 px-4 py-2 mb-[22px] rounded-lg bg-green-600 hover:bg-green-700 text-white text-sm font-medium transition-colors disabled:opacity-50"
-            >
-              {validatingHH ? <RefreshCw size={14} className="animate-spin" /> : <Check size={14} />}
-              Load Resumes
-            </button>
-          </div>
-          
-          {hhResumes.length > 0 && (
-            <div>
-              <label className="block text-xs text-gray-400 mb-1.5 font-medium">Select Resume for Auto-Apply</label>
-              <select
-                value={form.hhResumeId}
-                onChange={(e) => {
-                  const r = hhResumes.find(x => x.id === e.target.value);
-                  setForm(p => ({ ...p, hhResumeId: r?.id || "", hhResumeTitle: r?.title || "" }));
-                }}
-                className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-green-400/60 focus:outline-none"
-              >
-                <option value="" disabled>Select a resume...</option>
-                {hhResumes.map(r => (
-                  <option key={r.id} value={r.id}>{r.title} ({r.status?.name || "Active"})</option>
-                ))}
-              </select>
-            </div>
-          )}
-          {form.hhResumeTitle && hhResumes.length === 0 && (
-            <p className="text-xs text-green-400 bg-green-400/10 border border-green-400/20 p-2 rounded">
-              ✓ Connected to Resume: <strong>{form.hhResumeTitle}</strong>
+            <h1 className="text-xl font-semibold text-zinc-100 tracking-tight">Settings</h1>
+            <p className="text-zinc-400 text-sm mt-0.5">
+              Configure your job search preferences and profile matching
             </p>
-          )}
+          </div>
+          <SaveButton saving={saving} onClick={handleSave} />
         </div>
-      </FormCard>
 
-      {/* ── Target Roles ── */}
-      <FormCard title="Target Roles" icon={Target}>
-        <TextField
-          label="Job Titles"
-          value={form.targetRoles}
-          onChange={(v) => setForm((p) => ({ ...p, targetRoles: v }))}
-          hint="Comma-separated. e.g. Frontend Developer, React Developer"
-        />
-      </FormCard>
+        {/* ── Feedback message ── */}
+        {msg && (
+          <div
+            className={`p-4 rounded-xl text-sm border backdrop-blur-sm transition-all ${
+              msg.type === "success"
+                ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+                : msg.type === "warn"
+                ? "bg-amber-500/10 border-amber-500/30 text-amber-400"
+                : "bg-red-500/10 border-red-500/30 text-red-400"
+            }`}
+          >
+            {msg.text}
+          </div>
+        )}
 
-      {/* ── Search Keywords ── */}
-      <FormCard title="Search Keywords" icon={Search}>
-        <TextField
-          label="English Keywords"
-          value={form.searchKeywordsEn}
-          onChange={(v) => setForm((p) => ({ ...p, searchKeywordsEn: v }))}
-          hint="Used when searching HH.ru in English"
-        />
-        <TextField
-          label="Russian Keywords"
-          value={form.searchKeywordsRu}
-          onChange={(v) => setForm((p) => ({ ...p, searchKeywordsRu: v }))}
-          hint="Used when searching HH.ru in Russian (Кириллица)"
-        />
-      </FormCard>
-
-      {/* ── Skills ── */}
-      <FormCard title="Skills" icon={Wrench}>
-        <TextField
-          label="Required Skills"
-          value={form.requiredSkills}
-          onChange={(v) => setForm((p) => ({ ...p, requiredSkills: v }))}
-          hint="Must-have skills. e.g. React, TypeScript, JavaScript"
-        />
-        <TextField
-          label="Nice-to-Have Skills"
-          value={form.niceToHaveSkills}
-          onChange={(v) => setForm((p) => ({ ...p, niceToHaveSkills: v }))}
-          hint="Bonus skills that increase the match score"
-        />
-      </FormCard>
-
-      {/* ── Experience + Work Format (2-col) ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-
-        <FormCard title="Experience Level" icon={Calendar}>
-          <div className="space-y-2.5">
-            {EXPERIENCE_OPTIONS.map((opt) => (
+        {/* ── JSON Import ── */}
+        <FormCard title="Import Profile via JSON" icon={FileText}>
+          <div className="flex flex-col gap-3">
+            <p className="text-xs text-zinc-400">
+              Upload a JSON file to auto-fill your Name, Bio, Skills, Target Roles, and Portfolio URL.
+            </p>
+            <div className="flex items-center gap-4 flex-wrap">
               <label
-                key={opt.value}
-                className="flex items-center gap-3 cursor-pointer group"
+                htmlFor="json-file-input"
+                className="flex items-center gap-2 cursor-pointer bg-zinc-800 hover:bg-zinc-700/80 border border-zinc-700/80 text-zinc-100 px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
               >
+                {translatingJson ? <RefreshCw size={14} className="animate-spin text-zinc-400" /> : <FileText size={14} className="text-zinc-400" />}
+                {translatingJson ? "Processing..." : "Upload JSON"}
                 <input
-                  type="checkbox"
-                  checked={form.experience.includes(opt.value)}
-                  onChange={() => toggle("experience", opt.value)}
-                  className="w-4 h-4 rounded accent-green-400 cursor-pointer"
+                  id="json-file-input"
+                  type="file"
+                  accept=".json"
+                  className="hidden"
+                  onChange={handleJsonUpload}
+                  disabled={translatingJson}
                 />
-                <span className="text-sm text-gray-300 group-hover:text-white transition-colors">
-                  {opt.label}
-                </span>
               </label>
-            ))}
+              {uploadedJsonName && (
+                <span className="text-xs text-emerald-400 flex items-center gap-1 bg-emerald-500/10 px-2.5 py-1 rounded-md border border-emerald-500/20">
+                  <Check size={12} /> {uploadedJsonName}
+                </span>
+              )}
+              <div className="flex items-center gap-2 ml-auto">
+                <input
+                  id="translate-json-toggle"
+                  type="checkbox"
+                  checked={translateJsonEn}
+                  onChange={(e) => setTranslateJsonEn(e.target.checked)}
+                  className="w-4 h-4 rounded accent-emerald-500 cursor-pointer"
+                />
+                <label htmlFor="translate-json-toggle" className="text-xs text-zinc-300 cursor-pointer select-none">
+                  Translate Russian to English
+                </label>
+              </div>
+            </div>
           </div>
         </FormCard>
 
-        <FormCard title="Work Format" icon={Building2}>
-          <div className="space-y-2.5">
-            {WORK_FORMAT_OPTIONS.map((opt) => (
-              <label
-                key={opt.value}
-                className="flex items-center gap-3 cursor-pointer group"
-              >
-                <input
-                  type="checkbox"
-                  checked={form.workFormat.includes(opt.value)}
-                  onChange={() => toggle("workFormat", opt.value)}
-                  className="w-4 h-4 rounded accent-green-400 cursor-pointer"
-                />
-                <span className="text-sm text-gray-300 group-hover:text-white transition-colors">
-                  {opt.label}
-                </span>
-              </label>
-            ))}
-          </div>
+        {/* ── Profile Name ── */}
+        <FormCard title="Profile Information" icon={Target}>
+          <TextField
+            label="Profile Name"
+            value={form.name}
+            onChange={(v) => setForm((p) => ({ ...p, name: v }))}
+            hint="Name of this profile (e.g. Default, Web Developer, Backend Lead)"
+          />
         </FormCard>
 
-      </div>
-
-      {/* ── Notifications ── */}
-      <FormCard title="Notifications" icon={Bell}>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <NumberField
-            label="Minimum Score to Notify"
-            value={form.minimumScoreToNotify}
-            min={0}
-            max={100}
-            hint="Vacancies below this score won't trigger a Telegram alert (0–100)"
-            onChange={(v) =>
-              setForm((p) => ({ ...p, minimumScoreToNotify: v }))
-            }
-          />
-          <NumberField
-            label="Max Notifications Per Day"
-            value={parseInt(form.maxNotificationsPerDay, 10) || 0}
-            min={1}
-            max={200}
-            hint="Cap on daily Telegram messages to avoid spam"
-            onChange={(v) =>
-              setForm((p) => ({ ...p, maxNotificationsPerDay: String(v) }))
-            }
-          />
-        </div>
-      </FormCard>
-
-      {/* ── Salary ── */}
-      <FormCard title="Salary" icon={DollarSign}>
-        <div>
-          <label className="block text-xs text-gray-400 mb-1.5 font-medium">
-            Minimum Salary
-          </label>
-          <div className="flex gap-3">
-            <input
-              type="number"
-              min={0}
-              placeholder="e.g. 50000 — leave empty for no minimum"
-              value={form.salaryMinimum}
-              onChange={(e) =>
-                setForm((p) => ({ ...p, salaryMinimum: e.target.value }))
-              }
-              className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:border-green-400/60 focus:outline-none transition-colors"
-            />
-            <select
-              value={form.salaryCurrency}
-              onChange={(e) =>
-                setForm((p) => ({ ...p, salaryCurrency: e.target.value }))
-              }
-              className="w-24 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:border-green-400/60 focus:outline-none transition-colors"
-            >
-              <option value="RUR">RUR</option>
-              <option value="KZT">KZT</option>
-              <option value="BYN">BYN</option>
-              <option value="USD">USD</option>
-              <option value="EUR">EUR</option>
-            </select>
-          </div>
-          <p className="text-xs text-gray-600 mt-1">
-            Vacancies in other currencies will be automatically converted for comparison.
-          </p>
-        </div>
-      </FormCard>
-
-      {/* ── Filters ── */}
-      <FormCard title="Exclusion Filters" icon={Ban}>
-        <TextField
-          label="Exclude Keywords"
-          value={form.excludeKeywords}
-          onChange={(v) => setForm((p) => ({ ...p, excludeKeywords: v }))}
-          hint="Vacancies matching these words are skipped. e.g. 1С, PHP, .NET"
-        />
-        <TextField
-          label="Red Flag Keywords"
-          value={form.redFlagKeywords}
-          onChange={(v) => setForm((p) => ({ ...p, redFlagKeywords: v }))}
-          hint="Triggers a red flag warning in AI analysis. e.g. паспорт, залог, OTP"
-        />
-      </FormCard>
-
-      {/* ── Cover Letter Context ── */}
-      <FormCard title="Cover Letter Context" icon={FileText}>
-        <div className="space-y-4">
-          <div>
-            <label className="block text-xs text-gray-400 mb-1.5 font-medium">
-              Language
-            </label>
-            <select
-              value={form.coverLetterLanguage}
-              onChange={(e) => setForm((p) => ({ ...p, coverLetterLanguage: e.target.value }))}
-              className="w-full bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-green-400/50"
-            >
-              <option value="English">English</option>
-              <option value="Russian">Russian</option>
-              <option value="Auto (Match Vacancy)">Auto (Match Vacancy)</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs text-gray-400 mb-1.5 font-medium">
-              Resume / Background Text
-            </label>
-            <textarea
-              value={form.resumeText}
-              onChange={(e) => setForm((p) => ({ ...p, resumeText: e.target.value }))}
-              placeholder="Paste your resume or write a brief background so the AI knows your experience..."
-              className="w-full bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-green-400/50 min-h-32 custom-scrollbar"
-            />
-            <p className="mt-1.5 text-[10px] text-gray-500">
-              The AI will use this to generate highly personalized cover letters.
-            </p>
-          </div>
-          <div>
-            <label className="block text-xs text-gray-400 mb-1.5 font-medium">
-              Portfolio / Website URL
-            </label>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={form.portfolioUrl}
-                onChange={(e) => setForm((p) => ({ ...p, portfolioUrl: e.target.value }))}
-                placeholder="https://yoursite.com"
-                className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:border-green-400/60 focus:outline-none transition-colors"
-              />
+        {/* ── HH.ru Account Integration ── */}
+        <FormCard title="HH.ru Account Integration" icon={Bot}>
+          <div className="space-y-4">
+            <div className="flex gap-3 items-end">
+              <div className="flex-1">
+                <TextField
+                  label="Full Cookie String"
+                  value={form.hhToken}
+                  onChange={(v) => setForm((p) => ({ ...p, hhToken: v }))}
+                  placeholder="hhtoken=...; hhuid=...; _xsrf=..."
+                  hint="Go to Network tab, refresh hh.ru, click a request, copy 'Cookie' from Request Headers"
+                />
+              </div>
               <button
-                onClick={handleTestPortfolio}
-                disabled={testingPortfolio || !form.portfolioUrl}
-                className="flex items-center justify-center min-w-[120px] gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded-lg text-sm text-white transition-colors disabled:opacity-50"
+                type="button"
+                onClick={handleValidateHH}
+                disabled={validatingHH || !form.hhToken}
+                className="flex items-center gap-2 px-4 py-2 mb-[22px] rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
               >
-                {testingPortfolio ? <RefreshCw size={14} className="animate-spin" /> : <Bot size={14} />}
-                Test Crawl
+                {validatingHH ? <RefreshCw size={14} className="animate-spin" /> : <Check size={14} />}
+                {validatingHH ? "Loading Resumes..." : "Load Resumes"}
               </button>
             </div>
-            <p className="text-xs text-gray-600 mt-1">
-              AI will automatically crawl this URL to extract your projects when generating cover letters.
+
+            {hhResumes.length > 0 && (
+              <div>
+                <label htmlFor="hh-resume-select" className="block text-xs text-zinc-400 mb-1.5 font-medium cursor-pointer">
+                  Select Resume for Auto-Apply
+                </label>
+                <select
+                  id="hh-resume-select"
+                  value={form.hhResumeId}
+                  onChange={(e) => {
+                    const r = hhResumes.find(x => x.id === e.target.value);
+                    setForm(p => ({ ...p, hhResumeId: r?.id || "", hhResumeTitle: r?.title || "" }));
+                  }}
+                  className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:border-emerald-500/60 focus:ring-1 focus:ring-emerald-500/30 focus:outline-none transition-all"
+                >
+                  <option value="" disabled>Select a resume...</option>
+                  {hhResumes.map(r => (
+                    <option key={r.id} value={r.id}>{r.title} ({r.status?.name || "Active"})</option>
+                  ))}
+                </select>
+              </div>
+            )}
+            {form.hhResumeTitle && hhResumes.length === 0 && (
+              <p className="text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 p-2.5 rounded-lg flex items-center gap-1.5">
+                <Check size={13} /> Connected to Resume: <strong>{form.hhResumeTitle}</strong>
+              </p>
+            )}
+          </div>
+        </FormCard>
+
+        {/* ── Target Roles ── */}
+        <FormCard title="Target Roles" icon={Target}>
+          <TextField
+            label="Job Titles"
+            value={form.targetRoles}
+            onChange={(v) => setForm((p) => ({ ...p, targetRoles: v }))}
+            hint="Comma-separated. e.g. Frontend Developer, React Developer, Fullstack Engineer"
+          />
+        </FormCard>
+
+        {/* ── Search Keywords ── */}
+        <FormCard title="Search Keywords" icon={Search}>
+          <TextField
+            label="English Keywords"
+            value={form.searchKeywordsEn}
+            onChange={(v) => setForm((p) => ({ ...p, searchKeywordsEn: v }))}
+            hint="Used when searching HH.ru in English"
+          />
+          <TextField
+            label="Russian Keywords"
+            value={form.searchKeywordsRu}
+            onChange={(v) => setForm((p) => ({ ...p, searchKeywordsRu: v }))}
+            hint="Used when searching HH.ru in Russian (Кириллица)"
+          />
+        </FormCard>
+
+        {/* ── Skills ── */}
+        <FormCard title="Skills" icon={Wrench}>
+          <TextField
+            label="Required Skills"
+            value={form.requiredSkills}
+            onChange={(v) => setForm((p) => ({ ...p, requiredSkills: v }))}
+            hint="Must-have skills. e.g. React, TypeScript, Next.js, Node.js"
+          />
+          <TextField
+            label="Nice-to-Have Skills"
+            value={form.niceToHaveSkills}
+            onChange={(v) => setForm((p) => ({ ...p, niceToHaveSkills: v }))}
+            hint="Bonus skills that increase the match score"
+          />
+        </FormCard>
+
+        {/* ── Experience + Work Format (2-col) ── */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+          <FormCard title="Experience Level" icon={Calendar}>
+            <div className="space-y-2.5">
+              {EXPERIENCE_OPTIONS.map((opt) => {
+                const expId = `exp-option-${opt.value}`;
+                return (
+                  <div
+                    key={opt.value}
+                    className="flex items-center gap-3 group"
+                  >
+                    <input
+                      id={expId}
+                      type="checkbox"
+                      checked={form.experience.includes(opt.value)}
+                      onChange={() => toggle("experience", opt.value)}
+                      className="w-4 h-4 rounded accent-emerald-500 cursor-pointer"
+                    />
+                    <label
+                      htmlFor={expId}
+                      className="text-sm text-zinc-300 group-hover:text-zinc-100 transition-colors cursor-pointer select-none"
+                    >
+                      {opt.label}
+                    </label>
+                  </div>
+                );
+              })}
+            </div>
+          </FormCard>
+
+          <FormCard title="Work Format" icon={Building2}>
+            <div className="space-y-2.5">
+              {WORK_FORMAT_OPTIONS.map((opt) => {
+                const workId = `work-option-${opt.value}`;
+                return (
+                  <div
+                    key={opt.value}
+                    className="flex items-center gap-3 group"
+                  >
+                    <input
+                      id={workId}
+                      type="checkbox"
+                      checked={form.workFormat.includes(opt.value)}
+                      onChange={() => toggle("workFormat", opt.value)}
+                      className="w-4 h-4 rounded accent-emerald-500 cursor-pointer"
+                    />
+                    <label
+                      htmlFor={workId}
+                      className="text-sm text-zinc-300 group-hover:text-zinc-100 transition-colors cursor-pointer select-none"
+                    >
+                      {opt.label}
+                    </label>
+                  </div>
+                );
+              })}
+            </div>
+          </FormCard>
+
+        </div>
+
+        {/* ── Notifications ── */}
+        <FormCard title="Notifications" icon={Bell}>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <NumberField
+              label="Minimum Score to Notify"
+              value={form.minimumScoreToNotify}
+              min={0}
+              max={100}
+              hint="Vacancies below this score will not trigger alerts (0–100)"
+              onChange={(v) =>
+                setForm((p) => ({ ...p, minimumScoreToNotify: v }))
+              }
+            />
+            <NumberField
+              label="Max Notifications Per Day"
+              value={parseInt(form.maxNotificationsPerDay, 10) || 0}
+              min={1}
+              max={200}
+              hint="Cap on daily notification alerts"
+              onChange={(v) =>
+                setForm((p) => ({ ...p, maxNotificationsPerDay: String(v) }))
+              }
+            />
+          </div>
+        </FormCard>
+
+        {/* ── Salary ── */}
+        <FormCard title="Salary" icon={DollarSign}>
+          <div>
+            <label htmlFor="salary-minimum-input" className="block text-xs text-zinc-400 mb-1.5 font-medium cursor-pointer">
+              Minimum Salary
+            </label>
+            <div className="flex gap-3">
+              <input
+                id="salary-minimum-input"
+                type="number"
+                min={0}
+                placeholder="e.g. 50000 — leave empty for no minimum"
+                value={form.salaryMinimum}
+                onChange={(e) =>
+                  setForm((p) => ({ ...p, salaryMinimum: e.target.value }))
+                }
+                className="flex-1 bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 focus:border-emerald-500/60 focus:ring-1 focus:ring-emerald-500/30 focus:outline-none transition-all tabular-nums"
+              />
+              <select
+                id="salary-currency-select"
+                aria-label="Salary Currency"
+                value={form.salaryCurrency}
+                onChange={(e) =>
+                  setForm((p) => ({ ...p, salaryCurrency: e.target.value }))
+                }
+                className="w-24 bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:border-emerald-500/60 focus:ring-1 focus:ring-emerald-500/30 focus:outline-none transition-all"
+              >
+                <option value="RUR">RUR</option>
+                <option value="KZT">KZT</option>
+                <option value="BYN">BYN</option>
+                <option value="USD">USD</option>
+                <option value="EUR">EUR</option>
+              </select>
+            </div>
+            <p className="text-xs text-zinc-500 mt-1">
+              Vacancies in other currencies are converted for comparison.
             </p>
           </div>
-        </div>
-      </FormCard>
+        </FormCard>
 
-      {/* ── AI Providers ── */}
-      <FormCard title="AI Provider Order" icon={Bot}>
-        <div className="bg-gray-950 border border-gray-800 rounded-lg px-4 py-3 text-sm text-gray-300">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-xs font-semibold text-gray-500">PROVIDER PRIORITY (READ-ONLY)</span>
+        {/* ── Filters ── */}
+        <FormCard title="Exclusion Filters" icon={Ban}>
+          <TextField
+            label="Exclude Keywords"
+            value={form.excludeKeywords}
+            onChange={(v) => setForm((p) => ({ ...p, excludeKeywords: v }))}
+            hint="Vacancies matching these words are skipped. e.g. 1С, PHP, .NET"
+          />
+          <TextField
+            label="Red Flag Keywords"
+            value={form.redFlagKeywords}
+            onChange={(v) => setForm((p) => ({ ...p, redFlagKeywords: v }))}
+            hint="Triggers a red flag warning in analysis. e.g. passport, deposit, OTP"
+          />
+        </FormCard>
+
+        {/* ── Cover Letter Context ── */}
+        <FormCard title="Cover Letter Context" icon={FileText}>
+          <div className="space-y-4">
+            <div>
+              <label htmlFor="cover-letter-language-select" className="block text-xs text-zinc-400 mb-1.5 font-medium cursor-pointer">
+                Language
+              </label>
+              <select
+                id="cover-letter-language-select"
+                value={form.coverLetterLanguage}
+                onChange={(e) => setForm((p) => ({ ...p, coverLetterLanguage: e.target.value }))}
+                className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:border-emerald-500/60 focus:ring-1 focus:ring-emerald-500/30 focus:outline-none transition-all"
+              >
+                <option value="English">English</option>
+                <option value="Russian">Russian</option>
+                <option value="Auto (Match Vacancy)">Auto (Match Vacancy)</option>
+              </select>
+            </div>
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label htmlFor="resume-text-input" className="block text-xs text-zinc-400 font-medium cursor-pointer">
+                  Resume / Background Text
+                </label>
+                <span className="text-[11px] text-zinc-500 font-mono">
+                  Ctrl+Enter to save
+                </span>
+              </div>
+              <textarea
+                id="resume-text-input"
+                value={form.resumeText}
+                onChange={(e) => setForm((p) => ({ ...p, resumeText: e.target.value }))}
+                onKeyDown={(e) => {
+                  if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+                    e.preventDefault();
+                    handleSave();
+                  }
+                }}
+                placeholder="Paste your resume or write a brief background so the AI knows your experience..."
+                className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 focus:border-emerald-500/60 focus:ring-1 focus:ring-emerald-500/30 focus:outline-none transition-all min-h-32 custom-scrollbar"
+              />
+              <p className="mt-1.5 text-[11px] text-zinc-500">
+                The AI uses this background to tailor personalized cover letters.
+              </p>
+            </div>
+            <div>
+              <label htmlFor="portfolio-url-input" className="block text-xs text-zinc-400 mb-1.5 font-medium cursor-pointer">
+                Portfolio / Website URL
+              </label>
+              <div className="flex gap-2">
+                <input
+                  id="portfolio-url-input"
+                  type="text"
+                  value={form.portfolioUrl}
+                  onChange={(e) => setForm((p) => ({ ...p, portfolioUrl: e.target.value }))}
+                  placeholder="https://yoursite.com"
+                  className="flex-1 bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 focus:border-emerald-500/60 focus:ring-1 focus:ring-emerald-500/30 focus:outline-none transition-all"
+                />
+                <button
+                  type="button"
+                  onClick={handleTestPortfolio}
+                  disabled={testingPortfolio || !form.portfolioUrl}
+                  className="flex items-center justify-center min-w-[130px] gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700/80 border border-zinc-700/80 rounded-lg text-sm font-medium text-zinc-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {testingPortfolio ? <RefreshCw size={14} className="animate-spin text-zinc-400" /> : <Bot size={14} className="text-zinc-400" />}
+                  {testingPortfolio ? "Testing..." : "Test Crawl"}
+                </button>
+              </div>
+              <p className="text-xs text-zinc-500 mt-1">
+                AI extracts verified project evidence from this link when generating applications.
+              </p>
+            </div>
           </div>
-          <div className="flex gap-2 flex-wrap">
-            {form.aiProviderOrder.split(",").map((p, i) => (
-              <span key={i} className="px-2 py-1 bg-gray-800 text-green-400 rounded-md text-xs font-mono border border-green-400/20">
-                {i + 1}. {p.trim()}
-              </span>
-            ))}
+        </FormCard>
+
+        {/* ── AI Providers ── */}
+        <FormCard title="AI Provider Order" icon={Bot}>
+          <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-lg px-4 py-3 text-sm text-zinc-300">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-[11px] font-semibold text-zinc-500 tracking-wider">PROVIDER PRIORITY (READ-ONLY)</span>
+            </div>
+            <div className="flex gap-2 flex-wrap">
+              {form.aiProviderOrder.split(",").map((p, i) => (
+                <span key={i} className="px-2.5 py-1 bg-zinc-800/80 text-emerald-400 rounded-md text-xs font-mono border border-emerald-500/20">
+                  {i + 1}. {p.trim()}
+                </span>
+              ))}
+            </div>
+            <p className="text-[11px] text-zinc-500 mt-2">
+              AI providers are managed by the automated failover cluster. The first available provider is used.
+            </p>
           </div>
-          <p className="text-[10px] text-gray-500 mt-2">
-            AI providers are managed by the system. The first available provider is used.
+        </FormCard>
+
+        {/* ── Telegram Link ── */}
+        <TelegramLinkCard />
+
+
+        {/* ── Legal ── */}
+        <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl p-5">
+          <h2 className="text-sm font-semibold text-zinc-200 mb-1">Legal &amp; Open Source</h2>
+          <p className="text-xs text-zinc-500 mb-4">
+            Nanda AI Job Assistant is open-source software. All data you enter is stored exclusively
+            in your own database. The maintainers have no access to your information.
+          </p>
+          <div className="flex flex-wrap gap-3">
+            <Link
+              href="/legal/terms"
+              target="_blank"
+              className="text-xs text-zinc-300 border border-zinc-700/80 bg-zinc-800/60 hover:bg-zinc-700/60 hover:border-zinc-600 px-3 py-1.5 rounded-md transition-colors"
+            >
+              Terms of Service
+            </Link>
+            <Link
+              href="/legal/privacy"
+              target="_blank"
+              className="text-xs text-zinc-300 border border-zinc-700/80 bg-zinc-800/60 hover:bg-zinc-700/60 hover:border-zinc-600 px-3 py-1.5 rounded-md transition-colors"
+            >
+              Privacy Policy
+            </Link>
+            <a
+              href="https://github.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-zinc-300 border border-zinc-700/80 bg-zinc-800/60 hover:bg-zinc-700/60 hover:border-zinc-600 px-3 py-1.5 rounded-md transition-colors"
+            >
+              Source on GitHub
+            </a>
+          </div>
+          <p className="text-[11px] text-zinc-600 mt-4">
+            MIT License &middot; No telemetry &middot; Self-hosted
           </p>
         </div>
-      </FormCard>
 
-      {/* ── Telegram Link ── */}
-      <TelegramLinkCard />
-
-      {/* ── Bottom Save Button ── */}
-      <div className="flex justify-end">
-        <SaveButton saving={saving} onClick={handleSave} large />
-      </div>
+        {/* ── Bottom Save Button ── */}
+        <div className="flex justify-end">
+          <SaveButton saving={saving} onClick={handleSave} large />
+        </div>
 
       </div> {/* End Main Column */}
 
       {/* ── Right Side Panel (Profile & Analytics) ── */}
       <div className="w-full lg:w-80 shrink-0 space-y-6">
         {form.hhProfileName ? (
-          <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden shadow-lg sticky top-6">
-            <div className="h-24 bg-gradient-to-r from-blue-600 to-green-500 opacity-80"></div>
+          <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-xl overflow-hidden shadow-sm backdrop-blur-sm sticky top-6">
+            <div className="h-24 bg-gradient-to-r from-emerald-600/80 to-teal-500/80"></div>
             <div className="px-5 pb-6 relative text-center">
-              <div className="w-20 h-20 mx-auto rounded-full border-4 border-gray-900 bg-gray-800 -mt-10 overflow-hidden flex items-center justify-center">
+              <div className="w-20 h-20 mx-auto rounded-full border-4 border-zinc-900 bg-zinc-800 -mt-10 overflow-hidden flex items-center justify-center shadow-md">
                 {form.hhProfileAvatar && form.hhProfileAvatar !== "null" ? (
                   <img src={form.hhProfileAvatar} alt="Avatar" className="w-full h-full object-cover" />
                 ) : (
-                  <span className="text-3xl font-black text-gray-400">
+                  <span className="text-3xl font-black text-zinc-400">
                     {form.hhProfileName ? form.hhProfileName.charAt(0).toUpperCase() : "?"}
                   </span>
                 )}
               </div>
-              <h3 className="mt-3 text-lg font-bold text-white">{form.hhProfileName}</h3>
-              <p className="text-sm text-gray-400">HeadHunter Profile</p>
+              <h3 className="mt-3 text-lg font-bold text-zinc-100">{form.hhProfileName}</h3>
+              <p className="text-sm text-zinc-400">HeadHunter Profile</p>
               
-              <div className="mt-6 pt-5 border-t border-gray-800 grid grid-cols-2 gap-4">
+              <div className="mt-6 pt-5 border-t border-zinc-800/80 grid grid-cols-2 gap-4">
                 <div className="text-center">
-                  <div className="text-2xl font-black text-green-400">{form.hhTotalApplications || 0}</div>
-                  <div className="text-[10px] text-gray-500 uppercase tracking-wider mt-1 font-semibold">Total Responses</div>
+                  <div className="text-2xl font-black tabular-nums tracking-tight text-emerald-400">{form.hhTotalApplications || 0}</div>
+                  <div className="text-[10px] text-zinc-500 uppercase tracking-wider mt-1 font-semibold">Total Responses</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-2xl font-black text-blue-400">{form.hhResumeId ? "1" : "0"}</div>
-                  <div className="text-[10px] text-gray-500 uppercase tracking-wider mt-1 font-semibold">Active CV</div>
+                  <div className="text-2xl font-black tabular-nums tracking-tight text-teal-400">{form.hhResumeId ? "1" : "0"}</div>
+                  <div className="text-[10px] text-zinc-500 uppercase tracking-wider mt-1 font-semibold">Active CV</div>
                 </div>
               </div>
 
               <div className="mt-6">
                 <button
+                  type="button"
                   onClick={handleSyncHistory}
                   disabled={syncingHH}
-                  className="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-sm font-medium text-white transition-colors disabled:opacity-50 border border-gray-700"
+                  className="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700/80 text-sm font-medium text-zinc-100 transition-colors disabled:opacity-50 border border-zinc-700/80"
                 >
                   {syncingHH ? (
-                    <RefreshCw size={16} className="animate-spin text-green-400" />
+                    <RefreshCw size={16} className="animate-spin text-emerald-400" />
                   ) : (
-                    <RefreshCw size={16} className="text-gray-400" />
+                    <RefreshCw size={16} className="text-zinc-400" />
                   )}
                   {syncingHH ? "Syncing History..." : "Sync History to Database"}
                 </button>
-                <p className="text-[10px] text-gray-500 mt-2 text-center">
-                  Imports all your past HH.ru applications into the local Applied tab.
+                <p className="text-[11px] text-zinc-500 mt-2 text-center">
+                  Imports past HH.ru applications into the local database.
                 </p>
               </div>
             </div>
           </div>
         ) : (
-          <div className="bg-gray-900/50 border border-gray-800/50 border-dashed rounded-xl p-8 flex flex-col items-center justify-center text-center sticky top-6">
-            <Bot size={32} className="text-gray-600 mb-3" />
-            <h3 className="text-gray-400 font-medium">No Profile Loaded</h3>
-            <p className="text-xs text-gray-500 mt-2">Load your HH.ru account to view your profile and analytics dashboard.</p>
+          <div className="bg-zinc-900/40 border border-zinc-800/60 border-dashed rounded-xl p-8 flex flex-col items-center justify-center text-center sticky top-6">
+            <Bot size={32} className="text-zinc-600 mb-3" />
+            <h3 className="text-zinc-400 font-medium">No Profile Loaded</h3>
+            <p className="text-xs text-zinc-500 mt-2">Load your HH.ru account to view your profile and analytics dashboard.</p>
           </div>
         )}
       </div>
@@ -1162,9 +1257,10 @@ function SaveButton({
 }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       disabled={saving}
-      className={`flex items-center gap-2 rounded-lg bg-green-600 hover:bg-green-700 text-white font-medium transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${
+      className={`flex items-center gap-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium transition-all shadow-sm disabled:opacity-60 disabled:cursor-not-allowed ${
         large ? "px-6 py-3 text-base" : "px-5 py-2.5 text-sm"
       }`}
     >
@@ -1173,7 +1269,7 @@ function SaveButton({
       ) : (
         <Save size={15} />
       )}
-      {saving ? "Saving…" : "Save Settings"}
+      {saving ? "Saving..." : "Save Settings"}
     </button>
   );
 }
@@ -1231,10 +1327,10 @@ function TelegramLinkCard() {
         <div className="flex items-center gap-2">
           <div
             className={`w-2 h-2 rounded-full ${
-              linked ? "bg-green-400" : "bg-yellow-400"
+              linked ? "bg-emerald-400" : "bg-amber-400"
             }`}
           />
-          <span className="text-sm text-gray-300">
+          <span className="text-sm text-zinc-300">
             {loading
               ? "Checking..."
               : linked
@@ -1245,19 +1341,20 @@ function TelegramLinkCard() {
 
         {/* Token display */}
         {token && !linked && (
-          <div className="bg-gray-800 border border-gray-700 rounded-lg p-3">
-            <p className="text-xs text-gray-400 mb-2">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-3">
+            <p className="text-xs text-zinc-400 mb-2">
               Send this command to your Telegram bot:
             </p>
             <div className="flex items-center gap-2">
-              <code className="flex-1 bg-gray-900 px-3 py-2 rounded text-sm text-green-400 font-mono">
+              <code className="flex-1 bg-zinc-950 px-3 py-2 rounded text-sm text-emerald-400 font-mono border border-zinc-800/80">
                 /link {token}
               </code>
               <button
+                type="button"
                 onClick={handleCopy}
-                className="px-3 py-2 rounded bg-gray-700 hover:bg-gray-600 text-white transition-colors"
+                className="px-3 py-2 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors border border-zinc-700/60"
               >
-                {copied ? <Check size={14} /> : <Copy size={14} />}
+                {copied ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
               </button>
             </div>
           </div>
@@ -1265,10 +1362,12 @@ function TelegramLinkCard() {
 
         {/* Generate / Regenerate button */}
         <button
+          type="button"
           onClick={handleGenerate}
           disabled={generating}
-          className="px-4 py-2 rounded-lg text-sm font-medium bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 transition-colors disabled:opacity-50"
+          className="px-4 py-2 rounded-lg text-sm font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 transition-colors disabled:opacity-50 flex items-center gap-2"
         >
+          {generating && <RefreshCw size={14} className="animate-spin text-emerald-400" />}
           {generating
             ? "Generating..."
             : token
@@ -1276,9 +1375,9 @@ function TelegramLinkCard() {
             : "Generate Telegram Token"}
         </button>
 
-        <p className="text-xs text-gray-600">
+        <p className="text-xs text-zinc-500">
           Generate a token, then send it to your bot via{" "}
-          <code className="text-gray-400">/link TOKEN</code> to connect.
+          <code className="text-zinc-400 font-mono">/link TOKEN</code> to connect.
         </p>
       </div>
     </FormCard>

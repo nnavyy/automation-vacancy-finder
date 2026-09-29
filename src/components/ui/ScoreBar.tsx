@@ -8,15 +8,15 @@ interface ScoreBarProps {
 }
 
 function getBarColor(score: number): string {
-  if (score >= 75) return "bg-green-400";
-  if (score >= 50) return "bg-yellow-400";
-  return "bg-red-400";
+  if (score >= 75) return "bg-emerald-400";
+  if (score >= 50) return "bg-amber-400";
+  return "bg-rose-400";
 }
 
 function getTextColor(score: number): string {
-  if (score >= 75) return "text-green-400";
-  if (score >= 50) return "text-yellow-400";
-  return "text-red-400";
+  if (score >= 75) return "text-emerald-400";
+  if (score >= 50) return "text-amber-400";
+  return "text-rose-400";
 }
 
 export default function ScoreBar({ score, size = "md" }: ScoreBarProps) {
@@ -26,7 +26,7 @@ export default function ScoreBar({ score, size = "md" }: ScoreBarProps) {
 
   return (
     <div className="flex items-center gap-3 w-full">
-      <div className={`flex-1 bg-gray-800 rounded-full ${barH} overflow-hidden`}>
+      <div className={`flex-1 bg-zinc-800 rounded-full ${barH} overflow-hidden`}>
         <div
           className={`${barH} rounded-full ${getBarColor(score)} transition-all duration-500`}
           style={{ width: `${clamped}%` }}
