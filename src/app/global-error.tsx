@@ -6,6 +6,7 @@
 // ============================================================
 
 import { useEffect } from "react";
+import Link from "next/link";
 import { AlertOctagon, RefreshCw, Home } from "lucide-react";
 
 export default function GlobalError({
@@ -82,7 +83,7 @@ export default function GlobalError({
               <RefreshCw size={14} />
               Try Again
             </button>
-            <a
+            <Link
               href="/"
               style={{
                 display: "flex",
@@ -100,7 +101,7 @@ export default function GlobalError({
             >
               <Home size={14} />
               Home
-            </a>
+            </Link>
           </div>
         </div>
       </body>

@@ -403,8 +403,7 @@ export default function AnalyticsDashboard({
             {/* High Synergy (>= 75%) */}
             <div className="space-y-1">
               <div className="flex items-center justify-between text-xs">
-                <span className="font-semibold text-emerald-400 flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                <span className="font-semibold text-emerald-400">
                   High Synergy (&ge; 75%)
                 </span>
                 <span className="font-mono text-zinc-300">
@@ -422,8 +421,7 @@ export default function AnalyticsDashboard({
             {/* Moderate Match (50-74%) */}
             <div className="space-y-1">
               <div className="flex items-center justify-between text-xs">
-                <span className="font-semibold text-amber-400 flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-amber-400" />
+                <span className="font-semibold text-amber-400">
                   Moderate Match (50% - 74%)
                 </span>
                 <span className="font-mono text-zinc-300">
@@ -441,8 +439,7 @@ export default function AnalyticsDashboard({
             {/* Borderline (25-49%) */}
             <div className="space-y-1">
               <div className="flex items-center justify-between text-xs">
-                <span className="font-semibold text-zinc-400 flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-zinc-400" />
+                <span className="font-semibold text-zinc-400">
                   Borderline (25% - 49%)
                 </span>
                 <span className="font-mono text-zinc-300">
@@ -460,8 +457,7 @@ export default function AnalyticsDashboard({
             {/* Incompatible (<25%) */}
             <div className="space-y-1">
               <div className="flex items-center justify-between text-xs">
-                <span className="font-semibold text-rose-400 flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-rose-400" />
+                <span className="font-semibold text-rose-400">
                   Incompatible / Skip (&lt; 25%)
                 </span>
                 <span className="font-mono text-zinc-300">

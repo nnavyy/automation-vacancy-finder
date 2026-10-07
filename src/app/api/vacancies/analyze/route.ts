@@ -2,30 +2,16 @@
 // Nanda AI Job Assistant — Manual Vacancy Analysis
 // ============================================================
 // POST /api/vacancies/analyze
-//
-// Manually triggers (or re-runs) AI analysis for a specific vacancy.
-// Useful for:
-//   - Vacancies that were saved with status "low_priority" or "new"
-//   - Re-analyzing after a profile change
-//   - Testing the AI pipeline
-//
-// Body: { vacancyId: string }
-// ============================================================
 
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getSimilarFeedbackExamples } from "@/lib/feedbackLearning";
 import { analyzeVacancy } from "@/lib/aiAnalyzer";
 import { calculateRuleScore } from "@/lib/scoring";
+import { getApiUser, getOwnedVacancy } from "@/lib/auth-helpers";
+import { toSearchPrefData } from "@/lib/collectionPipeline";
 import type { NormalizedVacancy, HHSalary } from "@/types";
 
-// ── Helper ────────────────────────────────────────────────────
-
-/**
- * Converts a Prisma Vacancy record to the NormalizedVacancy shape expected
- * by the analysis, filter, and scoring functions.
- * JSON fields (salary, workFormat, snippet) are safely cast.
- */
 function toNormalizedVacancy(
   v: Awaited<ReturnType<typeof prisma.vacancy.findUnique>> & object
 ): NormalizedVacancy {
@@ -59,24 +45,13 @@ function toNormalizedVacancy(
   };
 }
 
-// ── Route Handler ─────────────────────────────────────────────
-
-/**
- * POST /api/vacancies/analyze
- *
- * Manually triggers or re-runs AI analysis for a specific vacancy.
- *
- * Body:  { vacancyId: string }
- *
- * Returns:
- *   200 { success: true, data: { analysis, provider, model, aiStatus } }
- *   400 { success: false, error: "vacancyId is required" }
- *   404 { success: false, error: "Vacancy not found" }
- *   500 { success: false, error: string }
- */
 export async function POST(req: NextRequest) {
   try {
-    // ── Parse and validate request body ──────────────────
+    const user = await getApiUser();
+    if (!user) {
+      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = await req.json().catch(() => ({})) as { vacancyId?: string };
     const { vacancyId } = body;
 
@@ -87,11 +62,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // ── Fetch vacancy from DB ─────────────────────────────
-    const dbVacancy = await prisma.vacancy.findUnique({
-      where: { id: vacancyId },
-    });
-
+    const dbVacancy = await getOwnedVacancy(vacancyId, user.id);
     if (!dbVacancy) {
       return NextResponse.json(
         { success: false, error: "Vacancy not found" },
@@ -99,25 +70,33 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // ── Convert to NormalizedVacancy for analysis functions
     const vacancy = toNormalizedVacancy(
       dbVacancy as Parameters<typeof toNormalizedVacancy>[0]
     );
 
-    // ── Retrieve personalised feedback context ─────────────
-    const { positive, negative } = await getSimilarFeedbackExamples(vacancy);
+    // Retrieve feedback context isolated to current user
+    const { positive, negative } = await getSimilarFeedbackExamples(vacancy, user.id);
     const similarFeedback = [...positive, ...negative];
 
-    // ── Run AI analysis ───────────────────────────────────
+    // Fetch user's active search preference
+    const pref = await prisma.searchPreference.findFirst({
+      where: { userId: user.id, isActive: true },
+    }) || await prisma.searchPreference.findFirst({
+      where: { isActive: true },
+    });
+
+    const prefData = pref ? toSearchPrefData(pref) : undefined;
+
+    // Run AI analysis
     const { analysis, provider, model, aiStatus } = await analyzeVacancy(
       vacancy,
-      similarFeedback
+      similarFeedback,
+      prefData
     );
 
-    // ── Compute rule-based score for storage ─────────────
-    const ruleScore = calculateRuleScore(vacancy);
+    // Compute rule-based score
+    const ruleScore = calculateRuleScore(vacancy, prefData);
 
-    // ── Upsert VacancyAnalysis ────────────────────────────
     const analysisData = {
       matchScore: analysis.match_score,
       ruleScore: ruleScore.score,
@@ -141,16 +120,10 @@ export async function POST(req: NextRequest) {
       update: analysisData,
     });
 
-    // ── Update vacancy status ─────────────────────────────
     await prisma.vacancy.update({
       where: { id: vacancyId },
       data: { status: "analyzed" },
     });
-
-    console.log(
-      `[Analyze] Completed analysis for vacancy ${vacancyId} — ` +
-        `score: ${analysis.match_score}, provider: ${provider}`
-    );
 
     return NextResponse.json({
       success: true,

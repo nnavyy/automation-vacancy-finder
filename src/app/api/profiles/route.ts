@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/db";
-import { requireUser } from "@/lib/auth-helpers";
+import { getApiUser } from "@/lib/auth-helpers";
 
 const PREF_DEFAULTS = {
   name:                  "New Profile",
@@ -23,7 +23,10 @@ const PREF_DEFAULTS = {
 };
 
 export async function GET() {
-  const user = await requireUser();
+  const user = await getApiUser();
+  if (!user?.id) {
+    return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+  }
   try {
     const profiles = await prisma.searchPreference.findMany({
       where:   { userId: user.id },
@@ -37,7 +40,10 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const user = await requireUser();
+  const user = await getApiUser();
+  if (!user?.id) {
+    return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+  }
   try {
     const body = await req.json();
     const { action, id, name } = body;

@@ -1,5 +1,5 @@
 // ============================================================
-// Nanda AI Job Assistant — Vacancies List
+// HH Job Copilot — Vacancies List
 // ============================================================
 // GET /api/vacancies
 //
@@ -17,7 +17,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/db";
-import { requireUser } from "@/lib/auth-helpers";
+import { getApiUser } from "@/lib/auth-helpers";
 import type { VacancyStatus } from "@/types";
 
 /**
@@ -33,7 +33,10 @@ import type { VacancyStatus } from "@/types";
  *   500 { success: false, error: string }
  */
 export async function GET(req: NextRequest) {
-  const user = await requireUser();
+  const user = await getApiUser();
+  if (!user) {
+    return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+  }
   try {
     const { searchParams } = new URL(req.url);
 

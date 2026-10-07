@@ -5,8 +5,22 @@
 // ============================================================
 
 import { NextRequest, NextResponse } from "next/server";
+import { getApiUser } from "@/lib/auth-helpers";
 
 export async function GET(req: NextRequest) {
+  const user = await getApiUser();
+  const authHeader = req.headers.get("authorization");
+  const secretParam = req.nextUrl.searchParams.get("secret");
+
+  const isAuthorized =
+    Boolean(user?.id) ||
+    (Boolean(process.env.CRON_SECRET) && authHeader === `Bearer ${process.env.CRON_SECRET}`) ||
+    (Boolean(process.env.TELEGRAM_WEBHOOK_SECRET) && secretParam === process.env.TELEGRAM_WEBHOOK_SECRET);
+
+  if (!isAuthorized) {
+    return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  }
+
   const token = process.env.TELEGRAM_BOT_TOKEN;
   if (!token) {
     return NextResponse.json({ ok: false, error: "TELEGRAM_BOT_TOKEN not set" }, { status: 500 });
@@ -20,13 +34,18 @@ export async function GET(req: NextRequest) {
   console.log(`[Setup] Setting webhook to: ${webhookUrl}`);
 
   try {
+    const webhookPayload: Record<string, unknown> = {
+      url: webhookUrl,
+      allowed_updates: ["message", "callback_query"],
+    };
+    if (process.env.TELEGRAM_WEBHOOK_SECRET) {
+      webhookPayload.secret_token = process.env.TELEGRAM_WEBHOOK_SECRET;
+    }
+
     const res = await fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        url: webhookUrl,
-        allowed_updates: ["message", "callback_query"],
-      }),
+      body: JSON.stringify(webhookPayload),
     });
 
     const body = await res.json();

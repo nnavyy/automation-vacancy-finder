@@ -1,17 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/db";
+import { getApiUser, getOwnedVacancy } from "@/lib/auth-helpers";
 
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params;
+    const user = await getApiUser();
+    if (!user) {
+      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
 
-    const vacancy = await prisma.vacancy.findUnique({
-      where: { id },
-      select: { company: true },
-    });
+    const { id } = await params;
+    const vacancy = await getOwnedVacancy(id, user.id);
 
     if (!vacancy) {
       return NextResponse.json(
@@ -27,8 +29,10 @@ export async function POST(
       );
     }
 
-    // Get the active search preference (since there's currently only one active at a time)
+    // Get the user's active search preference
     const pref = await prisma.searchPreference.findFirst({
+      where: { userId: user.id, isActive: true },
+    }) || await prisma.searchPreference.findFirst({
       where: { isActive: true },
     });
 

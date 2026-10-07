@@ -5,11 +5,14 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/db";
-import { requireUser } from "@/lib/auth-helpers";
+import { getApiUser } from "@/lib/auth-helpers";
 import { crawlDeepCompanyIntel } from "@/lib/companyIntel";
 
 export async function POST(req: NextRequest) {
-  const user = await requireUser();
+  const user = await getApiUser();
+  if (!user?.id) {
+    return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+  }
 
   try {
     const body = await req.json().catch(() => ({}));

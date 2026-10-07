@@ -19,28 +19,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { saveFeedback } from "@/lib/feedbackLearning";
+import { getApiUser, getOwnedVacancy } from "@/lib/auth-helpers";
 
-/**
- * POST /api/vacancies/[id]/save
- *
- * Bookmarks a vacancy for later review.
- *
- * Body:  { notes?: string }
- *
- * Returns:
- *   200 { success: true, message: string }
- *   404 { success: false, error: "Vacancy not found" }
- *   500 { success: false, error: string }
- */
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params;
+    const user = await getApiUser();
+    if (!user) {
+      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
 
-    // ── Validate vacancy exists ───────────────────────────
-    const vacancy = await prisma.vacancy.findUnique({ where: { id } });
+    const { id } = await params;
+    const vacancy = await getOwnedVacancy(id, user.id);
     if (!vacancy) {
       return NextResponse.json(
         { success: false, error: "Vacancy not found" },
@@ -48,13 +40,9 @@ export async function POST(
       );
     }
 
-    // ── Parse optional notes from body ────────────────────
     const body = await req.json().catch(() => ({})) as { notes?: string };
     const { notes } = body;
 
-    // ── Save feedback + status update + log ───────────────
-    // saveFeedback("save") → status: "saved", creates VacancyFeedback,
-    // and creates ApplicationLog — all in one call.
     await saveFeedback(id, "save", notes);
 
     return NextResponse.json({
@@ -69,3 +57,4 @@ export async function POST(
     );
   }
 }
+

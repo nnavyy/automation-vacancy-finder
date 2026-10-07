@@ -1,28 +1,27 @@
 // ============================================================
-// Nanda AI Job Assistant — Rule-Based Vacancy Scorer
+// Vacancy AI Assistant — Rule-Based Vacancy Scorer
 // ============================================================
 // Calculates a deterministic 0–100 score for a vacancy using
-// keyword matching rules. Used both as:
+// dynamic candidate preferences & keyword heuristics.
+// Used both as:
 //   1. A pre-score before AI analysis (helps with ranking)
 //   2. A complete fallback when all AI providers are unavailable
 // ============================================================
 
-import type { NormalizedVacancy, RuleScoreResult } from "@/types";
+import type { NormalizedVacancy, RuleScoreResult, SearchPreferenceData } from "@/types";
 
-// ── Scoring Rule Pattern Groups ───────────────────────────────
+// ── Fallback Pattern Groups (Used when user preference is not set) ────
 
-/** Frontend / framework keywords that earn +20 when found in title */
-const FRONTEND_TITLE_KEYWORDS: string[] = [
+const DEFAULT_TITLE_KEYWORDS: string[] = [
+  "developer",
+  "engineer",
   "frontend",
-  "front-end",
-  "react",
-  "next",
-  "nextjs",
-  "next.js",
-  "typescript",
-  "vue",
-  "angular",
-  "фронтенд",
+  "backend",
+  "fullstack",
+  "software",
+  "разработчик",
+  "программист",
+  "инженер",
 ];
 
 /** Remote work indicators across Russian and English */
@@ -32,7 +31,6 @@ const REMOTE_KEYWORDS: string[] = [
   "удалённо",
   "дистанционно",
   "дистанционная",
-  "remot",
   "work from home",
 ];
 
@@ -42,7 +40,6 @@ const JUNIOR_TEXT_KEYWORDS: string[] = [
   "intern",
   "стажер",
   "стажёр",
-  "intern",
   "no experience",
   "без опыта",
   "начинающий",
@@ -57,25 +54,13 @@ const JUNIOR_EXPERIENCE_IDS: string[] = [
   "between1and3",
 ];
 
-/** Tools / specializations aligned with Nanda's profile */
-const TOOLS_KEYWORDS: string[] = [
-  "figma",
-  "ui/ux",
-  "ui ux",
-  "uiux",
-  "wordpress",
-  "chatbot",
-  "elementor",
-  "webflow",
-  "чат-бот",
-];
-
 // ── Penalty Pattern Groups ────────────────────────────────────
 
 /** Senior / leadership / 5+ year requirements */
 const SENIOR_KEYWORDS: string[] = [
   "senior",
-  "lead",
+  "team lead",
+  "tech lead",
   "5+ years",
   "5 лет опыта",
   "5+ лет",
@@ -90,6 +75,7 @@ const CITIZENSHIP_KEYWORDS: string[] = [
   "гражданин рф",
   "russian citizenship",
   "гражданство российской федерации",
+  "только граждане рф",
 ];
 
 /** Mandatory Russian C1 / C2 language level */
@@ -104,17 +90,19 @@ const RUSSIAN_MANDATORY_KEYWORDS: string[] = [
   "носитель языка",
 ];
 
-/** Scam / fraud / unpaid / document-request patterns */
+/** Contextual Scam / fraud / unpaid / document-request patterns */
 const SCAM_KEYWORDS: string[] = [
-  "без оплаты",
-  "unpaid",
+  "работа без оплаты",
+  "unpaid internship",
   "оплата обучения",
   "залог",
   "deposit",
-  "otp",
-  "паспорт",
-  "passport",
-  "смс код",
+  "код из смс",
+  "смс-код",
+  "скан паспорта",
+  "фото паспорта",
+  "пришлите паспорт",
+  "паспортные данные",
 ];
 
 /** Office-only keywords */
@@ -136,54 +124,51 @@ const RELOCATION_KEYWORDS: string[] = [
   "гибрид",
 ];
 
-// ── Helper ────────────────────────────────────────────────────
+// ── Helper with Regex Word Boundary ───────────────────────────
+
+function matchesWordBoundary(text: string, keyword: string): boolean {
+  const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const regex = new RegExp(`(^|[^a-zA-Zа-яА-Я0-9_])${escaped}([^a-zA-Zа-яА-Я0-9_]|$)`, "i");
+  return regex.test(text);
+}
 
 /**
- * Returns true if the text contains any keyword from the list (case-insensitive).
+ * Returns true if the text contains any keyword from the list.
+ * Multi-word phrases use case-insensitive substring search.
+ * Single words use boundary regex to avoid false positives (e.g. "lead" in "leading").
  */
 function matchesAny(text: string, keywords: string[]): boolean {
   const lower = text.toLowerCase();
-  return keywords.some((k) => lower.includes(k.toLowerCase()));
+  return keywords.some((k) => {
+    const kLower = k.toLowerCase().trim();
+    if (!kLower) return false;
+    if (kLower.includes(" ") || kLower.includes("+") || kLower.includes("-")) {
+      return lower.includes(kLower);
+    }
+    return matchesWordBoundary(text, kLower);
+  });
 }
 
-// ── Scorer ────────────────────────────────────────────────────
+// ── Dynamic Scorer ────────────────────────────────────────────
 
 /**
- * Calculates a rule-based score (0–100) for a vacancy using keyword heuristics.
- *
- * Positive contributions:
- *   +20  Title contains frontend / React / Next.js / TypeScript keywords
- *   +20  Remote work detected in schedule, workFormat, or description
- *   +15  Position is junior / intern / no-experience level
- *   +15  Description / title mentions Figma, UI/UX, WordPress, chatbot, Elementor
- *   +10  Salary is specified (from or to)
- *   +10  English language mentioned in description
- *
- * Penalty deductions:
- *   -30  Senior / lead / 5+ years requirement detected
- *   -40  Russian citizenship required
- *   -35  Russian C1 / C2 language level mandatory
- *   -50  Unpaid, payment from applicant, OTP, or passport request
- *   -25  Office-only without any relocation or hybrid mention
- *
- * Final score is clamped to the [0, 100] range.
+ * Calculates a rule-based score (0–100) for a vacancy using dynamic candidate preferences.
  *
  * @param vacancy - Normalized vacancy to evaluate
+ * @param pref    - Optional candidate search preferences
  * @returns RuleScoreResult with clamped score, positive reasons, and penalties
  */
-export function calculateRuleScore(vacancy: NormalizedVacancy): RuleScoreResult {
+export function calculateRuleScore(
+  vacancy: NormalizedVacancy,
+  pref?: SearchPreferenceData
+): RuleScoreResult {
   let score = 0;
   const reasons: string[] = [];
   const penalties: string[] = [];
 
-  // ── Build search corpora ──────────────────────────────────
-
   const title = (vacancy.title ?? "").toLowerCase();
-
   const description = (vacancy.description ?? "").toLowerCase();
-
   const schedule = (vacancy.schedule ?? "").toLowerCase();
-
   const experience = (vacancy.experience ?? "");
 
   const workFormatStr = (vacancy.workFormat ?? [])
@@ -201,91 +186,147 @@ export function calculateRuleScore(vacancy: NormalizedVacancy): RuleScoreResult 
   // Full corpus used for most checks
   const fullText = `${title} ${description} ${snippetText}`;
 
-  // ── POSITIVE RULES ────────────────────────────────────────
+  // ── 1. TARGET ROLE & KEYWORDS MATCH (+25) ───────────────────
+  const roleKeywords = [
+    ...(pref?.targetRoles ?? []),
+    ...(pref?.searchKeywordsEn ?? []),
+    ...(pref?.searchKeywordsRu ?? []),
+  ].filter(Boolean);
 
-  // +20: Title matches core frontend tech stack
-  if (matchesAny(title, FRONTEND_TITLE_KEYWORDS)) {
-    score += 20;
-    reasons.push("+20 Title matches frontend / React / Next.js / TypeScript");
+  const effectiveTitleKeywords = roleKeywords.length > 0 ? roleKeywords : DEFAULT_TITLE_KEYWORDS;
+  if (matchesAny(title, effectiveTitleKeywords)) {
+    score += 25;
+    reasons.push(`+25 Title matches target roles / keywords`);
   }
 
-  // +20: Remote work available (schedule ID, workFormat name, or description mention)
-  if (
+  // ── 2. REMOTE / WORK FORMAT FIT (+20) ───────────────────────
+  const userWantsRemote = !pref?.workFormat?.length || pref.workFormat.some((w) => w.toLowerCase().includes("remote"));
+  const isRemoteVacancy =
     schedule.includes("remote") ||
     matchesAny(workFormatStr, REMOTE_KEYWORDS) ||
-    matchesAny(description, REMOTE_KEYWORDS)
-  ) {
+    matchesAny(description, REMOTE_KEYWORDS);
+
+  if (isRemoteVacancy) {
     score += 20;
-    reasons.push("+20 Remote work format detected");
-  }
-
-  // +15: Junior / intern / no-experience position
-  // Checks both the HH experience ID and free-text in description
-  if (
-    JUNIOR_EXPERIENCE_IDS.some((id) =>
-      experience.toLowerCase().includes(id.toLowerCase())
-    ) ||
-    matchesAny(fullText, JUNIOR_TEXT_KEYWORDS)
-  ) {
+    reasons.push("+20 Remote work format supported");
+  } else if (!userWantsRemote && matchesAny(workFormatStr, ["office", "hybrid"])) {
     score += 15;
-    reasons.push("+15 Junior / intern / entry-level position");
+    reasons.push("+15 Work format matches candidate preference");
   }
 
-  // +15: Mentions preferred tools aligned with Nanda's skill set
-  if (matchesAny(fullText, TOOLS_KEYWORDS)) {
+  // ── 3. CANDIDATE SKILLS OVERLAP (+15) ────────────────────────
+  const customSkills = [
+    ...(pref?.requiredSkills ?? []),
+    ...(pref?.niceToHaveSkills ?? []),
+  ].filter(Boolean);
+
+  if (customSkills.length > 0) {
+    const matchedSkills = customSkills.filter((s) => matchesAny(fullText, [s]));
+    if (matchedSkills.length > 0) {
+      score += 15;
+      reasons.push(`+15 Matches candidate skills (${matchedSkills.slice(0, 3).join(", ")})`);
+    }
+  } else {
+    // Generic fallback for fresh setup
+    if (matchesAny(fullText, ["javascript", "typescript", "react", "python", "sql", "api"])) {
+      score += 10;
+      reasons.push("+10 Mentions standard software engineering skills");
+    }
+  }
+
+  // ── 4. EXPERIENCE FIT (+15) ──────────────────────────────────
+  const isJuniorExperience =
+    JUNIOR_EXPERIENCE_IDS.some((id) => experience.toLowerCase().includes(id.toLowerCase())) ||
+    matchesAny(fullText, JUNIOR_TEXT_KEYWORDS);
+
+  if (pref?.experience?.length) {
+    const matchesExp = pref.experience.some((exp) => experience.toLowerCase().includes(exp.toLowerCase()));
+    if (matchesExp || isJuniorExperience) {
+      score += 15;
+      reasons.push("+15 Experience level matches candidate profile");
+    }
+  } else if (isJuniorExperience) {
     score += 15;
-    reasons.push("+15 Mentions preferred tools (Figma / UI-UX / WordPress / Chatbot / Elementor)");
+    reasons.push("+15 Entry / junior / adaptable experience level");
   }
 
-  // +10: Salary is provided (at least from or to)
-  if (vacancy.salary && (vacancy.salary.from || vacancy.salary.to)) {
+  // ── 5. SALARY FIT (+10) ──────────────────────────────────────
+  if (pref?.salaryMinimum && vacancy.salary?.from) {
+    if (vacancy.salary.from >= pref.salaryMinimum) {
+      score += 10;
+      reasons.push(`+10 Salary meets or exceeds threshold (${pref.salaryMinimum} ${pref.salaryCurrency || "RUR"})`);
+    }
+  } else if (vacancy.salary && (vacancy.salary.from || vacancy.salary.to)) {
     score += 10;
     reasons.push("+10 Salary is specified");
   }
 
-  // +10: English language explicitly mentioned
+  // ── 6. LANGUAGE PREFERENCE (+10) ─────────────────────────────
   if (
     description.includes("english") ||
     description.includes("английский") ||
     description.includes("английского")
   ) {
     score += 10;
-    reasons.push("+10 English language mentioned in description");
+    reasons.push("+10 English language explicitly supported in vacancy");
   }
 
-  // ── PENALTY RULES ─────────────────────────────────────────
+  // ── PENALTIES ────────────────────────────────────────────────
 
   // -30: Senior / lead / 5+ years required
   if (matchesAny(fullText, SENIOR_KEYWORDS)) {
-    score -= 30;
-    penalties.push("-30 Requires senior level or 5+ years of experience");
+    // Only penalize if candidate didn't specify senior experience
+    const candidateIsSenior = pref?.experience?.some((e) => e.includes("6+") || e.includes("3-6"));
+    if (!candidateIsSenior) {
+      score -= 30;
+      penalties.push("-30 Requires senior / lead or 5+ years of experience");
+    }
   }
 
   // -40: Russian citizenship explicitly required
   if (matchesAny(fullText, CITIZENSHIP_KEYWORDS)) {
     score -= 40;
-    penalties.push("-40 Requires Russian citizenship — Nanda is not eligible");
+    penalties.push("-40 Requires Russian citizenship (candidate constraint)");
   }
 
   // -35: Russian language at C1 / C2 level mandatory
   if (matchesAny(fullText, RUSSIAN_MANDATORY_KEYWORDS)) {
     score -= 35;
-    penalties.push("-35 Requires Russian C1/C2 language level — Nanda has basic Russian only");
+    penalties.push("-35 Requires Russian C1/C2 near-native language level");
   }
 
-  // -50: Scam/fraud signals (unpaid, payment from applicant, OTP, passport)
+  // -50: Scam/fraud signals
   if (matchesAny(fullText, SCAM_KEYWORDS)) {
     score -= 50;
-    penalties.push("-50 Scam / fraud indicators detected (unpaid / payment / OTP / passport)");
+    penalties.push("-50 Suspicious signals detected (unpaid / payment / OTP / passport scan)");
   }
 
-  // -25: Office-only in Moscow without any relocation / hybrid option mentioned
+  // User excluded keywords
+  if (pref?.excludeKeywords?.length) {
+    const matchedExcludes = pref.excludeKeywords.filter((k) => matchesAny(fullText, [k]));
+    if (matchedExcludes.length > 0) {
+      score -= 30;
+      penalties.push(`-30 Matches user excluded keywords (${matchedExcludes.join(", ")})`);
+    }
+  }
+
+  // User red flag keywords
+  if (pref?.redFlagKeywords?.length) {
+    const matchedRed = pref.redFlagKeywords.filter((k) => matchesAny(fullText, [k]));
+    if (matchedRed.length > 0) {
+      score -= 50;
+      penalties.push(`-50 Matches user red flag keywords (${matchedRed.join(", ")})`);
+    }
+  }
+
+  // -25: Office-only without any relocation / hybrid option mentioned
   if (
+    userWantsRemote &&
     matchesAny(fullText, OFFICE_ONLY_KEYWORDS) &&
     !matchesAny(fullText, RELOCATION_KEYWORDS)
   ) {
     score -= 25;
-    penalties.push("-25 Office-only position without relocation or hybrid option");
+    penalties.push("-25 Office-only position without relocation or remote option");
   }
 
   // Clamp to valid range [0, 100]

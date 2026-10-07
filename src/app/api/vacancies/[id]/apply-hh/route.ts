@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/db";
-import { requireUser } from "@/lib/auth-helpers";
+import { getApiUser } from "@/lib/auth-helpers";
 import { applyToVacancy } from "@/lib/hhPrivateClient";
 import { saveFeedback } from "@/lib/feedbackLearning";
+import { decrypt } from "@/lib/crypto";
 
 /**
  * POST /api/vacancies/[id]/apply-hh
@@ -15,7 +16,10 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const user = await requireUser();
+    const user = await getApiUser();
+    if (!user) {
+      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
     const { id } = await params;
 
     // 1. Fetch the vacancy and its analysis (for the cover letter)
@@ -47,8 +51,9 @@ export async function POST(
     // 3. Make the API call to HH.ru
     const coverLetterText = vacancy.analysis.coverLetter;
     const hhVacancyId = vacancy.hhId;
+    const rawToken = decrypt(pref.hhToken);
     
-    await applyToVacancy(pref.hhToken, pref.hhResumeId, hhVacancyId, coverLetterText);
+    await applyToVacancy(rawToken, pref.hhResumeId, hhVacancyId, coverLetterText);
 
     // 4. Update local state using saveFeedback (treat as applied_hh)
     // We will map it to "applied_hh" to distinguish from "apply" (manual)

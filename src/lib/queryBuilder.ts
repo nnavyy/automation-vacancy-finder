@@ -84,9 +84,8 @@ export function buildHHParams(
     params.schedule = "remote";
   }
 
-  // Area 1 = Moscow; set as a base region for HH relevance ranking.
-  // Remote vacancies appear regardless of area, so this does not exclude them.
-  params.area = "1";
+  // Area filter: Use user-specified area or default to 113 (entire Russia)
+  params.area = (pref as any).area ? String((pref as any).area) : "113";
 
   // Pass salary and currency filters directly to HH API
   if (pref.salaryMinimum) {

@@ -217,8 +217,8 @@ async function fetchRSSPage(
     page,
   };
 
-  // Add area filter
-  params.area = 1; // Moscow (remote jobs appear regardless)
+  // Add area filter (defaults to nationwide 113)
+  params.area = (pref as any).area ? Number((pref as any).area) : 113;
 
   // Add schedule filter
   if (pref.workFormat && pref.workFormat.includes("remote")) {

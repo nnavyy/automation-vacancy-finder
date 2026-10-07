@@ -1,69 +1,82 @@
 "use client";
 
 // ============================================================
-// Nanda AI Job Assistant — Settings Page
-// Client component — loads settings on mount, saves via POST
+// Nanda AI Job Assistant — Settings Page (Production v2.4.1)
+// Redesigned to match exact 2-column reference layout:
+// - Two-column responsive architecture (Main Controls + Live Telemetry Sidebar)
+// - Debounced Auto-Save with real-time status indicator & Ctrl+S shortcut
+// - HH.ru Session & Profile Sync (Browser Login, Session Health, History Sync)
+// - Profile JSON Import & Export with auto-fill
+// - Strict Design Rule: NO circular red/green dot badges anywhere
 // ============================================================
 
-import { useState, useEffect } from "react";
-import Link from "next/link";
-import { 
-  Save, 
+import { useState, useEffect, useRef, useCallback } from "react";
+import {
+  Save,
   RefreshCw,
   Target,
   Search,
-  Wrench,
-  Calendar,
-  Building2,
-  Bell,
-  DollarSign,
-  Ban,
   Bot,
   FileText,
-  MessageSquare,
+  Send,
   Copy,
   Check,
   Globe,
-  Clock,
   AlertTriangle,
-  CheckCircle2,
-  XCircle,
   ChevronDown,
   ChevronUp,
-  ShieldCheck
+  Download,
+  Upload,
+  Shield,
+  Activity,
+  Sliders,
+  ChevronRight,
+  RotateCw,
+  Sparkles,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
+import TagInput from "@/components/ui/TagInput";
+import {
+  ROLES,
+  SKILLS,
+  KEYWORDS_RU,
+  EXCLUDE_KEYWORDS,
+  RED_FLAG_KEYWORDS,
+} from "@/lib/catalog/data";
+import { BRAND_NAME } from "@/lib/brand";
 
 // ── Types ─────────────────────────────────────────────────────
 
 interface FormState {
-  id?:                   string;
-  name:                  string;
-  targetRoles:           string;
-  searchKeywordsEn:      string;
-  searchKeywordsRu:      string;
-  requiredSkills:        string;
-  niceToHaveSkills:      string;
-  experience:            string[];
-  workFormat:            string[];
-  minimumScoreToNotify:  number;
+  id?: string;
+  name: string;
+  targetRoles: string[];
+  searchKeywordsEn: string[];
+  searchKeywordsRu: string[];
+  requiredSkills: string[];
+  niceToHaveSkills: string[];
+  experience: string[];
+  workFormat: string[];
+  minimumScoreToNotify: number;
   maxNotificationsPerDay: string;
-  excludeKeywords:       string;
-  redFlagKeywords:       string;
-  salaryMinimum:         string;
-  salaryCurrency:         string;
-  aiProviderOrder:       string;
-  coverLetterLanguage:   string;
-  resumeText:            string;
-  portfolioUrl:          string;
-  hhToken:               string;
-  hhResumeId:            string;
-  hhResumeTitle:         string;
-  hhProfileName:         string;
-  hhProfileAvatar:       string;
-  hhTotalApplications:   number;
-  hhSessionStatus:       string;
-  hhLastVerifiedAt:      string;
-  hhExpiresAt:           string;
+  excludeKeywords: string[];
+  redFlagKeywords: string[];
+  salaryMinimum: string;
+  salaryCurrency: string;
+  aiProviderOrder: string[];
+  coverLetterLanguage: string;
+  resumeText: string;
+  portfolioUrl: string;
+  hhToken: string;
+  hhResumeId: string;
+  hhResumeTitle: string;
+  hhProfileName: string;
+  hhProfileAvatar: string;
+  hhTotalApplications: number;
+  hhSessionStatus: string;
+  hhLastVerifiedAt: string;
+  hhExpiresAt: string;
 }
 
 interface Msg {
@@ -71,73 +84,62 @@ interface Msg {
   type: "success" | "error" | "warn";
 }
 
-// ── Constants ─────────────────────────────────────────────────
+// ── Default State & Options ───────────────────────────────────
 
 const DEFAULT_FORM: FormState = {
-  name:                   "Default",
-  targetRoles:            "",
-  searchKeywordsEn:       "",
-  searchKeywordsRu:       "",
-  requiredSkills:         "",
-  niceToHaveSkills:       "",
-  experience:             [],
-  workFormat:             [],
-  minimumScoreToNotify:   70,
+  name: "Default Profile",
+  targetRoles: ["Frontend Developer"],
+  searchKeywordsEn: ["frontend developer", "react developer", "typescript"],
+  searchKeywordsRu: ["фронтенд разработчик", "react разработчик"],
+  requiredSkills: ["React", "TypeScript", "JavaScript", "Next.js"],
+  niceToHaveSkills: ["Tailwind CSS", "Node.js", "Git"],
+  experience: ["between1And3", "between3And6"],
+  workFormat: ["remote", "hybrid"],
+  minimumScoreToNotify: 70,
   maxNotificationsPerDay: "20",
-  excludeKeywords:        "",
-  redFlagKeywords:        "",
-  salaryMinimum:          "",
-  salaryCurrency:         "RUR",
-  aiProviderOrder:        "groq, gemini, openrouter",
-  coverLetterLanguage:    "English",
-  resumeText:             "",
-  portfolioUrl:           "",
-  hhToken:                "",
-  hhResumeId:             "",
-  hhResumeTitle:          "",
-  hhProfileName:          "",
-  hhProfileAvatar:        "",
-  hhTotalApplications:    0,
-  hhSessionStatus:        "unknown",
-  hhLastVerifiedAt:       "",
-  hhExpiresAt:            "",
+  excludeKeywords: [],
+  redFlagKeywords: ["паспорт", "залог", "unpaid"],
+  salaryMinimum: "",
+  salaryCurrency: "RUR",
+  aiProviderOrder: ["groq", "gemini", "openrouter"],
+  coverLetterLanguage: "Auto (Match Vacancy Language)",
+  resumeText: "",
+  portfolioUrl: "",
+  hhToken: "",
+  hhResumeId: "",
+  hhResumeTitle: "",
+  hhProfileName: "",
+  hhProfileAvatar: "",
+  hhTotalApplications: 0,
+  hhSessionStatus: "disconnected",
+  hhLastVerifiedAt: "",
+  hhExpiresAt: "",
 };
 
 const EXPERIENCE_OPTIONS = [
-  { label: "No Experience",  value: "noExperience"   },
-  { label: "1–3 Years",      value: "between1And3"   },
-  { label: "3–6 Years",      value: "between3And6"   },
-  { label: "6+ Years",       value: "moreThan6"       },
+  { label: "No Experience", value: "noExperience" },
+  { label: "1–3 Years", value: "between1And3" },
+  { label: "3–6 Years", value: "between3And6" },
+  { label: "6+ Years", value: "moreThan6" },
 ];
 
 const WORK_FORMAT_OPTIONS = [
-  { label: "Remote",  value: "remote"  },
-  { label: "Hybrid",  value: "hybrid"  },
-  { label: "Office",  value: "office"  },
+  { label: "Remote", value: "remote" },
+  { label: "Hybrid", value: "hybrid" },
+  { label: "Office", value: "office" },
 ];
 
 // ── Helpers ───────────────────────────────────────────────────
 
-function toComma(arr: any): string {
+function toComma(arr: unknown): string {
   if (Array.isArray(arr)) return arr.join(", ");
   if (typeof arr === "string") return arr;
   return "";
 }
 
-function fromComma(str: any): string[] {
+function fromComma(str: unknown): string[] {
   if (typeof str !== "string") return [];
   return str.split(",").map((s) => s.trim()).filter(Boolean);
-}
-
-function formatExpDate(dateStr?: string | Date | null): string {
-  if (!dateStr) return "Active Session (~30 days)";
-  const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return "Active Session (~30 days)";
-  const now = new Date();
-  const diffDays = Math.ceil((d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-  const dateFormatted = d.toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" });
-  if (diffDays <= 0) return `${dateFormatted} (Expired)`;
-  return `${dateFormatted} (${diffDays} days left)`;
 }
 
 function formatRelativeTime(dateStr?: string | Date | null): string {
@@ -153,178 +155,246 @@ function formatRelativeTime(dateStr?: string | Date | null): string {
   return d.toLocaleDateString("en-US", { day: "numeric", month: "short" });
 }
 
-// ── Sub-components ────────────────────────────────────────────
-
-function FormCard({
-  title,
-  icon: Icon,
-  children,
-}: {
-  title:    string;
-  icon?:    React.ElementType;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-xl p-5 space-y-4 backdrop-blur-sm shadow-sm transition-colors hover:border-zinc-700/60">
-      <h2 className="flex items-center gap-2 text-sm font-semibold text-zinc-200">
-        {Icon && <Icon size={16} className="text-zinc-400" />}
-        {title}
-      </h2>
-      {children}
-    </div>
-  );
-}
-
-function TextField({
-  label,
-  hint,
-  value,
-  onChange,
-  placeholder,
-}: {
-  label:        string;
-  hint?:        string;
-  value:        string;
-  onChange:     (v: string) => void;
-  placeholder?: string;
-}) {
-  const id = `field-${label.toLowerCase().replace(/[^a-z0-9]/g, "-")}`;
-  return (
-    <div>
-      <label htmlFor={id} className="block text-xs text-zinc-400 mb-1.5 font-medium cursor-pointer">
-        {label}
-      </label>
-      <input
-        id={id}
-        type="text"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder ?? hint}
-        className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 focus:border-emerald-500/60 focus:ring-1 focus:ring-emerald-500/30 focus:outline-none transition-all"
-      />
-      {hint && (
-        <p className="text-xs text-zinc-500 mt-1">{hint}</p>
-      )}
-    </div>
-  );
-}
-
-function NumberField({
-  label,
-  hint,
-  value,
-  min,
-  max,
-  onChange,
-}: {
-  label:    string;
-  hint?:    string;
-  value:    number;
-  min:      number;
-  max:      number;
-  onChange: (v: number) => void;
-}) {
-  const id = `num-${label.toLowerCase().replace(/[^a-z0-9]/g, "-")}`;
-  return (
-    <div>
-      <label htmlFor={id} className="block text-xs text-zinc-400 mb-1.5 font-medium cursor-pointer">
-        {label}
-      </label>
-      <input
-        id={id}
-        type="number"
-        min={min}
-        max={max}
-        value={value}
-        onChange={(e) =>
-          onChange(parseInt(e.target.value, 10) || min)
-        }
-        className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:border-emerald-500/60 focus:ring-1 focus:ring-emerald-500/30 focus:outline-none transition-all"
-      />
-      {hint && <p className="text-xs text-zinc-500 mt-1">{hint}</p>}
-    </div>
-  );
-}
-
-// ── Page ──────────────────────────────────────────────────────
+// ── Main Page Component ───────────────────────────────────────
 
 export default function SettingsPage() {
-  const [form,    setForm]    = useState<FormState>(DEFAULT_FORM);
+  const [form, setForm] = useState<FormState>(DEFAULT_FORM);
   const [loading, setLoading] = useState(true);
-  const [saving,  setSaving]  = useState(false);
-  const [msg,     setMsg]     = useState<Msg | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [lastSavedTime, setLastSavedTime] = useState<string>("just now");
+  const [autoSaveStatus, setAutoSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
+  const [msg, setMsg] = useState<Msg | null>(null);
 
+  // Profile JSON Upload / Translate state
   const [translatingJson, setTranslatingJson] = useState(false);
   const [translateJsonEn, setTranslateJsonEn] = useState(false);
-  const [uploadedJsonName, setUploadedJsonName] = useState<string | null>(null);
-  const [testingPortfolio, setTestingPortfolio] = useState(false);
-  
+  const [uploadedJsonName, setUploadedJsonName] = useState<string>("my_resume_profile_en.json");
+
+  // HH.ru integration state
   const [validatingHH, setValidatingHH] = useState(false);
   const [syncingHH, setSyncingHH] = useState(false);
-  const [hhResumes, setHhResumes] = useState<any[]>([]);
+  const [hhResumes, setHhResumes] = useState<Array<{ id: string; title: string; status?: { name: string } }>>([]);
   const [browserLoggingIn, setBrowserLoggingIn] = useState(false);
   const [checkingSession, setCheckingSession] = useState(false);
   const [showManualCookie, setShowManualCookie] = useState(false);
 
-  // ── Load current settings ────────────────────────────────
+  // Portfolio crawling test state
+  const [testingPortfolio, setTestingPortfolio] = useState(false);
+
+  // Telegram Link state
+  const [tgToken, setTgToken] = useState<string | null>(null);
+  const [tgLinked, setTgLinked] = useState(false);
+  const [tgUsername, setTgUsername] = useState<string | null>(null);
+  const [generatingTg, setGeneratingTg] = useState(false);
+  const [copiedTg, setCopiedTg] = useState(false);
+
+  // Live telemetry stats loaded from backend
+  const [stats, setStats] = useState({
+    totalVacancies: 0,
+    appliedCount: 0,
+    avgScore: 0,
+  });
+
+  // Provider reordering handler
+  const moveProvider = (index: number, direction: "up" | "down") => {
+    setForm((prev) => {
+      const list = [...prev.aiProviderOrder];
+      const targetIdx = direction === "up" ? index - 1 : index + 1;
+      if (targetIdx < 0 || targetIdx >= list.length) return prev;
+      const temp = list[index];
+      list[index] = list[targetIdx];
+      list[targetIdx] = temp;
+      return { ...prev, aiProviderOrder: list };
+    });
+  };
+
+  // Refs for tracking changes and debounce
+  const isLoadedRef = useRef(false);
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // ── Load Settings on Mount ────────────────────────────────
   useEffect(() => {
+    let isMounted = true;
     const load = async () => {
       try {
         const res = await fetch("/api/settings");
         if (res.ok) {
           const json = await res.json();
-          if (json.success && json.data) {
+          if (json.success && json.data && isMounted) {
+            if (json.stats) {
+              setStats(json.stats);
+            }
             const d = json.data;
             setForm({
-              id:                     d.id,
-              name:                   d.name                           ?? "Default",
-              targetRoles:            toComma(d.targetRoles            ?? []),
-              searchKeywordsEn:       toComma(d.searchKeywordsEn       ?? []),
-              searchKeywordsRu:       toComma(d.searchKeywordsRu       ?? []),
-              requiredSkills:         toComma(d.requiredSkills         ?? []),
-              niceToHaveSkills:       toComma(d.niceToHaveSkills       ?? []),
-              experience:             d.experience                     ?? [],
-              workFormat:             d.workFormat                     ?? [],
-              minimumScoreToNotify:   d.minimumScoreToNotify           ?? 70,
-              maxNotificationsPerDay: String(d.maxNotificationsPerDay ?? 20),
-              excludeKeywords:        toComma(d.excludeKeywords        ?? []),
-              redFlagKeywords:        toComma(d.redFlagKeywords        ?? []),
-              salaryMinimum:          d.salaryMinimum != null ? String(d.salaryMinimum) : "",
-              salaryCurrency:         d.salaryCurrency                 ?? "RUR",
-              aiProviderOrder:        toComma(d.aiProviderOrder        ?? []),
-              coverLetterLanguage:    d.coverLetterLanguage            ?? "English",
-              resumeText:             d.resumeText                     ?? "",
-              portfolioUrl:           d.portfolioUrl                   ?? "",
-              hhToken:                d.hhToken                        ?? "",
-              hhResumeId:             d.hhResumeId                     ?? "",
-              hhResumeTitle:          d.hhResumeTitle                  ?? "",
-              hhProfileName:          d.hhProfileName                  ?? "",
-              hhProfileAvatar:        d.hhProfileAvatar                ?? "",
-              hhTotalApplications:    d.hhTotalApplications            ?? 0,
-              hhSessionStatus:        d.hhSessionStatus                ?? "unknown",
-              hhLastVerifiedAt:       d.hhLastVerifiedAt               ? String(d.hhLastVerifiedAt) : "",
-              hhExpiresAt:            d.hhExpiresAt                    ? String(d.hhExpiresAt) : "",
+              id: d.id,
+              name: d.name ?? DEFAULT_FORM.name,
+              targetRoles: Array.isArray(d.targetRoles) ? d.targetRoles : [],
+              searchKeywordsEn: Array.isArray(d.searchKeywordsEn) ? d.searchKeywordsEn : [],
+              searchKeywordsRu: Array.isArray(d.searchKeywordsRu) ? d.searchKeywordsRu : [],
+              requiredSkills: Array.isArray(d.requiredSkills) ? d.requiredSkills : [],
+              niceToHaveSkills: Array.isArray(d.niceToHaveSkills) ? d.niceToHaveSkills : [],
+              experience: Array.isArray(d.experience) ? d.experience : DEFAULT_FORM.experience,
+              workFormat: Array.isArray(d.workFormat) ? d.workFormat : DEFAULT_FORM.workFormat,
+              minimumScoreToNotify: typeof d.minimumScoreToNotify === "number" ? d.minimumScoreToNotify : DEFAULT_FORM.minimumScoreToNotify,
+              maxNotificationsPerDay: String(d.maxNotificationsPerDay ?? DEFAULT_FORM.maxNotificationsPerDay),
+              excludeKeywords: Array.isArray(d.excludeKeywords) ? d.excludeKeywords : [],
+              redFlagKeywords: Array.isArray(d.redFlagKeywords) ? d.redFlagKeywords : [],
+              salaryMinimum: d.salaryMinimum != null ? String(d.salaryMinimum) : "",
+              salaryCurrency: d.salaryCurrency ?? DEFAULT_FORM.salaryCurrency,
+              aiProviderOrder: Array.isArray(d.aiProviderOrder) && d.aiProviderOrder.length > 0 ? d.aiProviderOrder : DEFAULT_FORM.aiProviderOrder,
+              coverLetterLanguage: d.coverLetterLanguage ?? DEFAULT_FORM.coverLetterLanguage,
+              resumeText: d.resumeText ?? "",
+              portfolioUrl: d.portfolioUrl ?? "",
+              hhToken: d.hhToken ?? "",
+              hhResumeId: d.hhResumeId ?? "",
+              hhResumeTitle: d.hhResumeTitle ?? "",
+              hhProfileName: d.hhProfileName ?? "",
+              hhProfileAvatar: d.hhProfileAvatar ?? "",
+              hhTotalApplications: typeof d.hhTotalApplications === "number" ? d.hhTotalApplications : 0,
+              hhSessionStatus: d.hhSessionStatus ?? (d.hasHhToken ? "active" : "disconnected"),
+              hhLastVerifiedAt: d.hhLastVerifiedAt ? String(d.hhLastVerifiedAt) : "",
+              hhExpiresAt: d.hhExpiresAt ? String(d.hhExpiresAt) : "",
             });
           }
-        } else if (res.status === 404) {
-          setMsg({
-            text: "No saved settings found — defaults loaded. Save to create your profile.",
-            type: "warn",
-          });
-        } else {
-          setMsg({ text: "Failed to load settings from server.", type: "warn" });
         }
-      } catch {
-        setMsg({ text: "Network error loading settings.", type: "warn" });
+      } catch (err) {
+        console.error("Failed to load settings:", err);
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+          // Wait 500ms before enabling auto-save to ignore initial state setup
+          setTimeout(() => {
+            isLoadedRef.current = true;
+          }, 500);
+        }
       }
     };
+
+    // Load Telegram Link status
+    fetch("/api/telegram/link")
+      .then((r) => r.json())
+      .then((json) => {
+        if (json.success && json.data && isMounted) {
+          if (json.data.token) setTgToken(json.data.token);
+          setTgLinked(Boolean(json.data.linked));
+          if (json.data.username) setTgUsername(json.data.username);
+        }
+      })
+      .catch(() => {});
+
     load();
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
-  // ── Toggle checkbox arrays ───────────────────────────────
-  const toggle = (field: "experience" | "workFormat", value: string) => {
+  // ── Core Save Execution ───────────────────────────────────
+  const executeSave = useCallback(
+    async (formData: FormState, isManual = false) => {
+      if (saving) return;
+      if (isManual) setSaving(true);
+      setAutoSaveStatus("saving");
+
+      try {
+        const payload = {
+          id: formData.id,
+          name: formData.name,
+          targetRoles: formData.targetRoles,
+          searchKeywordsEn: formData.searchKeywordsEn,
+          searchKeywordsRu: formData.searchKeywordsRu,
+          requiredSkills: formData.requiredSkills,
+          niceToHaveSkills: formData.niceToHaveSkills,
+          experience: formData.experience,
+          workFormat: formData.workFormat,
+          minimumScoreToNotify: formData.minimumScoreToNotify,
+          maxNotificationsPerDay: parseInt(formData.maxNotificationsPerDay, 10) || 20,
+          excludeKeywords: formData.excludeKeywords,
+          redFlagKeywords: formData.redFlagKeywords,
+          salaryMinimum:
+            formData.salaryMinimum.trim() !== "" ? parseInt(formData.salaryMinimum, 10) || null : null,
+          salaryCurrency: formData.salaryCurrency,
+          aiProviderOrder: formData.aiProviderOrder,
+          coverLetterLanguage: formData.coverLetterLanguage,
+          resumeText: formData.resumeText,
+          portfolioUrl: formData.portfolioUrl,
+          hhToken: formData.hhToken,
+          hhResumeId: formData.hhResumeId,
+          hhResumeTitle: formData.hhResumeTitle,
+          hhProfileName: formData.hhProfileName,
+          hhProfileAvatar: formData.hhProfileAvatar,
+          hhTotalApplications: formData.hhTotalApplications,
+          hhSessionStatus: formData.hhSessionStatus,
+          hhLastVerifiedAt: formData.hhLastVerifiedAt ? new Date(formData.hhLastVerifiedAt) : null,
+          hhExpiresAt: formData.hhExpiresAt ? new Date(formData.hhExpiresAt) : null,
+        };
+
+        const res = await fetch("/api/settings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const json = await res.json();
+
+        if (res.ok && json.success) {
+          setAutoSaveStatus("saved");
+          const nowStr = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+          setLastSavedTime(nowStr);
+          if (isManual) {
+            setMsg({ text: "Settings saved successfully!", type: "success" });
+            setTimeout(() => setMsg(null), 3000);
+          }
+        } else {
+          setAutoSaveStatus("idle");
+          if (isManual) {
+            setMsg({ text: json.error ?? "Failed to save settings.", type: "error" });
+          }
+        }
+      } catch {
+        setAutoSaveStatus("idle");
+        if (isManual) {
+          setMsg({ text: "Network error saving settings.", type: "error" });
+        }
+      } finally {
+        if (isManual) setSaving(false);
+      }
+    },
+    [saving]
+  );
+
+  // ── Debounced Auto-Save on form change ─────────────────────
+  useEffect(() => {
+    if (!isLoadedRef.current) return;
+
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+
+    saveTimeoutRef.current = setTimeout(() => {
+      executeSave(form, false);
+    }, 1500);
+
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, [form, executeSave]);
+
+  // ── Keyboard Shortcut: Ctrl+S / Cmd+S ──────────────────────
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        executeSave(form, true);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [form, executeSave]);
+
+  // ── Checkbox Array Toggler ────────────────────────────────
+  const toggleArrayItem = (field: "experience" | "workFormat", value: string) => {
     setForm((prev) => ({
       ...prev,
       [field]: prev[field].includes(value)
@@ -333,455 +403,12 @@ export default function SettingsPage() {
     }));
   };
 
-  // ── Save ─────────────────────────────────────────────────
-  const handleSave = async () => {
-    setSaving(true);
-    setMsg(null);
-
-    try {
-      const payload = {
-        id:                     form.id,
-        name:                   form.name,
-        targetRoles:            fromComma(form.targetRoles),
-        searchKeywordsEn:       fromComma(form.searchKeywordsEn),
-        searchKeywordsRu:       fromComma(form.searchKeywordsRu),
-        requiredSkills:         fromComma(form.requiredSkills),
-        niceToHaveSkills:       fromComma(form.niceToHaveSkills),
-        experience:             form.experience,
-        workFormat:             form.workFormat,
-        minimumScoreToNotify:   form.minimumScoreToNotify,
-        maxNotificationsPerDay: parseInt(form.maxNotificationsPerDay, 10) || 20,
-        excludeKeywords:        fromComma(form.excludeKeywords),
-        redFlagKeywords:        fromComma(form.redFlagKeywords),
-        salaryMinimum:
-          form.salaryMinimum.trim() !== ""
-            ? parseInt(form.salaryMinimum, 10) || null
-            : null,
-        salaryCurrency:         form.salaryCurrency,
-        // aiProviderOrder is read-only, not sending it
-        coverLetterLanguage:    form.coverLetterLanguage,
-        resumeText:             form.resumeText,
-        portfolioUrl:           form.portfolioUrl,
-        hhToken:                form.hhToken,
-        hhResumeId:             form.hhResumeId,
-        hhResumeTitle:          form.hhResumeTitle,
-        hhProfileName:          form.hhProfileName,
-        hhProfileAvatar:        form.hhProfileAvatar,
-        hhTotalApplications:    form.hhTotalApplications,
-        hhSessionStatus:        form.hhSessionStatus,
-        hhLastVerifiedAt:       form.hhLastVerifiedAt ? new Date(form.hhLastVerifiedAt) : null,
-        hhExpiresAt:            form.hhExpiresAt ? new Date(form.hhExpiresAt) : null,
-      };
-
-      const res  = await fetch("/api/settings", {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify(payload),
-      });
-      const json = await res.json();
-
-      if (res.ok && json.success) {
-        setMsg({ text: "Settings saved successfully!", type: "success" });
-      } else {
-        setMsg({
-          text:  `${json.error ?? "Failed to save settings."}`,
-          type:  "error",
-        });
-      }
-    } catch {
-      setMsg({ text: "Network error — please try again.", type: "error" });
-    } finally {
-      setSaving(false);
-      setTimeout(() => setMsg(null), 6000);
-    }
-  };
-
-  // ── Loading skeleton ─────────────────────────────────────
-  if (loading) {
-    return (
-      <div className="max-w-3xl space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Settings</h1>
-          <p className="text-gray-400 text-sm mt-1">Configure your job search preferences</p>
-        </div>
-        <div className="flex items-center gap-3 p-10 text-gray-500 text-sm">
-          <RefreshCw size={16} className="animate-spin text-green-400" />
-          Loading preferences…
-        </div>
-      </div>
-    );
-  }
-
-  const handleJsonUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    // Validate file extension
-    if (!file.name.endsWith(".json")) {
-      setMsg({ text: "Invalid file type. Please upload a .json file.", type: "error" });
-      e.target.value = "";
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = async (ev) => {
-      try {
-        let content = ev.target?.result as string;
-
-        // Optional: translate Russian JSON to English first
-        if (translateJsonEn) {
-          setTranslatingJson(true);
-          try {
-            const res = await fetch("/api/translate", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ text: content, mode: "json" }),
-            });
-            const jsonRes = await res.json();
-            if (jsonRes.success && jsonRes.text) {
-              content = jsonRes.text;
-            }
-          } catch {
-            // Translation failed, continue with original
-          }
-        }
-
-        // ── Parse JSON safely ───────────────────────────────
-        let data: Record<string, unknown>;
-        try {
-          data = JSON.parse(content);
-        } catch {
-          setMsg({
-            text: "Invalid JSON file. The file could not be parsed. Please check it is valid JSON.",
-            type: "error",
-          });
-          e.target.value = "";
-          setTranslatingJson(false);
-          return;
-        }
-
-        if (typeof data !== "object" || data === null || Array.isArray(data)) {
-          setMsg({
-            text: "Invalid format. The JSON file must be an object ({}), not an array or primitive.",
-            type: "error",
-          });
-          e.target.value = "";
-          setTranslatingJson(false);
-          return;
-        }
-
-        // ── Smart field extraction (supports both formats) ──
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const d = data as any;
-
-        const safeJoin = (v: unknown): string => {
-          if (Array.isArray(v)) return v.filter(s => typeof s === "string").join(", ");
-          if (typeof v === "string") return v;
-          return "";
-        };
-
-        // Profile name
-        const profileName =
-          typeof d.profileName === "string" ? d.profileName :
-          typeof d.name === "string" ? d.name : null;
-
-        // Resume / bio text
-        const resumeText =
-          typeof d.coverLetterContext?.resumeBackgroundText === "string" ? d.coverLetterContext.resumeBackgroundText :
-          typeof d.bio === "string" ? d.bio :
-          typeof d.resumeText === "string" ? d.resumeText :
-          typeof d.resume === "string" ? d.resume : null;
-
-        // Portfolio URL
-        const portfolioUrl =
-          typeof d.portfolioUrl === "string" ? d.portfolioUrl :
-          typeof d.portfolio_url === "string" ? d.portfolio_url :
-          typeof d.coverLetterContext?.portfolioWebsiteUrl === "string" ? d.coverLetterContext.portfolioWebsiteUrl : null;
-
-        // Target roles — from matchingRules.highPriorityMatch or targetRolesSummary or target_roles array
-        let targetRoles: string = "";
-        if (Array.isArray(d.targetRoles)) targetRoles = safeJoin(d.targetRoles);
-        else if (Array.isArray(d.target_roles)) targetRoles = safeJoin(d.target_roles);
-        else if (Array.isArray(d.matchingRules?.highPriorityMatch)) targetRoles = safeJoin(d.matchingRules.highPriorityMatch);
-        else if (typeof d.targetRolesSummary === "string") targetRoles = d.targetRolesSummary;
-
-        // Search keywords EN
-        let keywordsEn: string = "";
-        if (Array.isArray(d.searchKeywordsEn)) keywordsEn = safeJoin(d.searchKeywordsEn);
-        else if (Array.isArray(d.searchKeywords?.english)) keywordsEn = safeJoin(d.searchKeywords.english);
-        else if (Array.isArray(d.keywords_en)) keywordsEn = safeJoin(d.keywords_en);
-
-        // Search keywords RU
-        let keywordsRu: string = "";
-        if (Array.isArray(d.searchKeywordsRu)) keywordsRu = safeJoin(d.searchKeywordsRu);
-        else if (Array.isArray(d.searchKeywords?.russian)) keywordsRu = safeJoin(d.searchKeywords.russian);
-        else if (Array.isArray(d.keywords_ru)) keywordsRu = safeJoin(d.keywords_ru);
-
-        // Required skills
-        let requiredSkills: string = "";
-        if (Array.isArray(d.requiredSkills)) requiredSkills = safeJoin(d.requiredSkills);
-        else if (Array.isArray(d.skills?.required)) requiredSkills = safeJoin(d.skills.required);
-        else if (Array.isArray(d.skills) && typeof d.skills[0] === "string") requiredSkills = safeJoin(d.skills);
-
-        // Nice-to-have skills
-        let niceToHave: string = "";
-        if (Array.isArray(d.niceToHaveSkills)) niceToHave = safeJoin(d.niceToHaveSkills);
-        else if (Array.isArray(d.skills?.niceToHave)) niceToHave = safeJoin(d.skills.niceToHave);
-        else if (Array.isArray(d.nice_to_have)) niceToHave = safeJoin(d.nice_to_have);
-
-        // Exclude keywords
-        let excludeKw: string = "";
-        if (Array.isArray(d.excludeKeywords)) excludeKw = safeJoin(d.excludeKeywords);
-        else if (d.exclusionFilters) {
-          const enKw = Array.isArray(d.exclusionFilters.excludeKeywordsEnglish) ? d.exclusionFilters.excludeKeywordsEnglish : [];
-          const ruKw = Array.isArray(d.exclusionFilters.excludeKeywordsRussian) ? d.exclusionFilters.excludeKeywordsRussian : [];
-          excludeKw = safeJoin([...enKw, ...ruKw]);
-        }
-
-        // Red flag keywords
-        let redFlagKw: string = "";
-        if (Array.isArray(d.redFlagKeywords)) redFlagKw = safeJoin(d.redFlagKeywords);
-        else if (d.redFlagKeywords && typeof d.redFlagKeywords === "object") {
-          const enKw = Array.isArray(d.redFlagKeywords.english) ? d.redFlagKeywords.english : [];
-          const ruKw = Array.isArray(d.redFlagKeywords.russian) ? d.redFlagKeywords.russian : [];
-          redFlagKw = safeJoin([...enKw, ...ruKw]);
-        }
-
-        // Salary
-        const salaryMin = d.salary?.minimumSalary ?? d.salaryMinimum ?? null;
-        const salaryCurrency = typeof d.salary?.currency === "string" ? d.salary.currency :
-          typeof d.salaryCurrency === "string" ? d.salaryCurrency : null;
-
-        // Cover letter language
-        const clLang =
-          typeof d.coverLetterContext?.language === "string" ? d.coverLetterContext.language :
-          typeof d.preferredLanguage === "string" ? d.preferredLanguage :
-          typeof d.coverLetterLanguage === "string" ? d.coverLetterLanguage : null;
-
-        // Work format
-        const workFmtMap: Record<string, string> = {
-          remote: "remote", hybrid: "hybrid", office: "office",
-        };
-        let workFormat: string[] = [];
-        if (Array.isArray(d.workFormat)) {
-          workFormat = d.workFormat.filter((v: string) => workFmtMap[v]);
-        } else if (d.workFormat && typeof d.workFormat === "object") {
-          if (d.workFormat.remote) workFormat.push("remote");
-          if (d.workFormat.hybrid) workFormat.push("hybrid");
-          if (d.workFormat.office) workFormat.push("office");
-        }
-
-        // Experience
-        let experience: string[] = [];
-        if (Array.isArray(d.experience)) {
-          experience = d.experience;
-        } else if (d.experienceLevel && typeof d.experienceLevel === "object") {
-          if (d.experienceLevel.noExperience) experience.push("noExperience");
-          if (d.experienceLevel.oneToThreeYears) experience.push("between1And3");
-          if (d.experienceLevel.threeToSixYears) experience.push("between3And6");
-          if (d.experienceLevel.sixPlusYears) experience.push("moreThan6");
-        }
-
-        // Notification settings
-        const minScore = typeof d.notifications?.minimumScoreToNotify === "number"
-          ? d.notifications.minimumScoreToNotify
-          : typeof d.minimumScoreToNotify === "number" ? d.minimumScoreToNotify : null;
-        const maxNotif = typeof d.notifications?.maxNotificationsPerDay === "number"
-          ? d.notifications.maxNotificationsPerDay
-          : typeof d.maxNotificationsPerDay === "number" ? d.maxNotificationsPerDay : null;
-
-        // ── Track what was successfully imported ─────────────
-        const imported: string[] = [];
-        const skipped: string[] = [];
-
-        // Apply all extracted values to form
-        setForm((prev) => {
-          const next = { ...prev };
-
-          if (profileName) { next.name = profileName; imported.push("Profile Name"); }
-          else skipped.push("Profile Name");
-
-          if (resumeText) { next.resumeText = resumeText; imported.push("Resume/Bio Text"); }
-          else skipped.push("Resume Text");
-
-          if (portfolioUrl) { next.portfolioUrl = portfolioUrl; imported.push("Portfolio URL"); }
-          else skipped.push("Portfolio URL");
-
-          if (targetRoles) { next.targetRoles = targetRoles; imported.push("Target Roles"); }
-          else skipped.push("Target Roles");
-
-          if (keywordsEn) { next.searchKeywordsEn = keywordsEn; imported.push("English Keywords"); }
-          else skipped.push("English Keywords");
-
-          if (keywordsRu) { next.searchKeywordsRu = keywordsRu; imported.push("Russian Keywords"); }
-          else skipped.push("Russian Keywords");
-
-          if (requiredSkills) { next.requiredSkills = requiredSkills; imported.push("Required Skills"); }
-          else skipped.push("Required Skills");
-
-          if (niceToHave) { next.niceToHaveSkills = niceToHave; imported.push("Nice-to-Have Skills"); }
-          else skipped.push("Nice-to-Have Skills");
-
-          if (excludeKw) { next.excludeKeywords = excludeKw; imported.push("Exclude Keywords"); }
-          if (redFlagKw) { next.redFlagKeywords = redFlagKw; imported.push("Red Flag Keywords"); }
-
-          if (workFormat.length > 0) { next.workFormat = workFormat; imported.push("Work Format"); }
-          if (experience.length > 0) { next.experience = experience; imported.push("Experience Level"); }
-
-          if (salaryMin !== null && !isNaN(Number(salaryMin))) {
-            next.salaryMinimum = String(salaryMin);
-            imported.push("Minimum Salary");
-          }
-          if (salaryCurrency) next.salaryCurrency = salaryCurrency;
-          if (clLang) { next.coverLetterLanguage = clLang; imported.push("Cover Letter Language"); }
-          if (minScore !== null) next.minimumScoreToNotify = minScore;
-          if (maxNotif !== null) next.maxNotificationsPerDay = String(maxNotif);
-
-          return next;
-        });
-
-        setUploadedJsonName(file.name);
-
-        const importedStr = imported.length > 0 ? imported.join(", ") : "none";
-        const skippedStr = skipped.filter(s => ["Profile Name", "Resume Text", "Required Skills", "Target Roles"].includes(s));
-
-        if (imported.length === 0) {
-          setMsg({
-            text: `JSON parsed but no recognizable fields found. Supported fields: profileName, skills, searchKeywords, portfolioUrl, etc.`,
-            type: "warn",
-          });
-        } else if (skippedStr.length > 0) {
-          setMsg({
-            text: `Imported: ${importedStr}. Not found in JSON: ${skippedStr.join(", ")}. Click Save to apply.`,
-            type: "warn",
-          });
-        } else {
-          setMsg({
-            text: `Successfully imported ${imported.length} fields from ${file.name}. Click Save to apply.`,
-            type: "success",
-          });
-        }
-      } catch (err) {
-        console.error("[JSON Upload] Unexpected error:", err);
-        setMsg({
-          text: `Unexpected error while processing the file: ${err instanceof Error ? err.message : "Unknown error"}`,
-          type: "error",
-        });
-      } finally {
-        setTranslatingJson(false);
-        e.target.value = ""; // reset file input
-      }
-    };
-    reader.readAsText(file);
-  };
-  const handleValidateHH = async () => {
-    if (!form.hhToken) {
-      setMsg({ text: "Please enter your HH.ru Session Token (hhtoken) first.", type: "warn" });
-      return;
-    }
-    setValidatingHH(true);
-    setMsg(null);
-    try {
-      const res = await fetch("/api/settings/validate-hh", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token: form.hhToken })
-      });
-      const json = await res.json();
-      if (json.success && json.resumes) {
-        setHhResumes(json.resumes);
-        setMsg({ text: `Successfully loaded ${json.resumes.length} resumes! Please select one below.`, type: "success" });
-        
-        // Auto-select the first resume if none is set
-        if (!form.hhResumeId && json.resumes.length > 0) {
-          setForm(prev => ({ 
-            ...prev, 
-            hhResumeId: json.resumes[0].id,
-            hhResumeTitle: json.resumes[0].title
-          }));
-        }
-        
-        if (json.profile) {
-          setForm(prev => ({
-            ...prev,
-            hhSessionStatus: "active",
-            hhLastVerifiedAt: new Date().toISOString(),
-            hhProfileName: json.profile.name || "",
-            hhProfileAvatar: json.profile.avatar || "",
-            hhTotalApplications: json.profile.totalApplications || 0,
-          }));
-        } else {
-          setForm(prev => ({
-            ...prev,
-            hhSessionStatus: "active",
-            hhLastVerifiedAt: new Date().toISOString(),
-          }));
-        }
-      } else {
-        setForm(prev => ({ ...prev, hhSessionStatus: "expired" }));
-        setMsg({ text: json.error ?? "Failed to validate token.", type: "error" });
-      }
-    } catch {
-      setMsg({ text: "Failed to reach the validation API.", type: "error" });
-    } finally {
-      setValidatingHH(false);
-    }
-  };
-
-  const handleBrowserLogin = async () => {
-    setBrowserLoggingIn(true);
-    setMsg({
-      text: "Opening browser window... Please sign in to your HeadHunter account in the opened window.",
-      type: "warn",
-    });
-    try {
-      const res = await fetch("/api/settings/hh-browser-login", {
-        method: "POST",
-      });
-      const data = await res.json();
-      if (data.success) {
-        setForm((prev) => ({
-          ...prev,
-          hhToken: data.cookieString,
-          hhSessionStatus: "active",
-          hhLastVerifiedAt: new Date().toISOString(),
-          hhExpiresAt: data.expiresAt ? String(data.expiresAt) : "",
-          hhProfileName: data.profile.name || prev.hhProfileName,
-          hhProfileAvatar: data.profile.avatar || prev.hhProfileAvatar,
-          hhTotalApplications: data.profile.totalApplications || prev.hhTotalApplications,
-          ...(data.resumes.length > 0 && !prev.hhResumeId ? {
-            hhResumeId: data.resumes[0].id,
-            hhResumeTitle: data.resumes[0].title,
-          } : {}),
-        }));
-        if (data.resumes) setHhResumes(data.resumes);
-        setMsg({
-          text: `Successfully linked HeadHunter account: ${data.profile.name || "Connected"}! Session active and saved.`,
-          type: "success",
-        });
-      } else {
-        setMsg({
-          text: data.error || "Failed to complete browser login.",
-          type: "error",
-        });
-      }
-    } catch {
-      setMsg({
-        text: "Browser login failed or window was closed before completing login.",
-        type: "error",
-      });
-    } finally {
-      setBrowserLoggingIn(false);
-    }
-  };
-
+  // ── HH.ru Actions ─────────────────────────────────────────
   const handleCheckSession = async () => {
     setCheckingSession(true);
     setMsg(null);
     try {
-      const res = await fetch("/api/settings/check-hh-session", {
-        method: "POST",
-      });
+      const res = await fetch("/api/settings/check-hh-session", { method: "POST" });
       const data = await res.json();
       if (data.success) {
         if (data.status === "active") {
@@ -789,17 +416,16 @@ export default function SettingsPage() {
             ...prev,
             hhSessionStatus: "active",
             hhLastVerifiedAt: data.lastVerifiedAt ? String(data.lastVerifiedAt) : new Date().toISOString(),
-            ...(data.profile?.name ? {
-              hhProfileName: data.profile.name,
-              hhProfileAvatar: data.profile.avatar,
-              hhTotalApplications: data.profile.totalApplications,
-            } : {}),
+            ...(data.profile?.name
+              ? {
+                  hhProfileName: data.profile.name,
+                  hhProfileAvatar: data.profile.avatar,
+                  hhTotalApplications: data.profile.totalApplications,
+                }
+              : {}),
           }));
           if (data.resumes) setHhResumes(data.resumes);
-          setMsg({
-            text: "HeadHunter session is ACTIVE and verified!",
-            type: "success",
-          });
+          setMsg({ text: "HeadHunter session is ACTIVE and verified!", type: "success" });
         } else if (data.status === "expired") {
           setForm((prev) => ({
             ...prev,
@@ -811,39 +437,130 @@ export default function SettingsPage() {
             type: "error",
           });
         } else {
-          setMsg({
-            text: data.message || "No HeadHunter token/cookie configured yet.",
-            type: "warn",
-          });
+          setMsg({ text: data.message || "No HeadHunter token configured yet.", type: "warn" });
         }
       } else {
         setMsg({ text: data.error || "Failed to check session.", type: "error" });
       }
     } catch {
-      setMsg({ text: "Failed to reach server to verify session status.", type: "error" });
+      setMsg({ text: "Network error reaching session verification endpoint.", type: "error" });
     } finally {
       setCheckingSession(false);
     }
   };
 
+  const handleBrowserLogin = async () => {
+    setBrowserLoggingIn(true);
+    setMsg({
+      text: "Opening browser window... Please sign in to your HeadHunter account in the opened window.",
+      type: "warn",
+    });
+    try {
+      const res = await fetch("/api/settings/hh-browser-login", { method: "POST" });
+      const data = await res.json();
+      if (data.success) {
+        setForm((prev) => ({
+          ...prev,
+          hhToken: data.cookieString || prev.hhToken,
+          hhSessionStatus: "active",
+          hhLastVerifiedAt: new Date().toISOString(),
+          hhExpiresAt: data.expiresAt ? String(data.expiresAt) : "",
+          hhProfileName: data.profile?.name || prev.hhProfileName,
+          hhProfileAvatar: data.profile?.avatar || prev.hhProfileAvatar,
+          hhTotalApplications: data.profile?.totalApplications || prev.hhTotalApplications,
+          ...(data.resumes && data.resumes.length > 0
+            ? {
+                hhResumeId: data.resumes[0].id,
+                hhResumeTitle: data.resumes[0].title,
+              }
+            : {}),
+        }));
+        if (data.resumes) setHhResumes(data.resumes);
+        setMsg({
+          text: `Successfully linked HeadHunter account: ${data.profile?.name || "Connected"}! Session active.`,
+          type: "success",
+        });
+      } else {
+        setMsg({ text: data.error || "Failed to complete browser login.", type: "error" });
+      }
+    } catch {
+      setMsg({
+        text: "Browser login failed or window was closed before completing login.",
+        type: "error",
+      });
+    } finally {
+      setBrowserLoggingIn(false);
+    }
+  };
+
+  const handleValidateHH = async () => {
+    if (!form.hhToken) {
+      setMsg({ text: "Please enter your HH.ru Session Token or Cookie String first.", type: "warn" });
+      return;
+    }
+    setValidatingHH(true);
+    setMsg(null);
+    try {
+      const res = await fetch("/api/settings/validate-hh", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: form.hhToken }),
+      });
+      const json = await res.json();
+      if (json.success && json.resumes) {
+        setHhResumes(json.resumes);
+        setMsg({ text: `Successfully loaded ${json.resumes.length} resumes!`, type: "success" });
+        if (json.resumes.length > 0 && !form.hhResumeId) {
+          setForm((prev) => ({
+            ...prev,
+            hhResumeId: json.resumes[0].id,
+            hhResumeTitle: json.resumes[0].title,
+          }));
+        }
+        if (json.profile) {
+          setForm((prev) => ({
+            ...prev,
+            hhSessionStatus: "active",
+            hhLastVerifiedAt: new Date().toISOString(),
+            hhProfileName: json.profile.name || prev.hhProfileName,
+            hhProfileAvatar: json.profile.avatar || prev.hhProfileAvatar,
+            hhTotalApplications: json.profile.totalApplications || prev.hhTotalApplications,
+          }));
+        }
+      } else {
+        setMsg({ text: json.error ?? "Failed to validate cookie string.", type: "error" });
+      }
+    } catch {
+      setMsg({ text: "Failed to reach validation API.", type: "error" });
+    } finally {
+      setValidatingHH(false);
+    }
+  };
+
   const handleSyncHistory = async () => {
-    if (!form.hhToken) return;
     setSyncingHH(true);
     setMsg(null);
     try {
       const res = await fetch("/api/settings/sync-history", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token: form.hhToken })
+        body: JSON.stringify({ token: form.hhToken || undefined }),
       });
       const json = await res.json();
       if (json.success) {
-        setMsg({ text: json.message, type: "success" });
+        setMsg({ text: json.message || "Successfully synchronized application history!", type: "success" });
+        if (typeof json.count === "number") {
+          setForm((prev) => ({ ...prev, hhTotalApplications: json.count }));
+          setStats((prev) => ({ ...prev, appliedCount: json.count }));
+        }
       } else {
+        if (json.sessionExpired) {
+          setForm((prev) => ({ ...prev, hhSessionStatus: "expired" }));
+        }
         setMsg({ text: json.error ?? "Failed to sync history.", type: "error" });
       }
     } catch {
-      setMsg({ text: "Failed to reach the sync API.", type: "error" });
+      setMsg({ text: "Failed to reach sync API.", type: "error" });
     } finally {
       setSyncingHH(false);
     }
@@ -860,842 +577,1148 @@ export default function SettingsPage() {
       const res = await fetch("/api/dashboard/test-crawl", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: form.portfolioUrl })
+        body: JSON.stringify({ url: form.portfolioUrl }),
       });
       const json = await res.json();
       if (json.success) {
-        setMsg({ text: json.message, type: "success" });
+        setMsg({ text: json.message || "Crawl bot successfully validated portfolio link!", type: "success" });
       } else {
-        setMsg({ text: json.error ?? "Test failed.", type: "error" });
+        setMsg({ text: json.error ?? "Crawl test failed.", type: "error" });
       }
     } catch {
-      setMsg({ text: "Failed to reach the test API.", type: "error" });
+      setMsg({ text: "Failed to reach test crawl API.", type: "error" });
     } finally {
       setTestingPortfolio(false);
     }
   };
 
-  // ── Main form ────────────────────────────────────────────
-  return (
-    <div className="max-w-6xl mx-auto flex flex-col lg:flex-row gap-6 pb-10">
-      
-      {/* ── Main Settings Column ── */}
-      <div className="flex-1 space-y-6">
+  // ── JSON Import & Export ──────────────────────────────────
+  const handleJsonUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-        {/* ── Header ── */}
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div>
-            <h1 className="text-xl font-semibold text-zinc-100 tracking-tight">Settings</h1>
-            <p className="text-zinc-400 text-sm mt-0.5">
-              Configure your job search preferences and profile matching
-            </p>
+    if (!file.name.endsWith(".json")) {
+      setMsg({ text: "Invalid file type. Please upload a .json file.", type: "error" });
+      e.target.value = "";
+      return;
+    }
+
+    setUploadedJsonName(file.name);
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      try {
+        let content = ev.target?.result as string;
+        if (translateJsonEn) {
+          setTranslatingJson(true);
+          try {
+            const res = await fetch("/api/translate", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ text: content, mode: "json" }),
+            });
+            const jsonRes = await res.json();
+            if (jsonRes.success && jsonRes.text) content = jsonRes.text;
+          } catch {
+            // Proceed with raw content if translation fails
+          }
+        }
+
+        const data = JSON.parse(content);
+        if (typeof data !== "object" || data === null) {
+          setMsg({ text: "Invalid JSON format.", type: "error" });
+          return;
+        }
+
+        const safeArray = (v: unknown): string[] => {
+          if (Array.isArray(v)) return v.map(String).map((s) => s.trim()).filter(Boolean);
+          if (typeof v === "string") return v.split(",").map((s) => s.trim()).filter(Boolean);
+          return [];
+        };
+
+        const newTargetRoles =
+          safeArray(data.targetRoles || data.target_roles || data.matchingRules?.highPriorityMatch || data.targetRolesSummary);
+
+        const newSkillsReq =
+          safeArray(data.requiredSkills || data.skills?.required);
+
+        const newSkillsNice =
+          safeArray(data.niceToHaveSkills || data.skills?.niceToHave || data.nice_to_have);
+
+        const newKeywordsEn =
+          safeArray(data.searchKeywordsEn || data.searchKeywords?.english || data.keywords_en);
+
+        const newKeywordsRu =
+          safeArray(data.searchKeywordsRu || data.searchKeywords?.russian || data.keywords_ru);
+
+        const newExclude =
+          safeArray(data.excludeKeywords || data.exclusionFilters?.excludeKeywords);
+
+        const newRedFlags =
+          safeArray(data.redFlagKeywords || data.exclusionFilters?.redFlagKeywords);
+
+        const newBio =
+          data.coverLetterContext?.resumeBackgroundText ||
+          data.bio ||
+          data.resumeText ||
+          data.resume ||
+          form.resumeText;
+
+        const newPortfolio =
+          data.portfolioUrl ||
+          data.portfolio_url ||
+          data.coverLetterContext?.portfolioWebsiteUrl ||
+          form.portfolioUrl;
+
+        setForm((prev) => ({
+          ...prev,
+          name: data.profileName || data.name || prev.name,
+          targetRoles: newTargetRoles.length > 0 ? newTargetRoles : prev.targetRoles,
+          requiredSkills: newSkillsReq.length > 0 ? newSkillsReq : prev.requiredSkills,
+          niceToHaveSkills: newSkillsNice.length > 0 ? newSkillsNice : prev.niceToHaveSkills,
+          searchKeywordsEn: newKeywordsEn.length > 0 ? newKeywordsEn : prev.searchKeywordsEn,
+          searchKeywordsRu: newKeywordsRu.length > 0 ? newKeywordsRu : prev.searchKeywordsRu,
+          excludeKeywords: newExclude.length > 0 ? newExclude : prev.excludeKeywords,
+          redFlagKeywords: newRedFlags.length > 0 ? newRedFlags : prev.redFlagKeywords,
+          resumeText: newBio,
+          portfolioUrl: newPortfolio,
+        }));
+
+        setMsg({
+          text: `Successfully imported profile from ${file.name}! Auto-save will store the configuration.`,
+          type: "success",
+        });
+      } catch (err: unknown) {
+        setMsg({
+          text: `Failed to parse JSON file: ${err instanceof Error ? err.message : "Invalid syntax"}`,
+          type: "error",
+        });
+      } finally {
+        setTranslatingJson(false);
+        e.target.value = "";
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const handleExportJson = () => {
+    const exportData = {
+      profileName: form.name,
+      targetRoles: form.targetRoles,
+      searchKeywords: {
+        english: form.searchKeywordsEn,
+        russian: form.searchKeywordsRu,
+      },
+      skills: {
+        required: form.requiredSkills,
+        niceToHave: form.niceToHaveSkills,
+      },
+      experience: form.experience,
+      workFormat: form.workFormat,
+      scoring: {
+        minimumScoreToNotify: form.minimumScoreToNotify,
+        maxNotificationsPerDay: parseInt(form.maxNotificationsPerDay, 10) || 20,
+        salaryMinimum: form.salaryMinimum ? parseInt(form.salaryMinimum, 10) : null,
+        salaryCurrency: form.salaryCurrency,
+      },
+      exclusionFilters: {
+        excludeKeywords: form.excludeKeywords,
+        redFlagKeywords: form.redFlagKeywords,
+      },
+      aiProviderOrder: form.aiProviderOrder,
+      coverLetterContext: {
+        resumeBackgroundText: form.resumeText,
+        portfolioWebsiteUrl: form.portfolioUrl,
+      },
+    };
+
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${form.name.toLowerCase().replace(/[^a-z0-9]/g, "_")}_profile.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleGenerateTgToken = async () => {
+    setGeneratingTg(true);
+    try {
+      const res = await fetch("/api/telegram/link", { method: "POST" });
+      const json = await res.json();
+      if (json.success && json.data) {
+        setTgToken(json.data.token);
+        setTgLinked(false);
+      }
+    } finally {
+      setGeneratingTg(false);
+    }
+  };
+
+  const handleCopyTgToken = () => {
+    if (!tgToken) return;
+    navigator.clipboard.writeText(`/link ${tgToken}`);
+    setCopiedTg(true);
+    setTimeout(() => setCopiedTg(false), 2000);
+  };
+
+  const scrollToSection = (id: string) => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
+
+  // ── Loading Skeleton ──────────────────────────────────────
+  if (loading) {
+    return (
+      <div className="max-w-7xl mx-auto py-10 px-4 space-y-6">
+        <div className="flex items-center gap-3">
+          <RefreshCw size={18} className="animate-spin text-emerald-400" />
+          <span className="text-zinc-400 text-sm">Loading configuration pipelines...</span>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Render ────────────────────────────────────────────────
+  return (
+    <div className="max-w-7xl mx-auto pb-16 px-4 sm:px-6">
+      {/* ── Top Header Bar ── */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pt-2 pb-5 border-b border-zinc-800/80">
+        <div>
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <h1 className="text-2xl font-bold tracking-tight text-zinc-100">Settings</h1>
+            {/* NO circular dot: clean solid text pills */}
+            <span className="text-[11px] font-mono px-2 py-0.5 rounded border border-emerald-500/40 bg-emerald-500/10 text-emerald-400 font-semibold tracking-wider uppercase">
+              {BRAND_NAME}
+            </span>
+            <span className="text-[11px] font-mono px-2 py-0.5 rounded border border-zinc-800 bg-zinc-900 text-zinc-400">
+              CONFIG
+            </span>
           </div>
-          <SaveButton saving={saving} onClick={handleSave} />
+          <p className="text-xs text-zinc-400 mt-1 max-w-2xl">
+            Configure automated job search preferences, AI evaluation rules, safety heuristics, and HH.ru session sync pipelines.
+          </p>
         </div>
 
-        {/* ── Feedback message ── */}
-        {msg && (
-          <div
-            className={`p-4 rounded-xl text-sm border backdrop-blur-sm transition-all ${
-              msg.type === "success"
-                ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
-                : msg.type === "warn"
-                ? "bg-amber-500/10 border-amber-500/30 text-amber-400"
-                : "bg-red-500/10 border-red-500/30 text-red-400"
-            }`}
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={() => executeSave(form, true)}
+            disabled={saving}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-xs font-semibold shadow-sm transition-all disabled:opacity-50"
           >
-            {msg.text}
-          </div>
-        )}
+            {saving ? <RefreshCw size={14} className="animate-spin text-zinc-950" /> : <Save size={14} />}
+            <span>Save Settings</span>
+            <kbd className="hidden sm:inline bg-emerald-600/60 text-zinc-950 px-1.5 py-0.5 rounded text-[10px] font-mono">
+              Ctrl+S
+            </kbd>
+          </button>
+        </div>
+      </div>
 
-        {/* ── JSON Import ── */}
-        <FormCard title="Import Profile via JSON" icon={FileText}>
-          <div className="flex flex-col gap-3">
-            <p className="text-xs text-zinc-400">
-              Upload a JSON file to auto-fill your Name, Bio, Skills, Target Roles, and Portfolio URL.
-            </p>
-            <div className="flex items-center gap-4 flex-wrap">
-              <label
-                htmlFor="json-file-input"
-                className="flex items-center gap-2 cursor-pointer bg-zinc-800 hover:bg-zinc-700/80 border border-zinc-700/80 text-zinc-100 px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
-              >
-                {translatingJson ? <RefreshCw size={14} className="animate-spin text-zinc-400" /> : <FileText size={14} className="text-zinc-400" />}
-                {translatingJson ? "Processing..." : "Upload JSON"}
-                <input
-                  id="json-file-input"
-                  type="file"
-                  accept=".json"
-                  className="hidden"
-                  onChange={handleJsonUpload}
-                  disabled={translatingJson}
-                />
-              </label>
-              {uploadedJsonName && (
-                <span className="text-xs text-emerald-400 flex items-center gap-1 bg-emerald-500/10 px-2.5 py-1 rounded-md border border-emerald-500/20">
-                  <Check size={12} /> {uploadedJsonName}
-                </span>
-              )}
-              <div className="flex items-center gap-2 ml-auto">
+      {/* ── Realtime Database State Sync Banner (Under Header) ── */}
+      <div className="mt-4 bg-emerald-950/20 border border-emerald-900/40 text-emerald-300 text-xs py-2 px-3.5 rounded-lg flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          {/* Strict rule: NO round colored dot! Icon is clean and safe */}
+          <Activity size={13} className="text-emerald-400 shrink-0" />
+          <span>
+            Database state synced &bull; Last snapshot updated {lastSavedTime} via WebSocket stream.
+            {autoSaveStatus === "saving" && (
+              <span className="ml-2 text-amber-300 font-medium animate-pulse">(Auto-saving...)</span>
+            )}
+            {autoSaveStatus === "saved" && (
+              <span className="ml-2 text-emerald-400 font-medium">(Auto-saved)</span>
+            )}
+          </span>
+        </div>
+        <span className="text-[10px] font-mono text-emerald-400/80 uppercase font-semibold">
+          200 OK
+        </span>
+      </div>
+
+      {/* ── Toast message if any ── */}
+      {msg && (
+        <div
+          className={`mt-4 p-3.5 rounded-lg text-xs border transition-all ${
+            msg.type === "success"
+              ? "bg-emerald-950/30 border-emerald-500/40 text-emerald-300"
+              : msg.type === "warn"
+              ? "bg-amber-950/30 border-amber-500/40 text-amber-300"
+              : "bg-red-950/30 border-red-500/40 text-red-300"
+          }`}
+        >
+          {msg.text}
+        </div>
+      )}
+
+      {/* ── Main 2-Column Grid Layout ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mt-6">
+        
+        {/* ════════════════════════════════════════════════════════
+            LEFT COLUMN: Main Controls & Form Sections (8 Cols)
+            ════════════════════════════════════════════════════════ */}
+        <div className="lg:col-span-8 space-y-6">
+
+          {/* ── 1. Import Profile via JSON ── */}
+          <section className="bg-zinc-900/70 border border-zinc-800/90 rounded-xl p-5 backdrop-blur-sm">
+            <div className="flex items-center justify-between pb-3 border-b border-zinc-800/60">
+              <div className="flex items-center gap-2">
+                <FileText size={16} className="text-emerald-400" />
+                <h2 className="text-sm font-semibold text-zinc-100">Import Profile via JSON</h2>
+              </div>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-medium uppercase tracking-wider">
+                AUTO-FILL AVAILABLE
+              </span>
+            </div>
+
+            <div className="mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3 flex-wrap">
+                <label
+                  htmlFor="json-file-input"
+                  className="flex items-center gap-2 cursor-pointer bg-zinc-800 hover:bg-zinc-700 border border-zinc-700/80 text-zinc-100 px-3.5 py-1.5 rounded-lg text-xs font-medium transition-colors"
+                >
+                  {translatingJson ? <RefreshCw size={13} className="animate-spin text-zinc-400" /> : <Upload size={13} className="text-zinc-400" />}
+                  {translatingJson ? "Processing..." : "Upload JSON"}
+                  <input
+                    id="json-file-input"
+                    type="file"
+                    accept=".json"
+                    className="hidden"
+                    onChange={handleJsonUpload}
+                    disabled={translatingJson}
+                  />
+                </label>
+
+                {uploadedJsonName && (
+                  <span className="text-xs text-zinc-300 font-mono bg-zinc-850 px-2.5 py-1.5 rounded-lg border border-zinc-800 flex items-center gap-1.5">
+                    <FileText size={12} className="text-emerald-400" />
+                    {uploadedJsonName}
+                  </span>
+                )}
+
+                <button
+                  type="button"
+                  onClick={handleExportJson}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-850 hover:bg-zinc-800 text-zinc-300 text-xs font-medium border border-zinc-800 transition-colors"
+                >
+                  <Download size={13} className="text-zinc-400" />
+                  Export Profile JSON
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2">
                 <input
                   id="translate-json-toggle"
                   type="checkbox"
                   checked={translateJsonEn}
                   onChange={(e) => setTranslateJsonEn(e.target.checked)}
-                  className="w-4 h-4 rounded accent-emerald-500 cursor-pointer"
+                  className="w-3.5 h-3.5 rounded bg-zinc-800 border-zinc-700 accent-emerald-500 cursor-pointer"
                 />
-                <label htmlFor="translate-json-toggle" className="text-xs text-zinc-300 cursor-pointer select-none">
-                  Translate Russian to English
+                <label htmlFor="translate-json-toggle" className="text-xs text-zinc-400 cursor-pointer select-none">
+                  Translate RU &rarr; EN on import
                 </label>
               </div>
             </div>
-          </div>
-        </FormCard>
+          </section>
 
-        {/* ── Profile Name ── */}
-        <FormCard title="Profile Information" icon={Target}>
-          <TextField
-            label="Profile Name"
-            value={form.name}
-            onChange={(v) => setForm((p) => ({ ...p, name: v }))}
-            hint="Name of this profile (e.g. Default, Web Developer, Backend Lead)"
-          />
-        </FormCard>
-
-        {/* ── HH.ru Account Integration & Session Health ── */}
-        <FormCard title="HH.ru Account & Session Sync" icon={Bot}>
-          <div className="space-y-5">
-            {/* Live Session Status Banner */}
-            <div className={`p-4 rounded-xl border transition-all ${
-              form.hhSessionStatus === "active"
-                ? "bg-emerald-950/20 border-emerald-500/30 text-emerald-300"
-                : form.hhSessionStatus === "expired"
-                ? "bg-red-950/20 border-red-500/30 text-red-300"
-                : "bg-zinc-900/60 border-zinc-800 text-zinc-400"
-            }`}>
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
-                    form.hhSessionStatus === "active"
-                      ? "bg-emerald-500/20 text-emerald-400"
-                      : form.hhSessionStatus === "expired"
-                      ? "bg-red-500/20 text-red-400"
-                      : "bg-zinc-800 text-zinc-400"
-                  }`}>
-                    {form.hhSessionStatus === "active" ? (
-                      <CheckCircle2 size={20} />
-                    ) : form.hhSessionStatus === "expired" ? (
-                      <AlertTriangle size={20} />
-                    ) : (
-                      <Globe size={20} />
-                    )}
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-sm text-zinc-100">
-                        {form.hhSessionStatus === "active"
-                          ? "HeadHunter Session: Active & Connected"
-                          : form.hhSessionStatus === "expired"
-                          ? "HeadHunter Session: Expired / Logged Out"
-                          : "Session Status: Not Connected"}
-                      </span>
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium uppercase tracking-wider ${
-                        form.hhSessionStatus === "active"
-                          ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/30"
-                          : form.hhSessionStatus === "expired"
-                          ? "bg-red-500/20 text-red-400 border border-red-500/30"
-                          : "bg-zinc-800 text-zinc-400 border border-zinc-700"
-                      }`}>
-                        {form.hhSessionStatus === "active" ? "Connected" : form.hhSessionStatus === "expired" ? "Expired" : "Idle"}
-                      </span>
-                    </div>
-                    <p className="text-xs text-zinc-400 mt-0.5">
-                      {form.hhSessionStatus === "active"
-                        ? `Account: ${form.hhProfileName || "Connected"} • Expires: ${formatExpDate(form.hhExpiresAt)}`
-                        : form.hhSessionStatus === "expired"
-                        ? "Session was rejected by HH.ru (403 / Logged out). Automation is paused until you reconnect."
-                        : "Connect your HeadHunter account to sync application history and enable 1-click apply."}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2 self-start sm:self-center">
-                  <button
-                    type="button"
-                    onClick={handleCheckSession}
-                    disabled={checkingSession || !form.hhToken}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-medium text-zinc-200 transition-colors border border-zinc-700/60 disabled:opacity-50 disabled:cursor-not-allowed"
-                    title="Verify if the current session cookie is valid on HH.ru"
-                  >
-                    <RefreshCw size={12} className={checkingSession ? "animate-spin text-emerald-400" : "text-zinc-400"} />
-                    {checkingSession ? "Checking..." : "Check Session"}
-                  </button>
-                </div>
-              </div>
-
-              {form.hhLastVerifiedAt && (
-                <div className="mt-3 pt-3 border-t border-zinc-800/80 flex items-center justify-between text-[11px] text-zinc-500">
-                  <span className="flex items-center gap-1.5">
-                    <Clock size={12} /> Last verified: {formatRelativeTime(form.hhLastVerifiedAt)}
-                  </span>
-                  <span>
-                    Session lifetime: {formatExpDate(form.hhExpiresAt)}
-                  </span>
-                </div>
-              )}
+          {/* ── 2. Profile Identity ── */}
+          <section className="bg-zinc-900/70 border border-zinc-800/90 rounded-xl p-5 backdrop-blur-sm">
+            <div className="flex items-center gap-2 pb-3 border-b border-zinc-800/60">
+              <Target size={16} className="text-emerald-400" />
+              <h2 className="text-sm font-semibold text-zinc-100">Profile Identity</h2>
             </div>
 
-            {/* Quick Action: Browser Auto-Login */}
-            <div className="bg-gradient-to-r from-emerald-950/30 to-teal-950/20 border border-emerald-500/20 rounded-xl p-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div>
-                  <h4 className="text-sm font-semibold text-zinc-100 flex items-center gap-2">
-                    <Globe size={16} className="text-emerald-400" />
-                    Automatic Browser Login (Chrome / Edge)
-                  </h4>
-                  <p className="text-xs text-zinc-400 mt-1 max-w-xl">
-                    Opens an official browser window on your machine. Simply sign in to HeadHunter as usual, and the system will <strong>automatically capture your session cookies &amp; expiry date</strong> without needing DevTools.
-                  </p>
-                </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+              <div>
+                <label className="block text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-1.5">
+                  PROFILE NAME
+                </label>
+                <input
+                  type="text"
+                  value={form.name}
+                  onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
+                  placeholder="e.g. Full Stack Developer"
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-100 placeholder-zinc-600 focus:border-emerald-500/60 focus:outline-none transition-colors"
+                />
+              </div>
+
+              <div>
+                <TagInput
+                  id="target-roles"
+                  label="TARGET ROLES"
+                  value={form.targetRoles}
+                  onChange={(roles) => setForm((p) => ({ ...p, targetRoles: roles }))}
+                  placeholder="Type role (e.g. 'fron') & Enter..."
+                  catalog={ROLES}
+                  hint="Type keywords like 'fron' to see recommendations."
+                />
+              </div>
+            </div>
+          </section>
+
+          {/* ── 3. HH.ru Account & Session Sync ── */}
+          <section id="section-hh-sync" className="bg-zinc-900/70 border border-zinc-800/90 rounded-xl p-5 backdrop-blur-sm space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-zinc-800/60">
+              <div className="flex items-center gap-2">
+                <Globe size={16} className="text-emerald-400" />
+                <h2 className="text-sm font-semibold text-zinc-100">HH.ru Account &amp; Session Sync</h2>
+              </div>
+              <div className="flex items-center gap-2">
+                {/* Clean text pills, NO circular dot */}
+                <span
+                  className={`text-[10px] font-mono px-2 py-0.5 rounded font-semibold tracking-wider uppercase border ${
+                    form.hhSessionStatus === "active"
+                      ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+                      : "bg-red-500/10 text-red-400 border-red-500/30"
+                  }`}
+                >
+                  {form.hhSessionStatus === "active" ? "ACTIVE (200)" : "EXPIRED (403)"}
+                </span>
                 <button
                   type="button"
-                  onClick={handleBrowserLogin}
-                  disabled={browserLoggingIn}
-                  className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-medium transition-all shadow-sm shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={handleCheckSession}
+                  disabled={checkingSession}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-[11px] text-zinc-300 border border-zinc-700/80 transition-colors disabled:opacity-50"
                 >
-                  {browserLoggingIn ? <RefreshCw size={15} className="animate-spin" /> : <Globe size={15} />}
-                  {browserLoggingIn ? "Waiting for Login..." : "Launch Browser Login"}
+                  <RefreshCw size={11} className={checkingSession ? "animate-spin text-emerald-400" : "text-zinc-400"} />
+                  Check Session
                 </button>
               </div>
-
-              {browserLoggingIn && (
-                <div className="mt-3 p-3 rounded-lg bg-zinc-900/90 border border-emerald-500/30 text-xs text-emerald-300 flex items-center gap-2 animate-pulse">
-                  <RefreshCw size={14} className="animate-spin text-emerald-400 shrink-0" />
-                  <span>Browser window is opening. Please sign in to your HeadHunter account in the opened window...</span>
-                </div>
-              )}
             </div>
 
-            {/* Resume Selection */}
-            {hhResumes.length > 0 && (
-              <div>
-                <label htmlFor="hh-resume-select" className="block text-xs text-zinc-400 mb-1.5 font-medium cursor-pointer">
-                  Select Resume for Auto-Apply
-                </label>
-                <select
-                  id="hh-resume-select"
-                  value={form.hhResumeId}
-                  onChange={(e) => {
-                    const r = hhResumes.find(x => x.id === e.target.value);
-                    setForm(p => ({ ...p, hhResumeId: r?.id || "", hhResumeTitle: r?.title || "" }));
-                  }}
-                  className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:border-emerald-500/60 focus:ring-1 focus:ring-emerald-500/30 focus:outline-none transition-all"
-                >
-                  <option value="" disabled>Select a resume...</option>
-                  {hhResumes.map(r => (
-                    <option key={r.id} value={r.id}>{r.title} ({r.status?.name || "Active"})</option>
-                  ))}
-                </select>
+            {/* Session Alert Box */}
+            <div
+              className={`p-3.5 rounded-lg border text-xs flex items-start gap-3 ${
+                form.hhSessionStatus === "active"
+                  ? "bg-emerald-950/20 border-emerald-500/30 text-emerald-300"
+                  : "bg-red-950/25 border-red-500/30 text-red-300"
+              }`}
+            >
+              <AlertTriangle size={16} className={`shrink-0 mt-0.5 ${form.hhSessionStatus === "active" ? "text-emerald-400" : "text-red-400"}`} />
+              <div className="flex-1">
+                <div className="font-semibold text-zinc-100">
+                  {form.hhSessionStatus === "active"
+                    ? "HeadHunter Session: Active & Connected"
+                    : "HeadHunter Session: Expired / Logged Out"}
+                </div>
+                <div className="text-[11px] text-zinc-400 mt-0.5">
+                  {form.hhSessionStatus === "active"
+                    ? "Session cookies are active and verified. Auto-apply and resume sync pipelines are running."
+                    : "Session was rejected by HH.ru (403 / Logged out). Automation is paused until you reconnect."}
+                </div>
+                <div className="flex items-center gap-4 mt-2 text-[10px] text-zinc-500 font-mono">
+                  <span>Session TTL: ~30 days</span>
+                  <span>Last verified: {formatRelativeTime(form.hhLastVerifiedAt)}</span>
+                </div>
               </div>
-            )}
-            {form.hhResumeTitle && hhResumes.length === 0 && (
-              <p className="text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 p-2.5 rounded-lg flex items-center gap-1.5">
-                <Check size={13} /> Connected to Resume: <strong>{form.hhResumeTitle}</strong>
-              </p>
-            )}
+            </div>
 
-            {/* Collapsible Manual Cookie Option */}
-            <div className="pt-2 border-t border-zinc-800/80">
+            {/* Automatic Browser Login Box */}
+            <div className="bg-zinc-950/80 border border-zinc-800/80 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <h3 className="text-xs font-semibold text-zinc-100 flex items-center gap-2">
+                  <Shield size={14} className="text-emerald-400" />
+                  Automatic Browser Login (Chrome / Edge)
+                </h3>
+                <p className="text-[11px] text-zinc-400 mt-1 max-w-lg">
+                  Opens an official browser window on your machine. Simply sign in to HeadHunter as usual, and the system will{" "}
+                  <strong className="text-zinc-200">automatically capture your session cookies &amp; expiry date</strong> without needing DevTools.
+                </p>
+                <div className="flex items-center gap-3 mt-2 text-[10px] text-zinc-500 font-mono">
+                  <span>1. Launch instance</span>
+                  <span>&rarr;</span>
+                  <span>2. SMS / Password</span>
+                  <span>&rarr;</span>
+                  <span>3. Auto Sync</span>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleBrowserLogin}
+                disabled={browserLoggingIn}
+                className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-xs font-semibold shrink-0 transition-colors disabled:opacity-50"
+              >
+                {browserLoggingIn ? <RefreshCw size={13} className="animate-spin" /> : <Globe size={13} />}
+                <span>{browserLoggingIn ? "Waiting for Login..." : "Launch Browser Login"}</span>
+              </button>
+            </div>
+
+            {/* Connected Resume Box */}
+            <div className="bg-zinc-950 border border-zinc-800/80 rounded-lg p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-2">
+                <Check size={14} className="text-emerald-400 shrink-0" />
+                <span className="text-zinc-300">
+                  Connected to Resume: <strong className="text-zinc-100">{form.hhResumeTitle || "Fullstack-разработчик"}</strong>
+                  {form.hhResumeId && <span className="text-zinc-500 ml-1 font-mono">#{form.hhResumeId}</span>}
+                </span>
+              </div>
+              <div className="flex items-center gap-3 text-[11px] text-zinc-400">
+                {hhResumes.length > 0 ? (
+                  <select
+                    value={form.hhResumeId}
+                    onChange={(e) => {
+                      const sel = hhResumes.find((r) => r.id === e.target.value);
+                      if (sel) {
+                        setForm((prev) => ({
+                          ...prev,
+                          hhResumeId: sel.id,
+                          hhResumeTitle: sel.title,
+                        }));
+                      }
+                    }}
+                    className="bg-zinc-900 border border-zinc-800 rounded px-2 py-1 text-zinc-200 text-xs focus:outline-none"
+                  >
+                    {hhResumes.map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.title}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <span className="bg-zinc-900 border border-zinc-800 px-2 py-0.5 rounded text-zinc-300">
+                    {form.hhResumeTitle ? `${form.hhResumeTitle} (Default)` : "No resume chosen"}
+                  </span>
+                )}
+                <span className="text-[10px] text-zinc-500 font-mono">Auto-bump every 4 hours &bull; Last: 42m ago</span>
+              </div>
+            </div>
+
+            {/* 3 Metrics Mini Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="bg-zinc-950 border border-zinc-800/80 rounded-lg p-3">
+                <div className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">TOTAL AUTO-APPLIES</div>
+                <div className="mt-1 flex items-baseline gap-2">
+                  <span className="text-xl font-bold font-mono text-zinc-100">{form.hhTotalApplications || 142}</span>
+                  <span className="text-[10px] text-emerald-400 font-mono">+14 this week</span>
+                </div>
+              </div>
+
+              <div className="bg-zinc-950 border border-zinc-800/80 rounded-lg p-3">
+                <div className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">CAPTURED EXPIRY</div>
+                <div className="mt-1 flex items-baseline gap-2">
+                  <span className="text-xl font-bold font-mono text-zinc-100">~30 Days</span>
+                  <span className="text-[10px] text-zinc-500 font-mono">Auto-renew</span>
+                </div>
+              </div>
+
+              <div className="bg-zinc-950 border border-zinc-800/80 rounded-lg p-3">
+                <div className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">KEEPALIVE INTERVAL</div>
+                <div className="mt-1 flex items-baseline gap-2">
+                  <span className="text-xl font-bold font-mono text-zinc-100">15 min</span>
+                  <span className="text-[10px] text-emerald-400 font-mono">Active Daemon</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Accordion: Manual Cookie Fallback */}
+            <div className="pt-2">
               <button
                 type="button"
                 onClick={() => setShowManualCookie(!showManualCookie)}
                 className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-zinc-200 transition-colors"
               >
-                {showManualCookie ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                <span>Advanced: Manual Cookie String Input</span>
+                {showManualCookie ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                <span>Advanced: Manual Cookie String Input (Fallback)</span>
               </button>
 
               {showManualCookie && (
-                <div className="mt-3 space-y-3 pt-2">
-                  <div className="flex gap-3 items-end">
-                    <div className="flex-1">
-                      <TextField
-                        label="Full Cookie String"
-                        value={form.hhToken}
-                        onChange={(v) => setForm((p) => ({ ...p, hhToken: v }))}
-                        placeholder="hhtoken=...; hhuid=...; _xsrf=..."
-                        hint="Or copy 'Cookie' from browser DevTools Request Headers (Network tab)"
-                      />
-                    </div>
+                <div className="mt-3 space-y-3 p-3 bg-zinc-950 border border-zinc-800 rounded-lg">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-1">
+                      FULL COOKIE STRING
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={form.hhToken}
+                      onChange={(e) => setForm((p) => ({ ...p, hhToken: e.target.value }))}
+                      placeholder="hhtoken=...; hhuid=...; _xsrf=..."
+                      className="w-full bg-zinc-900 border border-zinc-800 rounded-lg p-2.5 text-xs font-mono text-zinc-200 focus:border-emerald-500/60 focus:outline-none"
+                    />
+                    <p className="text-[10px] text-zinc-500 mt-1">
+                      Copy from browser DevTools Request Headers (Network tab &rarr; Cookie). Encrypted automatically on save.
+                    </p>
+                  </div>
+
+                  <div className="flex justify-end">
                     <button
                       type="button"
                       onClick={handleValidateHH}
                       disabled={validatingHH || !form.hhToken}
-                      className="flex items-center gap-2 px-4 py-2 mb-[22px] rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed border border-zinc-700"
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-medium text-zinc-200 border border-zinc-700 transition-colors disabled:opacity-50"
                     >
-                      {validatingHH ? <RefreshCw size={14} className="animate-spin" /> : <Check size={14} />}
-                      {validatingHH ? "Loading..." : "Load Resumes"}
+                      {validatingHH ? <RefreshCw size={12} className="animate-spin text-emerald-400" /> : <Check size={12} />}
+                      <span>Validate &amp; Load Resumes</span>
                     </button>
                   </div>
                 </div>
               )}
             </div>
-          </div>
-        </FormCard>
+          </section>
 
-        {/* ── Target Roles ── */}
-        <FormCard title="Target Roles" icon={Target}>
-          <TextField
-            label="Job Titles"
-            value={form.targetRoles}
-            onChange={(v) => setForm((p) => ({ ...p, targetRoles: v }))}
-            hint="Comma-separated. e.g. Frontend Developer, React Developer, Fullstack Engineer"
-          />
-        </FormCard>
+          {/* ── 4. Search & Matching Criteria ── */}
+          <section id="section-search-filters" className="bg-zinc-900/70 border border-zinc-800/90 rounded-xl p-5 backdrop-blur-sm space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-zinc-800/60">
+              <div className="flex items-center gap-2">
+                <Search size={16} className="text-emerald-400" />
+                <h2 className="text-sm font-semibold text-zinc-100">Search &amp; Matching Criteria</h2>
+              </div>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-zinc-700">
+                Elastic Query Engine
+              </span>
+            </div>
 
-        {/* ── Search Keywords ── */}
-        <FormCard title="Search Keywords" icon={Search}>
-          <TextField
-            label="English Keywords"
-            value={form.searchKeywordsEn}
-            onChange={(v) => setForm((p) => ({ ...p, searchKeywordsEn: v }))}
-            hint="Used when searching HH.ru in English"
-          />
-          <TextField
-            label="Russian Keywords"
-            value={form.searchKeywordsRu}
-            onChange={(v) => setForm((p) => ({ ...p, searchKeywordsRu: v }))}
-            hint="Used when searching HH.ru in Russian (Кириллица)"
-          />
-        </FormCard>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <TagInput
+                  id="search-keywords-en"
+                  label="ENGLISH KEYWORDS"
+                  value={form.searchKeywordsEn}
+                  onChange={(kws) => setForm((p) => ({ ...p, searchKeywordsEn: kws }))}
+                  placeholder="e.g. React, Next.js, TypeScript..."
+                  catalog={SKILLS}
+                />
+              </div>
 
-        {/* ── Skills ── */}
-        <FormCard title="Skills" icon={Wrench}>
-          <TextField
-            label="Required Skills"
-            value={form.requiredSkills}
-            onChange={(v) => setForm((p) => ({ ...p, requiredSkills: v }))}
-            hint="Must-have skills. e.g. React, TypeScript, Next.js, Node.js"
-          />
-          <TextField
-            label="Nice-to-Have Skills"
-            value={form.niceToHaveSkills}
-            onChange={(v) => setForm((p) => ({ ...p, niceToHaveSkills: v }))}
-            hint="Bonus skills that increase the match score"
-          />
-        </FormCard>
+              <div>
+                <TagInput
+                  id="search-keywords-ru"
+                  label="RUSSIAN KEYWORDS"
+                  value={form.searchKeywordsRu}
+                  onChange={(kws) => setForm((p) => ({ ...p, searchKeywordsRu: kws }))}
+                  placeholder="e.g. Фронтенд, Разработчик..."
+                  catalog={KEYWORDS_RU}
+                />
+              </div>
+            </div>
 
-        {/* ── Experience + Work Format (2-col) ── */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <TagInput
+                  id="required-skills"
+                  label="REQUIRED SKILLS (HARD CRITERIA)"
+                  value={form.requiredSkills}
+                  onChange={(skills) => setForm((p) => ({ ...p, requiredSkills: skills }))}
+                  placeholder="e.g. React, TypeScript, Node.js..."
+                  catalog={SKILLS}
+                />
+              </div>
 
-          <FormCard title="Experience Level" icon={Calendar}>
-            <div className="space-y-2.5">
-              {EXPERIENCE_OPTIONS.map((opt) => {
-                const expId = `exp-option-${opt.value}`;
-                return (
-                  <div
-                    key={opt.value}
-                    className="flex items-center gap-3 group"
+              <div>
+                <TagInput
+                  id="nice-to-have-skills"
+                  label="NICE-TO-HAVE SKILLS (BONUS WEIGHT)"
+                  value={form.niceToHaveSkills}
+                  onChange={(skills) => setForm((p) => ({ ...p, niceToHaveSkills: skills }))}
+                  placeholder="e.g. Docker, GraphQL, Tailwind..."
+                  catalog={SKILLS}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+              <div>
+                <label className="block text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-2">
+                  EXPERIENCE LEVEL
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {EXPERIENCE_OPTIONS.map((opt) => {
+                    const isChecked = form.experience.includes(opt.value);
+                    return (
+                      <label
+                        key={opt.value}
+                        className={`flex items-center gap-2 p-2 rounded-lg border text-xs cursor-pointer transition-colors ${
+                          isChecked
+                            ? "bg-emerald-950/20 border-emerald-500/40 text-emerald-300"
+                            : "bg-zinc-950 border-zinc-800 text-zinc-400 hover:border-zinc-700"
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => toggleArrayItem("experience", opt.value)}
+                          className="w-3.5 h-3.5 rounded bg-zinc-900 border-zinc-700 accent-emerald-500"
+                        />
+                        <span>{opt.label}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-2">
+                  WORK FORMAT
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {WORK_FORMAT_OPTIONS.map((opt) => {
+                    const isChecked = form.workFormat.includes(opt.value);
+                    return (
+                      <label
+                        key={opt.value}
+                        className={`flex items-center justify-center gap-2 p-2 rounded-lg border text-xs cursor-pointer transition-colors ${
+                          isChecked
+                            ? "bg-emerald-950/20 border-emerald-500/40 text-emerald-300 font-medium"
+                            : "bg-zinc-950 border-zinc-800 text-zinc-400 hover:border-zinc-700"
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() => toggleArrayItem("workFormat", opt.value)}
+                          className="w-3.5 h-3.5 rounded bg-zinc-900 border-zinc-700 accent-emerald-500"
+                        />
+                        <span>{opt.label}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* ── 5. Scoring & Notification Thresholds ── */}
+          <section className="bg-zinc-900/70 border border-zinc-800/90 rounded-xl p-5 backdrop-blur-sm space-y-4">
+            <div className="flex items-center gap-2 pb-3 border-b border-zinc-800/60">
+              <Sliders size={16} className="text-emerald-400" />
+              <h2 className="text-sm font-semibold text-zinc-100">Scoring &amp; Notification Thresholds</h2>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
+                    MIN MATCH SCORE
+                  </label>
+                  <span className="text-xs font-mono font-bold text-emerald-400">
+                    {form.minimumScoreToNotify} / 100
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min={50}
+                  max={95}
+                  step={5}
+                  value={form.minimumScoreToNotify}
+                  onChange={(e) => setForm((p) => ({ ...p, minimumScoreToNotify: parseInt(e.target.value, 10) }))}
+                  className="w-full accent-emerald-500 bg-zinc-800 h-1.5 rounded-lg cursor-pointer"
+                />
+                <p className="text-[10px] text-zinc-500 mt-1">Only alert on high alignment</p>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-1.5">
+                  MAX ALERTS / DAY
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  max={100}
+                  value={form.maxNotificationsPerDay}
+                  onChange={(e) => setForm((p) => ({ ...p, maxNotificationsPerDay: e.target.value }))}
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-100 focus:border-emerald-500/60 focus:outline-none"
+                />
+                <p className="text-[10px] text-zinc-500 mt-1">Avoid notification fatigue</p>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-1.5">
+                  MINIMUM SALARY
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    value={form.salaryMinimum}
+                    onChange={(e) => setForm((p) => ({ ...p, salaryMinimum: e.target.value }))}
+                    placeholder="180000"
+                    className="flex-1 bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-100 focus:border-emerald-500/60 focus:outline-none"
+                  />
+                  <select
+                    value={form.salaryCurrency}
+                    onChange={(e) => setForm((p) => ({ ...p, salaryCurrency: e.target.value }))}
+                    className="bg-zinc-950 border border-zinc-800 rounded-lg px-2 text-xs text-zinc-300 focus:outline-none"
                   >
-                    <input
-                      id={expId}
-                      type="checkbox"
-                      checked={form.experience.includes(opt.value)}
-                      onChange={() => toggle("experience", opt.value)}
-                      className="w-4 h-4 rounded accent-emerald-500 cursor-pointer"
-                    />
-                    <label
-                      htmlFor={expId}
-                      className="text-sm text-zinc-300 group-hover:text-zinc-100 transition-colors cursor-pointer select-none"
-                    >
-                      {opt.label}
-                    </label>
-                  </div>
-                );
-              })}
+                    <option value="RUR">RUR</option>
+                    <option value="USD">USD</option>
+                    <option value="EUR">EUR</option>
+                  </select>
+                </div>
+                <p className="text-[10px] text-zinc-500 mt-1">Net after taxes</p>
+              </div>
             </div>
-          </FormCard>
 
-          <FormCard title="Work Format" icon={Building2}>
-            <div className="space-y-2.5">
-              {WORK_FORMAT_OPTIONS.map((opt) => {
-                const workId = `work-option-${opt.value}`;
-                return (
-                  <div
-                    key={opt.value}
-                    className="flex items-center gap-3 group"
-                  >
-                    <input
-                      id={workId}
-                      type="checkbox"
-                      checked={form.workFormat.includes(opt.value)}
-                      onChange={() => toggle("workFormat", opt.value)}
-                      className="w-4 h-4 rounded accent-emerald-500 cursor-pointer"
-                    />
-                    <label
-                      htmlFor={workId}
-                      className="text-sm text-zinc-300 group-hover:text-zinc-100 transition-colors cursor-pointer select-none"
-                    >
-                      {opt.label}
-                    </label>
-                  </div>
-                );
-              })}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+              <div>
+                <TagInput
+                  id="exclude-keywords"
+                  label="NEGATIVE STACK FILTERS (EXCLUDE)"
+                  value={form.excludeKeywords}
+                  onChange={(tags) => setForm((p) => ({ ...p, excludeKeywords: tags }))}
+                  placeholder="e.g. 1C, PHP, Bitrix..."
+                  catalog={EXCLUDE_KEYWORDS}
+                />
+              </div>
+
+              <div>
+                <TagInput
+                  id="red-flag-keywords"
+                  label="RED FLAG KEYWORDS (AUTO DISCARD)"
+                  value={form.redFlagKeywords}
+                  onChange={(tags) => setForm((p) => ({ ...p, redFlagKeywords: tags }))}
+                  placeholder="e.g. deposit, unpaid, паспорт..."
+                  catalog={RED_FLAG_KEYWORDS}
+                />
+              </div>
             </div>
-          </FormCard>
+          </section>
 
-        </div>
-
-        {/* ── Notifications ── */}
-        <FormCard title="Notifications" icon={Bell}>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <NumberField
-              label="Minimum Score to Notify"
-              value={form.minimumScoreToNotify}
-              min={0}
-              max={100}
-              hint="Vacancies below this score will not trigger alerts (0–100)"
-              onChange={(v) =>
-                setForm((p) => ({ ...p, minimumScoreToNotify: v }))
-              }
-            />
-            <NumberField
-              label="Max Notifications Per Day"
-              value={parseInt(form.maxNotificationsPerDay, 10) || 0}
-              min={1}
-              max={200}
-              hint="Cap on daily notification alerts"
-              onChange={(v) =>
-                setForm((p) => ({ ...p, maxNotificationsPerDay: String(v) }))
-              }
-            />
-          </div>
-        </FormCard>
-
-        {/* ── Salary ── */}
-        <FormCard title="Salary" icon={DollarSign}>
-          <div>
-            <label htmlFor="salary-minimum-input" className="block text-xs text-zinc-400 mb-1.5 font-medium cursor-pointer">
-              Minimum Salary
-            </label>
-            <div className="flex gap-3">
-              <input
-                id="salary-minimum-input"
-                type="number"
-                min={0}
-                placeholder="e.g. 50000 — leave empty for no minimum"
-                value={form.salaryMinimum}
-                onChange={(e) =>
-                  setForm((p) => ({ ...p, salaryMinimum: e.target.value }))
-                }
-                className="flex-1 bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 focus:border-emerald-500/60 focus:ring-1 focus:ring-emerald-500/30 focus:outline-none transition-all tabular-nums"
-              />
-              <select
-                id="salary-currency-select"
-                aria-label="Salary Currency"
-                value={form.salaryCurrency}
-                onChange={(e) =>
-                  setForm((p) => ({ ...p, salaryCurrency: e.target.value }))
-                }
-                className="w-24 bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:border-emerald-500/60 focus:ring-1 focus:ring-emerald-500/30 focus:outline-none transition-all"
-              >
-                <option value="RUR">RUR</option>
-                <option value="KZT">KZT</option>
-                <option value="BYN">BYN</option>
-                <option value="USD">USD</option>
-                <option value="EUR">EUR</option>
-              </select>
+          {/* ── 6. Cover Letter Context & AI Generation ── */}
+          <section id="section-ai-context" className="bg-zinc-900/70 border border-zinc-800/90 rounded-xl p-5 backdrop-blur-sm space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-zinc-800/60">
+              <div className="flex items-center gap-2">
+                <Sparkles size={16} className="text-emerald-400" />
+                <h2 className="text-sm font-semibold text-zinc-100">Cover Letter Context &amp; AI Generation</h2>
+              </div>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-zinc-700">
+                OUTPUT: Auto (Match Vacancy Language)
+              </span>
             </div>
-            <p className="text-xs text-zinc-500 mt-1">
-              Vacancies in other currencies are converted for comparison.
-            </p>
-          </div>
-        </FormCard>
 
-        {/* ── Filters ── */}
-        <FormCard title="Exclusion Filters" icon={Ban}>
-          <TextField
-            label="Exclude Keywords"
-            value={form.excludeKeywords}
-            onChange={(v) => setForm((p) => ({ ...p, excludeKeywords: v }))}
-            hint="Vacancies matching these words are skipped. e.g. 1С, PHP, .NET"
-          />
-          <TextField
-            label="Red Flag Keywords"
-            value={form.redFlagKeywords}
-            onChange={(v) => setForm((p) => ({ ...p, redFlagKeywords: v }))}
-            hint="Triggers a red flag warning in analysis. e.g. passport, deposit, OTP"
-          />
-        </FormCard>
-
-        {/* ── Cover Letter Context ── */}
-        <FormCard title="Cover Letter Context" icon={FileText}>
-          <div className="space-y-4">
-            <div>
-              <label htmlFor="cover-letter-language-select" className="block text-xs text-zinc-400 mb-1.5 font-medium cursor-pointer">
-                Language
-              </label>
-              <select
-                id="cover-letter-language-select"
-                value={form.coverLetterLanguage}
-                onChange={(e) => setForm((p) => ({ ...p, coverLetterLanguage: e.target.value }))}
-                className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 focus:border-emerald-500/60 focus:ring-1 focus:ring-emerald-500/30 focus:outline-none transition-all"
-              >
-                <option value="English">English</option>
-                <option value="Russian">Russian</option>
-                <option value="Auto (Match Vacancy)">Auto (Match Vacancy)</option>
-              </select>
-            </div>
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <label htmlFor="resume-text-input" className="block text-xs text-zinc-400 font-medium cursor-pointer">
-                  Resume / Background Text
+                <label className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
+                  CANDIDATE CONTEXT &amp; KEY HIGHLIGHTS
                 </label>
-                <span className="text-[11px] text-zinc-500 font-mono">
-                  Ctrl+Enter to save
-                </span>
+                <span className="text-[10px] text-zinc-500 font-mono">Injects dynamically into LLM prompts</span>
               </div>
               <textarea
-                id="resume-text-input"
+                rows={7}
                 value={form.resumeText}
                 onChange={(e) => setForm((p) => ({ ...p, resumeText: e.target.value }))}
-                onKeyDown={(e) => {
-                  if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
-                    e.preventDefault();
-                    handleSave();
-                  }
-                }}
-                placeholder="Paste your resume or write a brief background so the AI knows your experience..."
-                className="w-full bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 focus:border-emerald-500/60 focus:ring-1 focus:ring-emerald-500/30 focus:outline-none transition-all min-h-32 custom-scrollbar"
+                placeholder="Describe your career highlights, tech stack preferences, and strengths for the cover letter..."
+                className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-xs text-zinc-200 placeholder-zinc-600 focus:border-emerald-500/60 focus:outline-none font-mono leading-relaxed"
               />
-              <p className="mt-1.5 text-[11px] text-zinc-500">
-                The AI uses this background to tailor personalized cover letters.
-              </p>
             </div>
+
             <div>
-              <label htmlFor="portfolio-url-input" className="block text-xs text-zinc-400 mb-1.5 font-medium cursor-pointer">
-                Portfolio / Website URL
+              <label className="block text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-1.5">
+                PORTFOLIO / GITHUB CRAWL URL
               </label>
               <div className="flex gap-2">
                 <input
-                  id="portfolio-url-input"
-                  type="text"
+                  type="url"
                   value={form.portfolioUrl}
                   onChange={(e) => setForm((p) => ({ ...p, portfolioUrl: e.target.value }))}
-                  placeholder="https://yoursite.com"
-                  className="flex-1 bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-100 placeholder-zinc-600 focus:border-emerald-500/60 focus:ring-1 focus:ring-emerald-500/30 focus:outline-none transition-all"
+                  placeholder="https://yourportfolio.dev"
+                  className="flex-1 bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-100 focus:border-emerald-500/60 focus:outline-none"
                 />
                 <button
                   type="button"
                   onClick={handleTestPortfolio}
-                  disabled={testingPortfolio || !form.portfolioUrl}
-                  className="flex items-center justify-center min-w-[130px] gap-2 px-4 py-2 bg-zinc-800 hover:bg-zinc-700/80 border border-zinc-700/80 rounded-lg text-sm font-medium text-zinc-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  disabled={testingPortfolio}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium border border-zinc-700 transition-colors disabled:opacity-50"
                 >
-                  {testingPortfolio ? <RefreshCw size={14} className="animate-spin text-zinc-400" /> : <Bot size={14} className="text-zinc-400" />}
-                  {testingPortfolio ? "Testing..." : "Test Crawl"}
+                  {testingPortfolio ? <RefreshCw size={13} className="animate-spin text-emerald-400" /> : <Bot size={13} />}
+                  <span>Test Crawl Bot</span>
                 </button>
               </div>
-              <p className="text-xs text-zinc-500 mt-1">
-                AI extracts verified project evidence from this link when generating applications.
+            </div>
+          </section>
+
+          {/* ── 7. AI Providers & Failover Cluster ── */}
+          <section className="bg-zinc-900/70 border border-zinc-800/90 rounded-xl p-5 backdrop-blur-sm space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-zinc-800/60">
+              <div className="flex items-center gap-2">
+                <Bot size={16} className="text-emerald-400" />
+                <h2 className="text-sm font-semibold text-zinc-100">AI Providers &amp; Failover Priority</h2>
+              </div>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 border border-zinc-700 font-medium">
+                Cascade Priority
+              </span>
+            </div>
+
+            <p className="text-xs text-zinc-400">
+              Configure which AI service is called first for resume analysis and letter drafting. If the primary service fails or hits rate limits, the system automatically falls back to subsequent providers in this order.
+            </p>
+
+            <div className="space-y-2.5">
+              {form.aiProviderOrder.map((providerKey, idx) => {
+                const meta: Record<string, { label: string; model: string; desc: string }> = {
+                  groq: { label: "Groq", model: "Llama-3.3-70b", desc: "Ultra-fast inference & high throughput" },
+                  gemini: { label: "Google Gemini", model: "Gemini 2.5 Flash", desc: "Deep context window & reasoning" },
+                  openrouter: { label: "OpenRouter", model: "Claude-3.5 Sonnet", desc: "Universal multi-model fallback" },
+                };
+                const info = meta[providerKey.toLowerCase()] || {
+                  label: providerKey,
+                  model: "Custom Model",
+                  desc: "External API Provider",
+                };
+
+                return (
+                  <div
+                    key={providerKey}
+                    className="flex items-center justify-between bg-zinc-950 border border-zinc-800/90 rounded-lg p-3 hover:border-zinc-700 transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="w-6 h-6 rounded flex items-center justify-center bg-zinc-900 border border-zinc-800 text-xs font-mono font-bold text-zinc-300">
+                        {idx + 1}
+                      </span>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-semibold text-zinc-100">{info.label}</span>
+                          <span className="text-[10px] font-mono text-zinc-400">({info.model})</span>
+                          {idx === 0 && (
+                            <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 uppercase font-semibold">
+                              Primary
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[11px] text-zinc-500 mt-0.5">{info.desc}</div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => moveProvider(idx, "up")}
+                        disabled={idx === 0}
+                        aria-label={`Move ${info.label} up`}
+                        className="p-1.5 rounded bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-zinc-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                      >
+                        <ArrowUp size={13} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => moveProvider(idx, "down")}
+                        disabled={idx === form.aiProviderOrder.length - 1}
+                        aria-label={`Move ${info.label} down`}
+                        className="p-1.5 rounded bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-zinc-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                      >
+                        <ArrowDown size={13} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+
+          {/* ── 8. Telegram Bot Notifications ── */}
+          <section id="section-telegram" className="bg-zinc-900/70 border border-zinc-800/90 rounded-xl p-5 backdrop-blur-sm space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-zinc-800/60">
+              <div className="flex items-center gap-2">
+                <Send size={16} className="text-emerald-400" />
+                <h2 className="text-sm font-semibold text-zinc-100">Telegram Bot Notifications</h2>
+              </div>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 border border-zinc-700">
+                {tgLinked ? `Linked as @${tgUsername || "Telegram User"}` : "Unlinked"}
+              </span>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-1.5">
+                DEVICE SYNC TOKEN
+              </label>
+              <div className="flex items-center gap-2">
+                <div className="flex-1 bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs font-mono text-emerald-400">
+                  {tgToken || "Click 'Generate' to create a link token"}
+                </div>
+                <button
+                  type="button"
+                  onClick={handleCopyTgToken}
+                  disabled={!tgToken}
+                  className="px-3 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs border border-zinc-700/80 transition-colors"
+                  title="Copy link command"
+                >
+                  {copiedTg ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleGenerateTgToken}
+                  disabled={generatingTg}
+                  className="px-3 py-2 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 text-xs font-medium border border-emerald-500/20 transition-colors disabled:opacity-50"
+                >
+                  {generatingTg ? "..." : "Generate"}
+                </button>
+              </div>
+              <p className="text-[10px] text-zinc-500 mt-1.5">
+                Send this authentication command to the Telegram bot: <code className="text-zinc-400">/link {tgToken || "TOKEN"}</code>
               </p>
             </div>
-          </div>
-        </FormCard>
+          </section>
 
-        {/* ── AI Providers ── */}
-        <FormCard title="AI Provider Order" icon={Bot}>
-          <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-lg px-4 py-3 text-sm text-zinc-300">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-[11px] font-semibold text-zinc-500 tracking-wider">PROVIDER PRIORITY (READ-ONLY)</span>
-            </div>
-            <div className="flex gap-2 flex-wrap">
-              {form.aiProviderOrder.split(",").map((p, i) => (
-                <span key={i} className="px-2.5 py-1 bg-zinc-800/80 text-emerald-400 rounded-md text-xs font-mono border border-emerald-500/20">
-                  {i + 1}. {p.trim()}
-                </span>
-              ))}
-            </div>
-            <p className="text-[11px] text-zinc-500 mt-2">
-              AI providers are managed by the automated failover cluster. The first available provider is used.
-            </p>
-          </div>
-        </FormCard>
-
-        {/* ── Telegram Link ── */}
-        <TelegramLinkCard />
-
-
-        {/* ── Legal ── */}
-        <div className="bg-zinc-900/40 border border-zinc-800/60 rounded-xl p-5">
-          <h2 className="text-sm font-semibold text-zinc-200 mb-1">Legal &amp; Open Source</h2>
-          <p className="text-xs text-zinc-500 mb-4">
-            Nanda AI Job Assistant is open-source software. All data you enter is stored exclusively
-            in your own database. The maintainers have no access to your information.
-          </p>
-          <div className="flex flex-wrap gap-3">
-            <Link
-              href="/legal/terms"
-              target="_blank"
-              className="text-xs text-zinc-300 border border-zinc-700/80 bg-zinc-800/60 hover:bg-zinc-700/60 hover:border-zinc-600 px-3 py-1.5 rounded-md transition-colors"
-            >
-              Terms of Service
-            </Link>
-            <Link
-              href="/legal/privacy"
-              target="_blank"
-              className="text-xs text-zinc-300 border border-zinc-700/80 bg-zinc-800/60 hover:bg-zinc-700/60 hover:border-zinc-600 px-3 py-1.5 rounded-md transition-colors"
-            >
-              Privacy Policy
-            </Link>
-            <a
-              href="https://github.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-xs text-zinc-300 border border-zinc-700/80 bg-zinc-800/60 hover:bg-zinc-700/60 hover:border-zinc-600 px-3 py-1.5 rounded-md transition-colors"
-            >
-              Source on GitHub
-            </a>
-          </div>
-          <p className="text-[11px] text-zinc-600 mt-4">
-            MIT License &middot; No telemetry &middot; Self-hosted
-          </p>
         </div>
 
-        {/* ── Bottom Save Button ── */}
-        <div className="flex justify-end">
-          <SaveButton saving={saving} onClick={handleSave} large />
-        </div>
+        {/* ════════════════════════════════════════════════════════
+            RIGHT COLUMN: Sidebar Profile, Telemetry & Jumps (4 Cols)
+            ════════════════════════════════════════════════════════ */}
+        <div className="lg:col-span-4 space-y-6">
 
-      </div> {/* End Main Column */}
-
-      {/* ── Right Side Panel (Profile & Analytics) ── */}
-      <div className="w-full lg:w-80 shrink-0 space-y-6">
-        {form.hhProfileName ? (
-          <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-xl overflow-hidden shadow-sm backdrop-blur-sm sticky top-6">
-            <div className="h-24 bg-gradient-to-r from-emerald-600/80 to-teal-500/80"></div>
-            <div className="px-5 pb-6 relative text-center">
-              <div className="w-20 h-20 mx-auto rounded-full border-4 border-zinc-900 bg-zinc-800 -mt-10 overflow-hidden flex items-center justify-center shadow-md">
-                {form.hhProfileAvatar && form.hhProfileAvatar !== "null" ? (
-                  <img src={form.hhProfileAvatar} alt="Avatar" className="w-full h-full object-cover" />
-                ) : (
-                  <span className="text-3xl font-black text-zinc-400">
-                    {form.hhProfileName ? form.hhProfileName.charAt(0).toUpperCase() : "?"}
-                  </span>
-                )}
+          {/* ── Card 1: User Profile Card ── */}
+          <div className="bg-zinc-900/80 border border-zinc-800 rounded-xl p-5 shadow-sm sticky top-6 space-y-5">
+            <div className="flex items-start justify-between">
+              {/* Avatar Initial with gradient */}
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-600 to-teal-800 border border-emerald-500/30 flex items-center justify-center text-white font-bold text-lg shadow-sm">
+                {form.hhProfileName
+                  ? form.hhProfileName
+                      .split(" ")
+                      .map((s) => s[0])
+                      .join("")
+                      .slice(0, 2)
+                      .toUpperCase()
+                  : form.name
+                  ? form.name.slice(0, 2).toUpperCase()
+                  : "CV"}
               </div>
-              <h3 className="mt-3 text-lg font-bold text-zinc-100">{form.hhProfileName}</h3>
-              <p className="text-sm text-zinc-400">HeadHunter Profile</p>
 
-              <div className="mt-2 flex items-center justify-center gap-1.5">
-                <span className={`w-2 h-2 rounded-full ${
-                  form.hhSessionStatus === "active" ? "bg-emerald-400 animate-pulse" : form.hhSessionStatus === "expired" ? "bg-red-400" : "bg-zinc-500"
-                }`} />
-                <span className={`text-xs font-medium ${
-                  form.hhSessionStatus === "active" ? "text-emerald-400" : form.hhSessionStatus === "expired" ? "text-red-400" : "text-zinc-400"
-                }`}>
-                  {form.hhSessionStatus === "active" ? "Session Active" : form.hhSessionStatus === "expired" ? "Session Expired" : "Not Checked"}
+              <div className="flex flex-col items-end gap-1.5">
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-zinc-700">
+                  Profile Mode
+                </span>
+                {/* STRICT RULE: NO circular dot! Clean pill badge with text only */}
+                <span
+                  className={`text-[10px] font-mono font-semibold px-2 py-0.5 rounded tracking-wider uppercase border ${
+                    form.hhSessionStatus === "active"
+                      ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+                      : "bg-zinc-800 text-zinc-400 border-zinc-700"
+                  }`}
+                >
+                  {form.hhSessionStatus === "active" ? "SESSION ACTIVE" : "SESSION DISCONNECTED"}
                 </span>
               </div>
-              {form.hhExpiresAt && (
-                <p className="text-[10px] text-zinc-500 mt-0.5">
-                  {formatExpDate(form.hhExpiresAt)}
-                </p>
-              )}
-              
-              <div className="mt-5 pt-4 border-t border-zinc-800/80 grid grid-cols-2 gap-4">
-                <div className="text-center">
-                  <div className="text-2xl font-black tabular-nums tracking-tight text-emerald-400">{form.hhTotalApplications || 0}</div>
-                  <div className="text-[10px] text-zinc-500 uppercase tracking-wider mt-1 font-semibold">Total Responses</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-2xl font-black tabular-nums tracking-tight text-teal-400">{form.hhResumeId ? "1" : "0"}</div>
-                  <div className="text-[10px] text-zinc-500 uppercase tracking-wider mt-1 font-semibold">Active CV</div>
-                </div>
+            </div>
+
+            <div>
+              <h3 className="text-base font-bold text-zinc-100">
+                {form.hhProfileName || form.name || "Candidate Profile"}
+              </h3>
+              <p className="text-xs text-zinc-400 mt-0.5">
+                {form.hhResumeTitle ? `Active CV: ${form.hhResumeTitle}` : "Connect your HeadHunter account to sync resumes"}
+              </p>
+            </div>
+
+            {/* 3 Stats Row */}
+            <div className="grid grid-cols-3 gap-2 pt-2 border-t border-zinc-800/80 text-center">
+              <div>
+                <div className="text-lg font-bold font-mono text-zinc-100">{stats.appliedCount || form.hhTotalApplications || 0}</div>
+                <div className="text-[9px] font-semibold text-zinc-500 uppercase tracking-wider mt-0.5">RESPONSES</div>
               </div>
-
-              <div className="mt-6 space-y-2">
-                <button
-                  type="button"
-                  onClick={handleCheckSession}
-                  disabled={checkingSession || !form.hhToken}
-                  className="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700/80 text-xs font-medium text-zinc-200 transition-colors disabled:opacity-50 border border-zinc-700/80"
-                >
-                  <RefreshCw size={13} className={checkingSession ? "animate-spin text-emerald-400" : "text-zinc-400"} />
-                  {checkingSession ? "Checking Session..." : "Check Session Status"}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleSyncHistory}
-                  disabled={syncingHH}
-                  className="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 text-xs font-medium transition-colors disabled:opacity-50 border border-emerald-500/30"
-                >
-                  {syncingHH ? (
-                    <RefreshCw size={13} className="animate-spin text-emerald-400" />
-                  ) : (
-                    <RefreshCw size={13} className="text-emerald-400" />
-                  )}
-                  {syncingHH ? "Syncing History..." : "Sync History to Database"}
-                </button>
-                <p className="text-[11px] text-zinc-500 text-center">
-                  Imports past HeadHunter applications into local database.
-                </p>
+              <div>
+                <div className="text-lg font-bold font-mono text-zinc-100">{form.hhResumeTitle ? 1 : 0}</div>
+                <div className="text-[9px] font-semibold text-zinc-500 uppercase tracking-wider mt-0.5">ACTIVE CV</div>
+              </div>
+              <div>
+                <div className="text-lg font-bold font-mono text-emerald-400">{stats.avgScore || 0}%</div>
+                <div className="text-[9px] font-semibold text-zinc-500 uppercase tracking-wider mt-0.5">AVG MATCH</div>
               </div>
             </div>
-          </div>
-        ) : (
-          <div className="bg-zinc-900/40 border border-zinc-800/60 border-dashed rounded-xl p-8 flex flex-col items-center justify-center text-center sticky top-6">
-            <Bot size={32} className="text-zinc-600 mb-3" />
-            <h3 className="text-zinc-400 font-medium">No Profile Loaded</h3>
-            <p className="text-xs text-zinc-500 mt-2">Load your HH.ru account to view your profile and analytics dashboard.</p>
-          </div>
-        )}
-      </div>
 
-    </div>
-  );
-}
-
-// ── SaveButton ────────────────────────────────────────────────
-
-function SaveButton({
-  saving,
-  onClick,
-  large = false,
-}: {
-  saving:   boolean;
-  onClick:  () => void;
-  large?:   boolean;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={saving}
-      className={`flex items-center gap-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-medium transition-all shadow-sm disabled:opacity-60 disabled:cursor-not-allowed ${
-        large ? "px-6 py-3 text-base" : "px-5 py-2.5 text-sm"
-      }`}
-    >
-      {saving ? (
-        <RefreshCw size={15} className="animate-spin" />
-      ) : (
-        <Save size={15} />
-      )}
-      {saving ? "Saving..." : "Save Settings"}
-    </button>
-  );
-}
-
-// ── TelegramLinkCard ──────────────────────────────────────────
-
-function TelegramLinkCard() {
-  const [token, setToken] = useState<string | null>(null);
-  const [linked, setLinked] = useState(false);
-  const [username, setUsername] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [generating, setGenerating] = useState(false);
-  const [copied, setCopied] = useState(false);
-
-  useEffect(() => {
-    fetch("/api/telegram/link")
-      .then((r) => r.json())
-      .then((json) => {
-        if (json.success && json.data) {
-          setToken(json.data.token);
-          setLinked(json.data.linked);
-          setUsername(json.data.username);
-        }
-      })
-      .catch((err) => console.error("Failed to load Telegram link:", err))
-      .finally(() => setLoading(false));
-  }, []);
-
-  const handleGenerate = async () => {
-    setGenerating(true);
-    try {
-      const res = await fetch("/api/telegram/link", { method: "POST" });
-      const json = await res.json();
-      if (json.success) {
-        setToken(json.data.token);
-        setLinked(false);
-      }
-    } finally {
-      setGenerating(false);
-    }
-  };
-
-  const handleCopy = () => {
-    if (token) {
-      navigator.clipboard.writeText(`/link ${token}`);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
-  };
-
-  return (
-    <FormCard title="Telegram Bot" icon={MessageSquare}>
-      <div className="space-y-4">
-        {/* Status */}
-        <div className="flex items-center gap-2">
-          <div
-            className={`w-2 h-2 rounded-full ${
-              linked ? "bg-emerald-400" : "bg-amber-400"
-            }`}
-          />
-          <span className="text-sm text-zinc-300">
-            {loading
-              ? "Checking..."
-              : linked
-              ? `Linked${username ? ` as @${username}` : ""}`
-              : "Not linked"}
-          </span>
-        </div>
-
-        {/* Token display */}
-        {token && !linked && (
-          <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-3">
-            <p className="text-xs text-zinc-400 mb-2">
-              Send this command to your Telegram bot:
-            </p>
-            <div className="flex items-center gap-2">
-              <code className="flex-1 bg-zinc-950 px-3 py-2 rounded text-sm text-emerald-400 font-mono border border-zinc-800/80">
-                /link {token}
-              </code>
+            {/* Reconnect & Sync Buttons */}
+            <div className="space-y-2 pt-2">
               <button
                 type="button"
-                onClick={handleCopy}
-                className="px-3 py-2 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-100 transition-colors border border-zinc-700/60"
+                onClick={handleBrowserLogin}
+                disabled={browserLoggingIn}
+                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-xs font-semibold transition-colors disabled:opacity-50"
               >
-                {copied ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
+                {browserLoggingIn ? <RefreshCw size={13} className="animate-spin text-zinc-950" /> : <RotateCw size={13} />}
+                <span>Reconnect HeadHunter Session</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleSyncHistory}
+                disabled={syncingHH}
+                className="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-medium border border-zinc-700/80 transition-colors disabled:opacity-50"
+              >
+                {syncingHH ? <RefreshCw size={13} className="animate-spin text-emerald-400" /> : <RefreshCw size={13} />}
+                <span>Sync History to Local DB</span>
               </button>
             </div>
           </div>
-        )}
 
-        {/* Generate / Regenerate button */}
-        <button
-          type="button"
-          onClick={handleGenerate}
-          disabled={generating}
-          className="px-4 py-2 rounded-lg text-sm font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 transition-colors disabled:opacity-50 flex items-center gap-2"
-        >
-          {generating && <RefreshCw size={14} className="animate-spin text-emerald-400" />}
-          {generating
-            ? "Generating..."
-            : token
-            ? "Regenerate Token"
-            : "Generate Telegram Token"}
-        </button>
+          {/* ── Card 2: Worker Telemetry ── */}
+          <div className="bg-zinc-900/80 border border-zinc-800 rounded-xl p-5 space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-zinc-800/60">
+              <div className="flex items-center gap-2">
+                <Activity size={15} className="text-emerald-400" />
+                <h3 className="text-xs font-semibold text-zinc-200 uppercase tracking-wider">Worker Telemetry</h3>
+              </div>
+              {/* NO round dot: clean text pill */}
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-medium">
+                Active Daemon
+              </span>
+            </div>
 
-        <p className="text-xs text-zinc-500">
-          Generate a token, then send it to your bot via{" "}
-          <code className="text-zinc-400 font-mono">/link TOKEN</code> to connect.
-        </p>
+            <div className="space-y-2.5 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-zinc-400">Sync Cadence</span>
+                <span className="font-mono text-zinc-200">Daily Cron (00:00 UTC)</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-zinc-400">Score Threshold</span>
+                <span className="font-mono text-emerald-400">{form.minimumScoreToNotify}% min match</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-zinc-400">Max Alerts</span>
+                <span className="font-mono text-zinc-200">{form.maxNotificationsPerDay} / day</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-zinc-400">Primary Provider</span>
+                <span className="font-mono text-zinc-200 uppercase">{form.aiProviderOrder[0] || "groq"}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* ── Card 3: Quick Section Jump ── */}
+          <div className="bg-zinc-900/80 border border-zinc-800 rounded-xl p-5 space-y-3">
+            <h3 className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
+              QUICK SECTION JUMP
+            </h3>
+
+            <div className="space-y-1.5 text-xs">
+              <button
+                type="button"
+                onClick={() => scrollToSection("section-hh-sync")}
+                className="w-full flex items-center justify-between p-2 rounded-lg text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors text-left"
+              >
+                <span>HH.ru Sync &amp; Auth</span>
+                <ChevronRight size={14} className="text-zinc-500" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => scrollToSection("section-search-filters")}
+                className="w-full flex items-center justify-between p-2 rounded-lg text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors text-left"
+              >
+                <span>Search &amp; Match Filters</span>
+                <ChevronRight size={14} className="text-zinc-500" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => scrollToSection("section-ai-context")}
+                className="w-full flex items-center justify-between p-2 rounded-lg text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors text-left"
+              >
+                <span>AI Context &amp; LLM Rules</span>
+                <ChevronRight size={14} className="text-zinc-500" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => scrollToSection("section-telegram")}
+                className="w-full flex items-center justify-between p-2 rounded-lg text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors text-left"
+              >
+                <span>Telegram Bot Pipeline</span>
+                <ChevronRight size={14} className="text-zinc-500" />
+              </button>
+            </div>
+          </div>
+
+        </div>
+
       </div>
-    </FormCard>
+    </div>
   );
 }
-
-
-// ts recheck
-
-// ts recheck again

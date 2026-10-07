@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/db";
-import { requireUser } from "@/lib/auth-helpers";
+import { getApiUser } from "@/lib/auth-helpers";
 import { performBrowserLogin } from "@/lib/hhBrowserLogin";
+import { encrypt } from "@/lib/crypto";
 
 export const maxDuration = 300; // allow up to 5 minutes for user login
 
@@ -14,7 +15,7 @@ export const maxDuration = 300; // allow up to 5 minutes for user login
  */
 export async function POST(req: NextRequest) {
   try {
-    const user = await requireUser();
+    const user = await getApiUser();
     if (!user) {
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
     }
@@ -28,7 +29,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Launch automated browser login
-    const result = await performBrowserLogin(180000); // 3 minutes timeout
+    const result = await performBrowserLogin(240000); // 4 minutes timeout
 
     if (!result.success) {
       return NextResponse.json(
@@ -37,11 +38,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Update DB
+    // Update DB with encrypted cookies
     const updated = await prisma.searchPreference.update({
       where: { id: pref.id },
       data: {
-        hhToken: result.cookieString,
+        hhToken: encrypt(result.cookieString),
         hhSessionStatus: "active",
         hhLastVerifiedAt: new Date(),
         hhExpiresAt: result.expiresAt,
@@ -54,13 +55,13 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    // Sanitized response without raw cookie string
     return NextResponse.json({
       success: true,
-      cookieString: result.cookieString,
       expiresAt: result.expiresAt,
       resumes: result.resumes,
       profile: result.profile,
-      preference: updated,
+      hasHhToken: true,
     });
   } catch (error: any) {
     console.error("[POST /api/settings/hh-browser-login]", error);

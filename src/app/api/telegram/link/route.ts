@@ -7,17 +7,20 @@
 
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
-import { requireUser } from "@/lib/auth-helpers";
+import { getApiUser } from "@/lib/auth-helpers";
 import crypto from "crypto";
 
 function generateToken(): string {
-  return crypto.randomBytes(3).toString("hex").toUpperCase();
+  return crypto.randomBytes(16).toString("hex");
 }
 
 // ── GET: Check current link status ────────────────────────────
 
 export async function GET() {
-  const user = await requireUser();
+  const user = await getApiUser();
+  if (!user) {
+    return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+  }
   try {
     const link = await prisma.telegramLink.findFirst({
       where:   { userId: user.id, isActive: true },
@@ -47,7 +50,10 @@ export async function GET() {
 // ── POST: Generate new link token ─────────────────────────────
 
 export async function POST() {
-  const user = await requireUser();
+  const user = await getApiUser();
+  if (!user) {
+    return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+  }
   try {
     // Deactivate previous tokens for this user
     await prisma.telegramLink.updateMany({

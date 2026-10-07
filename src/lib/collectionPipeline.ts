@@ -1,5 +1,5 @@
 // ============================================================
-// wingkiiy Job AI — Collection Pipeline (Multi-User)
+// HH Job Copilot — Collection Pipeline (Multi-User)
 // ============================================================
 // Runs for a specific userId's active SearchPreference.
 // All vacancies are stored with userId for data isolation.
@@ -17,9 +17,10 @@ import type { NormalizedVacancy, SearchPreferenceData } from "@/types";
 // ── Type Helpers ──────────────────────────────────────────────
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function toSearchPrefData(p: any): SearchPreferenceData {
+export function toSearchPrefData(p: any): SearchPreferenceData {
   return {
     id: p.id,
+    userId: p.userId,
     name: p.name,
     targetRoles:           (p.targetRoles as string[])           ?? [],
     searchKeywordsEn:      (p.searchKeywordsEn as string[])      ?? [],
@@ -37,6 +38,7 @@ function toSearchPrefData(p: any): SearchPreferenceData {
     aiProviderOrder:       (p.aiProviderOrder as string[])        ?? [],
     coverLetterLanguage:   p.coverLetterLanguage,
     resumeText:            p.resumeText,
+    portfolioUrl:          p.portfolioUrl ?? undefined,
     isActive:              p.isActive,
   };
 }
@@ -79,6 +81,24 @@ export async function runCollectionPipeline(
       success: false,
       error: "No active search profile found. Please configure one in Settings.",
     };
+  }
+
+  // Concurrency guard: prevent multiple concurrent crawls on the same profile
+  const currentStatus = prefRaw.collectionStatus as {
+    running?: boolean;
+    startedAt?: string | null;
+  } | null;
+
+  if (currentStatus?.running && currentStatus.startedAt) {
+    const elapsedMs = Date.now() - new Date(currentStatus.startedAt).getTime();
+    const STALE_LOCK_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes stale lock breaker
+    if (!isNaN(elapsedMs) && elapsedMs < STALE_LOCK_TIMEOUT_MS) {
+      return {
+        success: false,
+        error: "A collection run is already in progress for this profile. Please wait for it to finish.",
+      };
+    }
+    console.warn(`[Pipeline] Stale collection lock detected (${Math.round(elapsedMs / 1000)}s old), resetting.`);
   }
 
   const pref = toSearchPrefData(prefRaw);
@@ -235,7 +255,13 @@ export async function runCollectionPipeline(
       // ── Basic rule filter ──────────────────────────────────
       const filterResult = passesBasicFilter(vacancy, pref);
       if (!filterResult.passes) {
-        await prisma.vacancy.update({ where: { id: dbVacancyId }, data: { status: "ignored" } });
+        await prisma.vacancy.update({
+          where: { id: dbVacancyId },
+          data: {
+            status: "ignored",
+            filterReason: filterResult.reason ?? null,
+          },
+        });
         summary.ignored++;
         continue;
       }
@@ -254,14 +280,14 @@ export async function runCollectionPipeline(
       }
 
       // ── Rule score pre-check ───────────────────────────────
-      const ruleScore = calculateRuleScore(vacancy);
+      const ruleScore = calculateRuleScore(vacancy, pref);
       if (ruleScore.score < 30) {
         await prisma.vacancy.update({ where: { id: dbVacancyId }, data: { status: "low_priority" } });
         continue;
       }
 
       // ── AI analysis ────────────────────────────────────────
-      const { positive, negative } = await getSimilarFeedbackExamples(vacancy);
+      const { positive, negative } = await getSimilarFeedbackExamples(vacancy, pref.userId);
       const { analysis, provider, model, aiStatus } = await analyzeVacancy(vacancy, [...positive, ...negative], pref);
 
       const analysisData = {

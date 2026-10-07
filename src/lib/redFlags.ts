@@ -74,7 +74,7 @@ const RED_FLAG_DEFINITIONS: RedFlagPattern[] = [
     severity: "high",
   },
   {
-    // Russian citizenship barrier — Nanda is Indonesian
+    // Citizenship barrier
     patterns: [
       "гражданство рф",
       "гражданин рф",
@@ -83,11 +83,11 @@ const RED_FLAG_DEFINITIONS: RedFlagPattern[] = [
       "только граждане рф",
     ],
     reason:
-      "Russian citizenship is required — Nanda is an Indonesian national and is not eligible",
+      "Russian citizenship is required — candidate is not eligible without work authorization",
     severity: "high",
   },
   {
-    // Advanced Russian language — Nanda has only basic Russian
+    // Advanced Russian language requirement
     patterns: [
       "русский c1",
       "русский c2",
@@ -100,7 +100,7 @@ const RED_FLAG_DEFINITIONS: RedFlagPattern[] = [
       "native russian",
     ],
     reason:
-      "Requires Russian at C1/C2 (near-native) level — Nanda has basic Russian only",
+      "Requires advanced or native Russian language proficiency (C1/C2)",
     severity: "high",
   },
 
@@ -131,11 +131,11 @@ const RED_FLAG_DEFINITIONS: RedFlagPattern[] = [
       "5 years experience",
     ],
     reason:
-      "Requires 5+ years experience or senior level — Nanda is a junior/fresh-grad candidate",
+      "Requires senior level experience (5+ years)",
     severity: "medium",
   },
   {
-    // Office-only conflicts with Nanda's remote preference
+    // Office-only position
     patterns: [
       "только офис",
       "office only",
@@ -144,7 +144,7 @@ const RED_FLAG_DEFINITIONS: RedFlagPattern[] = [
       "без возможности удаленной работы",
     ],
     reason:
-      "Office-only position — conflicts with Nanda's remote work preference",
+      "Office-only position (no remote work option)",
     severity: "medium",
   },
 ];
@@ -163,12 +163,28 @@ const RED_FLAG_DEFINITIONS: RedFlagPattern[] = [
  * @param text - Combined vacancy text (title + full description)
  * @returns Array of RedFlag objects (may be empty if no flags found)
  */
-export function detectRedFlags(text: string): RedFlag[] {
+export function detectRedFlags(text: string, customRedFlags?: string[]): RedFlag[] {
   const lowerText = text.toLowerCase();
   const flags: RedFlag[] = [];
 
   // Track which reason strings have already fired to prevent duplicates
   const firedReasons = new Set<string>();
+
+  // ── Custom user-defined red flags ──────────────────────────
+  if (Array.isArray(customRedFlags)) {
+    for (const raw of customRedFlags) {
+      const term = raw.trim();
+      if (!term) continue;
+      if (lowerText.includes(term.toLowerCase())) {
+        flags.push({
+          trigger_text: term,
+          reason: `Matched user red-flag filter: "${term}"`,
+          severity: "high",
+        });
+        firedReasons.add(term.toLowerCase());
+      }
+    }
+  }
 
   for (const def of RED_FLAG_DEFINITIONS) {
     // Skip if this reason group already fired

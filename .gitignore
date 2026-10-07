@@ -62,13 +62,27 @@ revisi/
 /revisi
 vc low code/
 /vc low code
+*.mp4
 
-# Test scripts & scratch files
+# Test directories, configs & scratch files
+tests/
+/tests
+vitest.config.mts
 *test*.*
 test*.*
-scratch*.*
-check-*.*
-create-test*.*
-find-tel.*
-send-test.*
+scratch/
+scripts/
+/test_*.ts
+/test_*.js
+/test-*.ts
+/test-*.js
+/login-hh.ts
+/audit_tests.ts
+/scratch*.*
+/check-*.*
+/create-test*.*
+/find-tel.*
+/send-test.*
+
+# Local browser profile directory
 .hh_browser_profile/

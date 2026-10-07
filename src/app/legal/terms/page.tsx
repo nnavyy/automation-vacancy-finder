@@ -1,8 +1,9 @@
 import Link from "next/link";
+import { BRAND_NAME } from "@/lib/brand";
 
 export const metadata = {
-  title: "Terms of Service — Nanda AI Job Assistant",
-  description: "Terms of Service governing the use of Nanda AI Job Assistant.",
+  title: `Terms of Service — ${BRAND_NAME}`,
+  description: `Terms of Service governing the use of ${BRAND_NAME}.`,
 };
 
 export default function TermsPage() {
@@ -30,7 +31,7 @@ export default function TermsPage() {
           <section>
             <h2 className="text-base font-semibold text-zinc-100 mb-3">1. Acceptance of Terms</h2>
             <p>
-              By installing, configuring, or operating Nanda AI Job Assistant (the &quot;Software&quot;),
+              By installing, configuring, or operating {BRAND_NAME} (the &quot;Software&quot;),
               you agree to be bound by these Terms of Service (&quot;Terms&quot;). If you do not agree,
               do not use the Software.
             </p>
@@ -44,7 +45,7 @@ export default function TermsPage() {
           <section>
             <h2 className="text-base font-semibold text-zinc-100 mb-3">2. Description of Software</h2>
             <p>
-              Nanda AI Job Assistant is an open-source, self-hosted tool that automates the discovery
+              {BRAND_NAME} is an open-source, self-hosted tool that automates the discovery
               and AI-based evaluation of job vacancies from third-party employment platforms, primarily
               HH.ru. The Software interfaces with external APIs (Groq, Google Gemini, Hunter.io,
               Apollo.io, Telegram) on behalf of the user.
@@ -182,7 +183,7 @@ export default function TermsPage() {
             Settings
           </Link>
           <span>&middot;</span>
-          <span>Nanda AI Job Assistant</span>
+          <span>{BRAND_NAME}</span>
         </div>
       </div>
     </main>

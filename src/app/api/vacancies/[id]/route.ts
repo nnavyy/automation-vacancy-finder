@@ -9,30 +9,28 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/db";
+import { getApiUser } from "@/lib/auth-helpers";
 import { fetchVacancyJsonLd } from "@/lib/hhPublicVacancyClient";
 
 /**
  * GET /api/vacancies/[id]
  *
- * Fetch a single vacancy by its internal Prisma ID, along with:
- *  - Full VacancyAnalysis record (matchScore, recommendation, coverLetter, etc.)
- *  - All VacancyFeedback entries sorted newest-first
- *  - All ApplicationLog entries sorted newest-first
- *
- * Returns:
- *   200 { success: true, data: { ...vacancy, analysis, feedbacks, logs } }
- *   404 { success: false, error: "Vacancy not found" }
- *   500 { success: false, error: string }
+ * Fetch a single vacancy belonging to the authenticated user.
  */
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const user = await getApiUser();
+    if (!user) {
+      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
+
     const { id } = await params;
 
-    const vacancy = await prisma.vacancy.findUnique({
-      where: { id },
+    const vacancy = await prisma.vacancy.findFirst({
+      where: { id, userId: user.id },
       include: {
         // Full analysis — all fields including cover letter, questions, red flags
         analysis: true,

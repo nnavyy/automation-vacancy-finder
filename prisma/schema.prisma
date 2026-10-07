@@ -105,6 +105,7 @@ model Vacancy {
   rawData         Json?
   sourceKeyword   String?
   status          String   @default("new")
+  filterReason    String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -115,6 +116,7 @@ model Vacancy {
 
   @@unique([userId, hhId])
   @@index([userId, status])
+  @@index([userId, createdAt])
   @@map("vacancies")
 }
 
@@ -143,6 +145,7 @@ model VacancyAnalysis {
 
   createdAt DateTime @default(now())
 
+  @@index([matchScore])
   @@map("vacancy_analyses")
 }
 
@@ -164,6 +167,7 @@ model VacancyFeedback {
 
   createdAt DateTime @default(now())
 
+  @@index([vacancyId])
   @@map("vacancy_feedbacks")
 }
 
@@ -180,6 +184,7 @@ model ApplicationLog {
 
   createdAt DateTime @default(now())
 
+  @@index([vacancyId])
   @@map("application_logs")
 }
 
@@ -282,4 +287,23 @@ model CompanyContact {
   createdAt       DateTime @default(now())
 
   @@map("company_contacts")
+}
+
+// ============================================================
+// CatalogTerm — Dynamic auto-updating suggestion dictionary
+// Tracks popularity of roles, skills, and keywords across users
+// ============================================================
+model CatalogTerm {
+  id         String   @id @default(cuid())
+  category   String   // "roles" | "skills" | "keywords_ru" | "keywords_en" | "exclude" | "red_flag"
+  value      String
+  lang       String   @default("all") // "en" | "ru" | "all"
+  usageCount Int      @default(1)
+  isCurated  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([category, value])
+  @@index([category, usageCount])
+  @@map("catalog_terms")
 }

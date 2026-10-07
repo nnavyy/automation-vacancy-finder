@@ -7,24 +7,26 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/db";
-import { requireUser } from "@/lib/auth-helpers";
+import { getApiUser } from "@/lib/auth-helpers";
+import { encrypt } from "@/lib/crypto";
+import { recordPreferenceCatalogTerms } from "@/lib/catalog/dynamic";
 import type { SearchPreferenceData } from "@/types";
 
 // ── Default Values ────────────────────────────────────────────
 
 const PREF_DEFAULTS = {
   name:                  "Default",
-  targetRoles:           ["Full Stack Developer", "Frontend Developer", "UI/UX Designer", "Web Developer", "WordPress Developer"],
-  searchKeywordsEn:      ["full stack developer", "frontend developer", "react developer", "next.js developer", "UI/UX designer", "web developer intern", "wordpress developer"],
-  searchKeywordsRu:      ["фулл стек разработчик", "фронтенд разработчик", "веб разработчик", "react разработчик", "стажёр разработчик", "UI/UX дизайнер"],
+  targetRoles:           ["Frontend Developer", "Full Stack Developer", "Software Engineer"],
+  searchKeywordsEn:      ["frontend developer", "full stack developer", "react developer", "next.js developer"],
+  searchKeywordsRu:      ["фронтенд разработчик", "фулл стек разработчик", "веб разработчик", "react разработчик"],
   requiredSkills:        ["React", "TypeScript", "JavaScript", "Next.js"],
-  niceToHaveSkills:      ["Figma", "Node.js", "Tailwind CSS", "Prisma", "WordPress", "PostgreSQL", "REST API", "JWT Auth"],
-  experience:            ["noExperience", "between1And3"],
-  workFormat:            ["remote"],
+  niceToHaveSkills:      ["Tailwind CSS", "Node.js", "PostgreSQL", "REST API", "Git"],
+  experience:            ["between1And3", "between3And6"],
+  workFormat:            ["remote", "hybrid"],
   salaryMinimum:         null as number | null,
   salaryCurrency:        "RUR",
   excludeKeywords:       [],
-  redFlagKeywords:       ["паспорт", "залог"],
+  redFlagKeywords:       ["паспорт", "залог", "unpaid"],
   minimumScoreToNotify:  70,
   maxNotificationsPerDay: 20,
   aiProviderOrder:       ["groq", "gemini", "openrouter"],
@@ -45,8 +47,14 @@ function pick<T extends object, K extends keyof T>(obj: T, keys: K[]): Partial<T
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function serializePref(pref: any) {
+  const hasHhToken = Boolean(pref.hhToken);
+  // Clone and redact sensitive session cookies
+  const clean = { ...pref };
+  delete clean.hhToken;
+
   return {
-    ...pref,
+    ...clean,
+    hasHhToken,
     targetRoles:           Array.isArray(pref.targetRoles)           ? pref.targetRoles           : [],
     searchKeywordsEn:      Array.isArray(pref.searchKeywordsEn)      ? pref.searchKeywordsEn      : [],
     searchKeywordsRu:      Array.isArray(pref.searchKeywordsRu)      ? pref.searchKeywordsRu      : [],
@@ -56,13 +64,18 @@ function serializePref(pref: any) {
     workFormat:            Array.isArray(pref.workFormat)            ? pref.workFormat            : [],
     excludeKeywords:       Array.isArray(pref.excludeKeywords)       ? pref.excludeKeywords       : [],
     redFlagKeywords:       Array.isArray(pref.redFlagKeywords)       ? pref.redFlagKeywords       : [],
+    aiProviderOrder:       Array.isArray(pref.aiProviderOrder)       ? pref.aiProviderOrder       : ["groq", "gemini", "openrouter"],
   };
 }
 
 // ── GET ───────────────────────────────────────────────────────
 
 export async function GET() {
-  const user = await requireUser();
+  const user = await getApiUser();
+  if (!user) {
+    return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     let pref = await prisma.searchPreference.findFirst({
       where:   { userId: user.id, isActive: true },
@@ -96,7 +109,25 @@ export async function GET() {
       });
     }
 
-    return NextResponse.json({ success: true, data: serializePref(pref) });
+    // Live telemetry stats for the user
+    const [totalVacancies, appliedCount, avgScoreResult] = await Promise.all([
+      prisma.vacancy.count({ where: { userId: user.id } }),
+      prisma.vacancy.count({ where: { userId: user.id, status: "applied" } }),
+      prisma.vacancyAnalysis.aggregate({
+        where: { vacancy: { userId: user.id } },
+        _avg: { matchScore: true },
+      }),
+    ]);
+
+    return NextResponse.json({
+      success: true,
+      data: serializePref(pref),
+      stats: {
+        totalVacancies,
+        appliedCount,
+        avgScore: Math.round(avgScoreResult._avg.matchScore ?? 0),
+      },
+    });
   } catch (err) {
     console.error("[GET /api/settings]", err);
     return NextResponse.json({ success: false, error: "Failed to load settings" }, { status: 500 });
@@ -106,7 +137,10 @@ export async function GET() {
 // ── POST ──────────────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
-  const user = await requireUser();
+  const user = await getApiUser();
+  if (!user) {
+    return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+  }
   try {
     const body = (await req.json().catch(() => ({}))) as Partial<SearchPreferenceData> & { id?: string };
 
@@ -115,10 +149,15 @@ export async function POST(req: NextRequest) {
       "name", "salaryMinimum", "salaryCurrency",
       "minimumScoreToNotify", "maxNotificationsPerDay",
       "coverLetterLanguage", "resumeText", "isActive", "portfolioUrl",
-      "hhToken", "hhResumeId", "hhResumeTitle",
+      "hhResumeId", "hhResumeTitle",
       "hhProfileName", "hhProfileAvatar", "hhTotalApplications",
       "hhSessionStatus", "hhLastVerifiedAt", "hhExpiresAt",
     ]);
+
+    // Encrypt hhToken if a fresh token string was provided
+    if (typeof body.hhToken === "string" && body.hhToken.trim().length > 0 && !body.hhToken.includes("***")) {
+      scalarFields.hhToken = encrypt(body.hhToken.trim());
+    }
 
     // JSON array fields
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -127,9 +166,10 @@ export async function POST(req: NextRequest) {
       "targetRoles", "searchKeywordsEn", "searchKeywordsRu",
       "requiredSkills", "niceToHaveSkills", "experience",
       "workFormat", "excludeKeywords", "redFlagKeywords",
+      "aiProviderOrder",
     ];
     for (const key of arrayKeys) {
-      if (key in body) jsonFields[key] = body[key];
+      if (key in body && Array.isArray(body[key])) jsonFields[key] = body[key];
     }
 
     const safeData = { ...scalarFields, ...jsonFields };
@@ -152,6 +192,7 @@ export async function POST(req: NextRequest) {
         where: { id: existing.id },
         data:  { ...safeData, userId: user.id },
       });
+      void recordPreferenceCatalogTerms(jsonFields);
       return NextResponse.json({ success: true, data: serializePref(updated) });
     }
 
@@ -159,6 +200,7 @@ export async function POST(req: NextRequest) {
     const created = await prisma.searchPreference.create({
       data: { ...PREF_DEFAULTS, ...safeData, userId: user.id, isActive: true },
     });
+    void recordPreferenceCatalogTerms(jsonFields);
     return NextResponse.json({ success: true, data: serializePref(created) });
   } catch (err) {
     console.error("[POST /api/settings]", err);

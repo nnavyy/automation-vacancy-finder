@@ -11,6 +11,7 @@ import { saveFeedback } from "@/lib/feedbackLearning";
 import { buildAnalysisPrompt, parseAIResponse } from "@/lib/aiAnalyzer";
 import { callAI } from "@/lib/aiProviderRouter";
 import { getSimilarFeedbackExamples } from "@/lib/feedbackLearning";
+import { BRAND_NAME } from "@/lib/brand";
 import type { NormalizedVacancy, HHSalary } from "@/types";
 
 // ── Direct Telegram API call (no external deps) ──────────────
@@ -120,33 +121,33 @@ function toNormalizedVacancy(v: {
 
 // ── Action Handlers ───────────────────────────────────────────
 
-async function handleApprove(vacancyId: string): Promise<string> {
-  const v = await prisma.vacancy.findUnique({ where: { id: vacancyId } });
-  if (!v) return "❌ Vacancy not found.";
+async function handleApprove(vacancyId: string, userId: string): Promise<string> {
+  const v = await prisma.vacancy.findFirst({ where: { id: vacancyId, userId } });
+  if (!v) return "❌ Vacancy not found or access denied.";
   await saveFeedback(vacancyId, "apply");
   return `✅ <b>Marked as Applied!</b>\n\n<b>Role:</b> ${v.title}\n<b>Company:</b> ${v.company ?? "N/A"}\n\nGood luck! 🍀`;
 }
 
-async function handleSkip(vacancyId: string): Promise<string> {
-  const v = await prisma.vacancy.findUnique({ where: { id: vacancyId } });
-  if (!v) return "❌ Vacancy not found.";
+async function handleSkip(vacancyId: string, userId: string): Promise<string> {
+  const v = await prisma.vacancy.findFirst({ where: { id: vacancyId, userId } });
+  if (!v) return "❌ Vacancy not found or access denied.";
   await saveFeedback(vacancyId, "skip");
   return `🚫 <b>Vacancy Skipped</b>\n\n<b>Role:</b> ${v.title}\n<b>Company:</b> ${v.company ?? "N/A"}\n\nFeedback saved.`;
 }
 
-async function handleSave(vacancyId: string): Promise<string> {
-  const v = await prisma.vacancy.findUnique({ where: { id: vacancyId } });
-  if (!v) return "❌ Vacancy not found.";
+async function handleSave(vacancyId: string, userId: string): Promise<string> {
+  const v = await prisma.vacancy.findFirst({ where: { id: vacancyId, userId } });
+  if (!v) return "❌ Vacancy not found or access denied.";
   await saveFeedback(vacancyId, "save");
   return `💾 <b>Saved for Later</b>\n\n<b>Role:</b> ${v.title}\n<b>Company:</b> ${v.company ?? "N/A"}`;
 }
 
-async function handleEdit(vacancyId: string): Promise<string> {
-  const dbVac = await prisma.vacancy.findUnique({ where: { id: vacancyId }, include: { analysis: true } });
-  if (!dbVac) return "❌ Vacancy not found.";
+async function handleEdit(vacancyId: string, userId: string): Promise<string> {
+  const dbVac = await prisma.vacancy.findFirst({ where: { id: vacancyId, userId }, include: { analysis: true } });
+  if (!dbVac) return "❌ Vacancy not found or access denied.";
   const vacancy = toNormalizedVacancy(dbVac);
   const { positive, negative } = await getSimilarFeedbackExamples(vacancy);
-  const pref = await prisma.searchPreference.findFirst({ where: { userId: dbVac.userId, isActive: true } });
+  const pref = await prisma.searchPreference.findFirst({ where: { userId, isActive: true } });
   const prompt = await buildAnalysisPrompt(vacancy, [...positive, ...negative], pref);
   const aiResult = await callAI({ prompt, requestType: "cover_letter", maxTokens: 2048 });
 
@@ -194,6 +195,12 @@ export async function POST(req: NextRequest) {
   console.log("[Webhook] ── Incoming POST ──");
   console.log("[Webhook] TELEGRAM_BOT_TOKEN exists:", !!process.env.TELEGRAM_BOT_TOKEN);
 
+  const secretHeader = req.headers.get("x-telegram-bot-api-secret-token");
+  if (process.env.TELEGRAM_WEBHOOK_SECRET && secretHeader !== process.env.TELEGRAM_WEBHOOK_SECRET) {
+    console.warn("[Webhook] Invalid secret token header");
+    return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     const body = await req.text();
     console.log("[Webhook] Raw body:", body.slice(0, 500));
@@ -223,7 +230,12 @@ export async function POST(req: NextRequest) {
           const vacancyId = rText.split("\n").pop()?.trim();
           if (vacancyId) {
             try {
-              const dbVac = await prisma.vacancy.findUnique({ where: { id: vacancyId }, include: { analysis: true } });
+              const linked = await prisma.telegramLink.findFirst({ where: { telegramChatId: chatId, isActive: true } });
+              if (!linked) {
+                await tgSend(chatId, "❌ Account not linked. Use /link first.");
+                return NextResponse.json({ ok: true });
+              }
+              const dbVac = await prisma.vacancy.findFirst({ where: { id: vacancyId, userId: linked.userId }, include: { analysis: true } });
               if (dbVac && dbVac.analysis) {
                 await prisma.vacancyAnalysis.update({
                   where: { vacancyId },
@@ -243,7 +255,7 @@ export async function POST(req: NextRequest) {
       if (text === "/start") {
         console.log("[Webhook] Handling /start...");
         const result = await tgSend(chatId,
-          `👋 <b>Welcome to wingkiiy Job AI!</b>\n\n` +
+          `👋 <b>Welcome to ${BRAND_NAME}!</b>\n\n` +
           `To connect this bot with your dashboard:\n` +
           `1. Go to Settings in your dashboard\n` +
           `2. Click "Generate Telegram Token"\n` +
@@ -388,7 +400,7 @@ export async function POST(req: NextRequest) {
     if (!cb) return NextResponse.json({ ok: true });
 
     const cbData = cb.data ?? "";
-    const cbChatId = cb.message?.chat?.id?.toString();
+    const cbChatId = cb.message?.chat?.id?.toString() || cb.from?.id?.toString();
     const colonIdx = cbData.indexOf(":");
     if (colonIdx === -1) {
       await tgAnswerCallback(cb.id, "Unknown action");
@@ -402,41 +414,60 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true });
     }
 
-    console.log(`[Webhook] Callback: action="${action}" id="${targetId}"`);
+    if (!cbChatId) {
+      await tgAnswerCallback(cb.id, "No chat ID");
+      return NextResponse.json({ ok: true });
+    }
+
+    const linked = await prisma.telegramLink.findFirst({
+      where: { telegramChatId: cbChatId, isActive: true },
+    });
+    if (!linked) {
+      await tgAnswerCallback(cb.id, "❌ Not linked");
+      await tgSend(cbChatId, "❌ Account not linked. Use /link with your token from Settings first.");
+      return NextResponse.json({ ok: true });
+    }
+
+    console.log(`[Webhook] Callback: action="${action}" id="${targetId}" user="${linked.userId}"`);
 
     let reply: string;
     let toast: string;
 
     switch (action) {
       case "approve":
-        reply = await handleApprove(targetId);
+        reply = await handleApprove(targetId, linked.userId);
         toast = "✅ Applied!";
         break;
 
       case "profile": {
-        const pref = await prisma.searchPreference.findUnique({ where: { id: targetId } });
+        const pref = await prisma.searchPreference.findFirst({
+          where: { id: targetId, userId: linked.userId },
+        });
         if (pref) {
-          await prisma.searchPreference.updateMany({ where: { userId: pref.userId }, data: { isActive: false } });
-          await prisma.searchPreference.update({ where: { id: targetId }, data: { isActive: true } });
+          await prisma.searchPreference.updateMany({ where: { userId: linked.userId }, data: { isActive: false } });
+          await prisma.searchPreference.update({ where: { id: targetId, userId: linked.userId }, data: { isActive: true } });
+          reply = `✅ Active profile: ${pref.name}`;
+          toast = "Profile updated";
+        } else {
+          reply = "❌ Profile not found.";
+          toast = "Profile not found";
         }
-        reply = `✅ Active profile: ${pref?.name ?? "unknown"}`;
-        toast = "Profile updated";
         break;
       }
 
       case "skip":
-        reply = await handleSkip(targetId);
+        reply = await handleSkip(targetId, linked.userId);
         toast = "🚫 Skipped";
         break;
 
       case "save":
-        reply = await handleSave(targetId);
+        reply = await handleSave(targetId, linked.userId);
         toast = "💾 Saved";
         break;
 
       case "edit":
         await tgAnswerCallback(cb.id, "✍️ Regenerating...");
-        reply = await handleEdit(targetId);
+        reply = await handleEdit(targetId, linked.userId);
         if (cbChatId) await tgSend(cbChatId, reply);
         return NextResponse.json({ ok: true });
 

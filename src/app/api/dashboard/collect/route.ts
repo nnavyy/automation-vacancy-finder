@@ -5,12 +5,15 @@
 
 import { NextResponse } from "next/server";
 import { runCollectionPipeline } from "@/lib/collectionPipeline";
-import { requireUser } from "@/lib/auth-helpers";
+import { getApiUser } from "@/lib/auth-helpers";
 
 export const maxDuration = 300;
 
 export async function GET() {
-  const user = await requireUser();
+  const user = await getApiUser();
+  if (!user?.id) {
+    return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+  }
   try {
     console.log(`[Dashboard Collect] Starting collection for user ${user.id}...`);
     const result = await runCollectionPipeline(user.id);

@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/db";
-import { requireUser } from "@/lib/auth-helpers";
+import { getApiUser } from "@/lib/auth-helpers";
 import { checkHHSession } from "@/lib/hhPrivateClient";
 import { sendMessage } from "@/lib/telegram";
+import { decrypt } from "@/lib/crypto";
 
 export async function POST(req: NextRequest) {
   try {
-    const user = await requireUser();
+    const user = await getApiUser();
     if (!user) {
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
     }
@@ -23,7 +24,8 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const check = await checkHHSession(pref.hhToken);
+    const rawToken = decrypt(pref.hhToken);
+    const check = await checkHHSession(rawToken);
     const now = new Date();
 
     if (check.active) {

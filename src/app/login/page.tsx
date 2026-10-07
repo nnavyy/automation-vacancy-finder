@@ -5,6 +5,7 @@ import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Loader2, Mail, Lock, Cpu, ArrowRight } from "lucide-react";
+import { BRAND_NAME } from "@/lib/brand";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -47,7 +48,7 @@ export default function LoginPage() {
             <Cpu size={22} className="text-emerald-400" />
           </div>
           <h1 className="text-xl font-bold text-zinc-100 tracking-tight">
-            Nanda AI Job Assistant
+            {BRAND_NAME}
           </h1>
           <p className="text-xs text-zinc-400 mt-1">
             Sign in to access your vacancy pipeline

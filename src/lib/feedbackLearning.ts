@@ -53,7 +53,8 @@ function extractKeywords(title: string): string[] {
  * @returns Positive and negative SimilarFeedbackExample arrays
  */
 export async function getSimilarFeedbackExamples(
-  vacancy: NormalizedVacancy
+  vacancy: NormalizedVacancy,
+  userId?: string
 ): Promise<{
   positive: SimilarFeedbackExample[];
   negative: SimilarFeedbackExample[];
@@ -66,8 +67,9 @@ export async function getSimilarFeedbackExamples(
       return { positive: [], negative: [] };
     }
 
-    // Fetch recent feedback with their associated vacancy and AI analysis
+    // Fetch recent feedback isolated to this user (P0-4)
     const recentFeedbacks = await prisma.vacancyFeedback.findMany({
+      where: userId ? { vacancy: { userId } } : undefined,
       include: {
         vacancy: {
           include: {

@@ -20,6 +20,7 @@ import {
   LogOut
 } from "lucide-react";
 import { useState, useEffect } from "react";
+import { BRAND_NAME, BRAND_SHORT } from "@/lib/brand";
 
 interface NavItem {
   icon: LucideIcon;
@@ -98,10 +99,10 @@ export default function SidebarNav({ onNavigate }: { onNavigate?: () => void }) 
           </div>
           <div>
             <p className="text-sm font-semibold text-zinc-100 leading-tight">
-              Nanda AI Job Assistant
+              {BRAND_NAME}
             </p>
             <p className="text-xs text-zinc-500 leading-tight">
-              HH.ru Assistant
+              {BRAND_SHORT}
             </p>
           </div>
         </div>
@@ -166,7 +167,7 @@ export default function SidebarNav({ onNavigate }: { onNavigate?: () => void }) 
       <div className="p-4 border-t border-zinc-800/80 space-y-3">
         {userEmail && (
           <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-full bg-emerald-500/15 border border-emerald-500/25 flex items-center justify-center shrink-0">
+            <div className="w-7 h-7 rounded-lg bg-emerald-500/15 border border-emerald-500/25 flex items-center justify-center shrink-0">
               <span className="text-[11px] font-bold text-emerald-400 uppercase">
                 {(userName || userEmail)[0]}
               </span>

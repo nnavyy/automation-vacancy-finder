@@ -10,7 +10,8 @@ const BROWSER_USER_AGENT =
 /**
  * Standard API User-Agent for api.hh.ru REST endpoints.
  */
-const API_USER_AGENT = "NandaJobAssistant/1.0 (nandazhafran@gmail.com)";
+const API_USER_AGENT =
+  process.env.HH_USER_AGENT || "VacancyAssistant/2.0 (automation-client@vacancy-finder.io)";
 
 /**
  * Cleans and formats the HH cookie string.
@@ -299,15 +300,22 @@ function parseHHDate(dateStr: string): Date {
   return now;
 }
 
+export interface HHSyncHistoryResult {
+  success: boolean;
+  history: any[];
+  sessionExpired?: boolean;
+  error?: string;
+}
+
 /**
  * Scrapes all history of applications from HH.ru.
  */
-export async function syncHHHistory(cookieString: string): Promise<{ success: boolean; history: any[] }> {
+export async function syncHHHistory(cookieString: string): Promise<HHSyncHistoryResult> {
   const history: any[] = [];
   try {
     const formattedCookies = formatHHCookies(cookieString);
     if (!formattedCookies) {
-      return { success: false, history: [] };
+      return { success: false, history: [], error: "No HeadHunter session cookie provided." };
     }
 
     const headers = getWebHeaders(formattedCookies);
@@ -321,11 +329,44 @@ export async function syncHHHistory(cookieString: string): Promise<{ success: bo
         validateStatus: () => true,
       });
 
-      if (res.status !== 200) {
+      if (res.status === 403 || res.status === 401) {
+        if (page === 0) {
+          return {
+            success: false,
+            history: [],
+            sessionExpired: true,
+            error: "HeadHunter session is expired or invalid (403 Forbidden). Please reconnect your session.",
+          };
+        }
         break;
       }
 
       const html = String(res.data);
+
+      // Check if redirected to login page
+      if (html.includes('data-qa="login-input-username"') || html.includes("/account/login")) {
+        if (page === 0) {
+          return {
+            success: false,
+            history: [],
+            sessionExpired: true,
+            error: "HeadHunter session has expired (redirected to login). Please reconnect your session.",
+          };
+        }
+        break;
+      }
+
+      if (res.status !== 200) {
+        if (page === 0) {
+          return {
+            success: false,
+            history: [],
+            error: `HH.ru returned HTTP status ${res.status} when fetching negotiations.`,
+          };
+        }
+        break;
+      }
+
       const state = extractHHInitialState(html);
       let pageFoundCount = 0;
 
@@ -395,7 +436,7 @@ export async function syncHHHistory(cookieString: string): Promise<{ success: bo
     return { success: true, history };
   } catch (error: any) {
     console.error("[HH Private] Failed to sync history:", error.message);
-    return { success: false, history: [] };
+    return { success: false, history: [], error: error.message || "Failed to sync history from HH.ru" };
   }
 }
 
@@ -462,7 +503,7 @@ export async function applyToVacancy(
       throw new Error("HH.ru requires an employer questionnaire or direct browser response. Please use the vacancy link to submit.");
     }
 
-    return true;
+    throw new Error(`HH.ru rejected application submission with HTTP status ${res.status}`);
   } catch (error: any) {
     throw new Error(error.message || "Failed to submit application via HH.ru.");
   }

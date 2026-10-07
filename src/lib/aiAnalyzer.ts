@@ -172,10 +172,10 @@ Avoid (Red Flags):
 - passport/OTP/SMS code requests
 
 User feedback examples (learn from these to calibrate your scoring):
-Positive (Nanda liked / applied to similar roles):
+Positive (Candidate liked / applied to similar roles):
 ${positiveFeedbackBlock}
 
-Negative (Nanda skipped similar roles):
+Negative (Candidate skipped similar roles):
 ${negativeFeedbackBlock}
 
 Vacancy data:
@@ -239,20 +239,23 @@ ${coverLetterLangInstruction}
 export function parseAIResponse(raw: string): AIAnalysisResult {
   let jsonStr = raw.trim();
 
-  // 1. Strip markdown code fences  (```json ... ``` or ``` ... ```)
+  // 1. Strip reasoning blocks (e.g. <think> ... </think> from Qwen / DeepSeek / Llama Think)
+  jsonStr = jsonStr.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+
+  // 2. Strip markdown code fences (```json ... ``` or ``` ... ```)
   const fenceMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (fenceMatch?.[1]) {
     jsonStr = fenceMatch[1].trim();
   }
 
-  // 2. Find the outermost JSON object in case the AI added preamble text
+  // 3. Find the outermost JSON object
   const firstBrace = jsonStr.indexOf("{");
   const lastBrace = jsonStr.lastIndexOf("}");
   if (firstBrace !== -1 && lastBrace > firstBrace) {
     jsonStr = jsonStr.slice(firstBrace, lastBrace + 1);
   }
 
-  // 3. Parse
+  // 4. Parse
   let parsed: Partial<AIAnalysisResult>;
   try {
     parsed = JSON.parse(jsonStr) as Partial<AIAnalysisResult>;
@@ -263,45 +266,51 @@ export function parseAIResponse(raw: string): AIAnalysisResult {
     );
   }
 
-  // 4. Validate / apply defaults for every required field
+  // Parse numeric match_score robustly (handling string numbers like "85" or "85%")
+  const rawScore = (parsed as Record<string, unknown>).match_score;
+  let matchScore = 0;
+  if (typeof rawScore === "number") {
+    matchScore = rawScore;
+  } else if (typeof rawScore === "string") {
+    const parsedNum = parseInt(rawScore.replace(/[^0-9]/g, ""), 10);
+    if (!isNaN(parsedNum)) matchScore = parsedNum;
+  }
+
+  // Parse numeric confidence robustly
+  const rawConf = (parsed as Record<string, unknown>).confidence;
+  let confidence = 50;
+  if (typeof rawConf === "number") {
+    confidence = rawConf;
+  } else if (typeof rawConf === "string") {
+    const parsedConf = parseInt(rawConf.replace(/[^0-9]/g, ""), 10);
+    if (!isNaN(parsedConf)) confidence = parsedConf;
+  }
+
+  const recRaw = String(parsed.recommendation ?? "").toLowerCase().trim();
+  const recommendation = ["apply", "maybe", "skip"].includes(recRaw)
+    ? (recRaw as AIAnalysisResult["recommendation"])
+    : "maybe";
+
+  const langRaw = String(parsed.best_language ?? "").toLowerCase().trim();
+  const bestLanguage = ["english", "russian"].includes(langRaw)
+    ? (langRaw as AIAnalysisResult["best_language"])
+    : "english";
+
+  // 5. Validate / apply defaults for every required field
   const result: AIAnalysisResult = {
-    match_score:
-      typeof parsed.match_score === "number" ? parsed.match_score : 0,
-
-    recommendation: ["apply", "maybe", "skip"].includes(
-      parsed.recommendation ?? ""
-    )
-      ? (parsed.recommendation as AIAnalysisResult["recommendation"])
-      : "maybe",
-
-    best_language: ["english", "russian"].includes(parsed.best_language ?? "")
-      ? (parsed.best_language as AIAnalysisResult["best_language"])
-      : "english",
-
+    match_score: matchScore,
+    recommendation,
+    best_language: bestLanguage,
     summary: typeof parsed.summary === "string" ? parsed.summary : "",
-
-    match_reasons: Array.isArray(parsed.match_reasons)
-      ? parsed.match_reasons
-      : [],
-
-    missing_requirements: Array.isArray(parsed.missing_requirements)
-      ? parsed.missing_requirements
-      : [],
-
+    match_reasons: Array.isArray(parsed.match_reasons) ? parsed.match_reasons : [],
+    missing_requirements: Array.isArray(parsed.missing_requirements) ? parsed.missing_requirements : [],
     red_flags: Array.isArray(parsed.red_flags) ? parsed.red_flags : [],
-
-    cover_letter:
-      typeof parsed.cover_letter === "string" ? parsed.cover_letter : "",
-
-    questions_to_recruiter: Array.isArray(parsed.questions_to_recruiter)
-      ? parsed.questions_to_recruiter
-      : [],
-
-    confidence:
-      typeof parsed.confidence === "number" ? parsed.confidence : 50,
+    cover_letter: typeof parsed.cover_letter === "string" ? parsed.cover_letter : "",
+    questions_to_recruiter: Array.isArray(parsed.questions_to_recruiter) ? parsed.questions_to_recruiter : [],
+    confidence,
   };
 
-  // 5. Clamp numeric scores to valid range
+  // 6. Clamp numeric scores to valid range
   result.match_score = Math.max(0, Math.min(100, result.match_score));
   result.confidence = Math.max(0, Math.min(100, result.confidence));
 
@@ -321,8 +330,12 @@ export function parseAIResponse(raw: string): AIAnalysisResult {
  * @param vacancy - Vacancy to evaluate
  * @returns Full AIAnalysisResult with rule-based data and a confidence of 40
  */
-export function buildRuleBasedResult(vacancy: NormalizedVacancy): AIAnalysisResult {
-  const { score, reasons, penalties } = calculateRuleScore(vacancy);
+export function buildRuleBasedResult(
+  vacancy: NormalizedVacancy,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  pref?: any
+): AIAnalysisResult {
+  const { score, reasons, penalties } = calculateRuleScore(vacancy, pref);
 
   const combinedText = [
     vacancy.title ?? "",
@@ -330,7 +343,7 @@ export function buildRuleBasedResult(vacancy: NormalizedVacancy): AIAnalysisResu
     vacancy.snippet?.requirement ?? "",
   ].join(" ");
 
-  const redFlags = detectRedFlags(combinedText);
+  const redFlags = detectRedFlags(combinedText, pref?.redFlagKeywords);
 
   // Derive a recommendation from the numeric score and penalty count
   let recommendation: AIAnalysisResult["recommendation"] = "maybe";
@@ -340,20 +353,22 @@ export function buildRuleBasedResult(vacancy: NormalizedVacancy): AIAnalysisResu
     recommendation = "skip";
   }
 
-  // Generic cover letter template — better than nothing
+  // Generic dynamic cover letter template
+  const candidateName = pref?.name || "Applicant";
+  const candidateSkills = pref?.requiredSkills || "Software Engineering & Web Development";
+  const portfolioText = pref?.portfolioUrl
+    ? `\n\nYou can review my live portfolio and projects at ${pref.portfolioUrl}.`
+    : "";
+
   const coverLetter =
     `Dear Hiring Team,\n\n` +
-    `I am Nanda Zhafran Mahendra, an Indonesian final-year Software Engineering ` +
-    `student with strong experience in React, Next.js, TypeScript, and UI/UX design. ` +
-    `I came across the "${vacancy.title}" position at ` +
-    `${vacancy.company ?? "your company"} and believe my skill set aligns well ` +
-    `with your requirements.\n\n` +
-    `I am a fast learner who enjoys building clean, user-friendly web applications. ` +
-    `My portfolio at https://nandaz-portofolio.vercel.app/ showcases several ` +
-    `projects including AI chatbots, full-stack applications, and UI/UX designs.\n\n` +
-    `I am available immediately for remote work and would love the opportunity ` +
-    `to discuss how I can contribute to your team.\n\n` +
-    `Best regards,\nNanda Zhafran Mahendra`;
+    `I am writing to express my strong interest in the "${vacancy.title}" position at ` +
+    `${vacancy.company ?? "your company"}. With my background in ${candidateSkills}, ` +
+    `I believe my experience and technical skill set align well with your requirements.\n\n` +
+    `I am a proactive problem-solver dedicated to building robust, high-quality solutions.${portfolioText}\n\n` +
+    `I am available for remote work and would welcome the opportunity ` +
+    `to discuss how I can contribute to your team's goals.\n\n` +
+    `Best regards,\n${candidateName}`;
 
   return {
     match_score: score,
@@ -412,6 +427,7 @@ export async function analyzeVacancy(
     prompt,
     requestType: "analyze",
     maxTokens: 2048,
+    providerOrder: pref?.aiProviderOrder,
   });
 
   // ── Step 2: Handle total AI failure ──────────────────────
@@ -421,7 +437,7 @@ export async function analyzeVacancy(
         "Falling back to rule-based analysis."
     );
     return {
-      analysis: buildRuleBasedResult(vacancy) as AIAnalysisResult,
+      analysis: buildRuleBasedResult(vacancy, pref) as AIAnalysisResult,
       provider: "rule_based",
       model: "none",
       aiStatus: "rule_based_only",
@@ -454,7 +470,7 @@ export async function analyzeVacancy(
     );
 
     return {
-      analysis: buildRuleBasedResult(vacancy) as AIAnalysisResult,
+      analysis: buildRuleBasedResult(vacancy, pref) as AIAnalysisResult,
       provider: aiResult.provider,   // keep the provider that responded
       model: aiResult.model,
       aiStatus: "rule_based_only",

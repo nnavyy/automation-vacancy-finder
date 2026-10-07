@@ -18,29 +18,23 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/db";
+import { getApiUser } from "@/lib/auth-helpers";
 import { saveFeedback } from "@/lib/feedbackLearning";
 
-/**
- * POST /api/vacancies/[id]/skip
- *
- * Skips a vacancy and optionally records the reason.
- *
- * Body:  { reason?: string }
- *
- * Returns:
- *   200 { success: true, message: string }
- *   404 { success: false, error: "Vacancy not found" }
- *   500 { success: false, error: string }
- */
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const user = await getApiUser();
+    if (!user) {
+      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
+
     const { id } = await params;
 
-    // ── Validate vacancy exists ───────────────────────────
-    const vacancy = await prisma.vacancy.findUnique({ where: { id } });
+    // ── Validate vacancy belongs to authenticated user ────
+    const vacancy = await prisma.vacancy.findFirst({ where: { id, userId: user.id } });
     if (!vacancy) {
       return NextResponse.json(
         { success: false, error: "Vacancy not found" },

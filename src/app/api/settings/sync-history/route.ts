@@ -1,65 +1,114 @@
 import { NextRequest, NextResponse } from "next/server";
 import { syncHHHistory } from "@/lib/hhPrivateClient";
 import prisma from "@/lib/db";
-import { requireUser } from "@/lib/auth-helpers";
+import { getApiUser } from "@/lib/auth-helpers";
+import { decrypt } from "@/lib/crypto";
 
 export async function POST(req: NextRequest) {
   try {
-    const user = await requireUser();
-    const { token } = await req.json();
+    const user = await getApiUser();
+    if (!user?.id) {
+      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
+    const body = await req.json().catch(() => ({}));
+    let token = body?.token;
+
+    const pref = await prisma.searchPreference.findFirst({
+      where: { userId: user.id, isActive: true },
+    });
+
+    if (!token && pref?.hhToken) {
+      token = decrypt(pref.hhToken);
+    }
 
     if (!token) {
-      return NextResponse.json({ success: false, error: "Token is required" }, { status: 400 });
+      return NextResponse.json(
+        { success: false, error: "No HeadHunter session found. Please connect your HeadHunter account first." },
+        { status: 400 }
+      );
     }
 
     const result = await syncHHHistory(token);
     
-    if (result.success && result.history.length > 0) {
-      // Upsert into Vacancy database
-      let newAdded = 0;
-      for (const item of result.history) {
-        // Extract ID from URL (e.g. /vacancy/123456)
-        let vacancyIdMatch = item.url.match(/vacancy\/(\d+)/);
-        let vacancyId = vacancyIdMatch ? vacancyIdMatch[1] : `manual-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
-        
-        // Check if already in DB for this user
-        const exists = await prisma.vacancy.findFirst({
-          where: { hhId: vacancyId, userId: user.id }
-        });
-        
-        if (!exists) {
-          const created = await prisma.vacancy.create({
+    if (!result.success) {
+      if (result.sessionExpired) {
+        if (pref) {
+          await prisma.searchPreference.update({
+            where: { id: pref.id },
             data: {
-              userId: user.id,
-              hhId: vacancyId,
-              title: item.title,
-              company: item.company,
-              url: item.url ? (item.url.startsWith('http') ? item.url : `https://hh.ru${item.url}`) : "",
-              status: "applied_manual",
-              sourceKeyword: "HH.ru Sync",
-              createdAt: item.appliedAt,
-              updatedAt: item.appliedAt,
-            }
+              hhSessionStatus: "expired",
+              hhLastVerifiedAt: new Date(),
+            },
           });
-          
-          await prisma.applicationLog.create({
-            data: {
-              vacancyId: created.id,
-              action: "HH.ru Sync",
-              notes: `Status on HH: ${item.status}`
-            }
-          });
-          newAdded++;
         }
+        return NextResponse.json(
+          {
+            success: false,
+            sessionExpired: true,
+            error:
+              "HeadHunter session is expired or logged out (403). Please click 'Reconnect HeadHunter Session' or paste your cookie in the fallback section.",
+          },
+          { status: 401 }
+        );
       }
-      
-      return NextResponse.json({ 
-        success: true, 
-        message: `Successfully synchronized ${result.history.length} items. ${newAdded} new items added to your Applied dashboard.` 
+      return NextResponse.json(
+        { success: false, error: result.error || "Failed to fetch application history from HeadHunter." },
+        { status: 400 }
+      );
+    }
+
+    if (result.history.length === 0) {
+      return NextResponse.json({
+        success: true,
+        count: 0,
+        message: "HeadHunter session is active. No previous job applications were found on this account yet.",
       });
     }
 
-    return NextResponse.json({ success: false, error: "No history found or failed to fetch." }, { status: 400 });
+    // Upsert into Vacancy database
+    let newAdded = 0;
+    for (const item of result.history) {
+      // Extract ID from URL (e.g. /vacancy/123456)
+      let vacancyIdMatch = item.url.match(/vacancy\/(\d+)/);
+      let vacancyId = vacancyIdMatch ? vacancyIdMatch[1] : `manual-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+      
+      // Check if already in DB for this user
+      const exists = await prisma.vacancy.findFirst({
+        where: { hhId: vacancyId, userId: user.id }
+      });
+      
+      if (!exists) {
+        const created = await prisma.vacancy.create({
+          data: {
+            userId: user.id,
+            hhId: vacancyId,
+            title: item.title,
+            company: item.company,
+            url: item.url ? (item.url.startsWith('http') ? item.url : `https://hh.ru${item.url}`) : "",
+            status: "applied_manual",
+            sourceKeyword: "HH.ru Sync",
+            createdAt: item.appliedAt,
+            updatedAt: item.appliedAt,
+          }
+        });
+        
+        await prisma.applicationLog.create({
+          data: {
+            vacancyId: created.id,
+            action: "HH.ru Sync",
+            notes: `Status on HH: ${item.status}`
+          }
+        });
+        newAdded++;
+      }
+    }
+    
+    return NextResponse.json({ 
+      success: true, 
+      count: result.history.length,
+      newAdded,
+      message: `Successfully synchronized ${result.history.length} items. ${newAdded} new items added to your Applied dashboard.` 
+    });
   } catch (error: any) {
     console.error("[POST /api/settings/sync-history]", error);
     return NextResponse.json(
@@ -68,7 +117,3 @@ export async function POST(req: NextRequest) {
     );
   }
 }
-
-// force reload
-
-// force reload 2

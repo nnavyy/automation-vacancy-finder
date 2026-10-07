@@ -1,8 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { callAI } from "@/lib/aiProviderRouter";
+import { getApiUser } from "@/lib/auth-helpers";
 
 export async function POST(req: NextRequest) {
   try {
+    const user = await getApiUser();
+    if (!user) {
+      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
+
     const { text, mode = "text" } = await req.json();
     if (!text || typeof text !== "string") {
       return NextResponse.json({ success: false, error: "Text is required" }, { status: 400 });

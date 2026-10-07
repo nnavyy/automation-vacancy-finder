@@ -5,10 +5,13 @@
 
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
-import { requireUser } from "@/lib/auth-helpers";
+import { getApiUser } from "@/lib/auth-helpers";
 
 export async function POST() {
-  const user = await requireUser();
+  const user = await getApiUser();
+  if (!user?.id) {
+    return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+  }
   try {
     const pref = await prisma.searchPreference.findFirst({
       where: { userId: user.id, isActive: true },

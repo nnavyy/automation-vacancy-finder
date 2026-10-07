@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { fetchMyResumes, fetchHHProfile } from "@/lib/hhPrivateClient";
 import prisma from "@/lib/db";
-import { requireUser } from "@/lib/auth-helpers";
+import { getApiUser } from "@/lib/auth-helpers";
+import { encrypt } from "@/lib/crypto";
 
 /**
  * POST /api/settings/validate-hh
@@ -10,7 +11,7 @@ import { requireUser } from "@/lib/auth-helpers";
  */
 export async function POST(req: NextRequest) {
   try {
-    const user = await requireUser();
+    const user = await getApiUser();
     if (!user) {
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
     }
@@ -42,7 +43,7 @@ export async function POST(req: NextRequest) {
       await prisma.searchPreference.update({
         where: { id: pref.id },
         data: {
-          hhToken: cleanToken,
+          hhToken: encrypt(cleanToken),
           hhSessionStatus: "active",
           hhLastVerifiedAt: new Date(),
           hhProfileName: profile.name,

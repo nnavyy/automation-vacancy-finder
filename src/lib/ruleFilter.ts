@@ -1,59 +1,56 @@
 // ============================================================
-// Nanda AI Job Assistant — Rule-Based Pre-Filter
+// Vacancy AI Assistant — Rule-Based Pre-Filter
 // ============================================================
 // Runs BEFORE AI analysis to disqualify obviously bad vacancies.
-// Saves AI quota by rejecting scams, overly-senior roles, and
-// citizenship-restricted positions early.
+// Saves AI quota by rejecting scams, incompatible roles, and
+// strict constraint conflicts early.
 // ============================================================
 
 import type { NormalizedVacancy, SearchPreferenceData } from "@/types";
 
 // ── Constant Pattern Lists ────────────────────────────────────
 
-/** Russian / English citizenship restriction phrases */
-const CITIZENSHIP_PATTERNS: string[] = [
-  "гражданство рф",
-  "гражданин рф",
-  "russian citizenship required",
-  "гражданство российской федерации",
+/** Russian / English citizenship mandatory restriction phrases */
+const CITIZENSHIP_MANDATORY_PATTERNS: string[] = [
   "только граждане рф",
+  "гражданство рф обязательно",
+  "строго граждане рф",
+  "требуется гражданство рф",
+  "наличие гражданства рф обязательно",
 ];
 
-/** Unpaid / "free internship" indicators */
+/** Unpaid / "free work" indicators (contextual to avoid benefit false positives) */
 const UNPAID_PATTERNS: string[] = [
-  "без оплаты",
-  "бесплатная стажировка",
-  "unpaid",
-  "бесплатно",
+  "работа без оплаты",
+  "неоплачиваемая стажировка",
+  "неоплачиваемый",
+  "unpaid internship",
+  "без выплаты заработной платы",
   "без зарплаты",
 ];
 
 /** Requests payment FROM the applicant (scam indicators) */
 const PAYMENT_REQUEST_PATTERNS: string[] = [
-  "оплата обучения",
-  "внесите",
-  "залог",
-  "взнос",
-  "предоплата",
-  "оплатите",
-  "стоимость обучения",
+  "оплата обучения кандидатом",
+  "взнос за трудоустройство",
+  "страховой залог",
+  "предоплата за материалы",
+  "купите курс",
 ];
 
-/** Requests sensitive documents or verification codes */
+/** Requests sensitive documents or verification codes (scam indicators) */
 const OTP_PASSPORT_PATTERNS: string[] = [
-  "паспорт",
-  "passport copy",
-  "otp",
-  "смс код",
-  "sms code",
   "скан паспорта",
-  "верификационный код",
+  "фото паспорта",
+  "пришлите паспорт",
+  "паспортные данные для допуска",
+  "код из смс",
+  "смс-код",
+  "сообщите код подтверждения",
+  "пароль из смс",
 ];
 
-/**
- * HH experience IDs that indicate a senior-level role (6+ years).
- * Nanda is targeting junior / no-experience positions.
- */
+/** HH experience IDs that indicate a senior-level role (6+ years) */
 const SENIOR_EXPERIENCE_IDS: string[] = ["more6", "moreThan6"];
 
 // ── Helper ────────────────────────────────────────────────────
@@ -80,16 +77,8 @@ function containsAny(text: string, patterns: string[]): string | null {
  * Returns `{ passes: false, reason }` for any definite disqualifier,
  * or `{ passes: true }` if the vacancy should proceed to AI scoring.
  *
- * Checks (in order):
- *  1. User-defined excludeKeywords (case-insensitive match in title or description)
- *  2. Experience level "more6" / "moreThan6" (senior 6+ years — not suitable)
- *  3. Russian citizenship requirement
- *  4. Unpaid / free internship
- *  5. Payment requested from applicant
- *  6. OTP, passport, or SMS code requests (scam indicators)
- *
  * @param vacancy - Normalized vacancy to evaluate
- * @param pref    - Active search preferences (provides excludeKeywords)
+ * @param pref    - Active search preferences
  * @returns Filter result — { passes: true } or { passes: false, reason }
  */
 export function passesBasicFilter(
@@ -108,7 +97,8 @@ export function passesBasicFilter(
 
   // ── Rule 1: User-defined exclude keywords ─────────────────
   for (const keyword of pref.excludeKeywords) {
-    if (combinedText.includes(keyword.toLowerCase())) {
+    const k = keyword.trim().toLowerCase();
+    if (k && combinedText.includes(k)) {
       return {
         passes: false,
         reason: `Contains excluded keyword: "${keyword}"`,
@@ -116,50 +106,69 @@ export function passesBasicFilter(
     }
   }
 
-  // ── Rule 2: Senior 6+ years experience (HH experience ID) ─
+  // ── Rule 2: User-defined red flag keywords ────────────────
+  for (const keyword of pref.redFlagKeywords) {
+    const k = keyword.trim().toLowerCase();
+    if (k && combinedText.includes(k)) {
+      return {
+        passes: false,
+        reason: `Contains user red-flag keyword: "${keyword}"`,
+      };
+    }
+  }
+
+  // ── Rule 3: Senior 6+ years experience (only if user is not senior) ─
+  const userIsSenior = pref.experience?.some((e) => e.includes("6+") || e.includes("more6"));
   if (
+    !userIsSenior &&
     vacancy.experience &&
     SENIOR_EXPERIENCE_IDS.includes(vacancy.experience)
   ) {
     return {
       passes: false,
-      reason: `Requires 6+ years of experience (HH ID: ${vacancy.experience})`,
+      reason: `Requires 6+ years of senior experience (${vacancy.experience})`,
     };
   }
 
-  // ── Rule 3: Russian citizenship requirement ────────────────
-  const citizenshipMatch = containsAny(combinedText, CITIZENSHIP_PATTERNS);
-  if (citizenshipMatch) {
-    return {
-      passes: false,
-      reason: `Requires Russian citizenship — detected: "${citizenshipMatch}"`,
-    };
+  // ── Rule 4: Russian citizenship mandatory requirement ─────
+  // Ensure we don't disqualify if it says "гражданство РФ не требуется"
+  if (
+    !combinedText.includes("не требуется") &&
+    !combinedText.includes("не имеет значения")
+  ) {
+    const citizenshipMatch = containsAny(combinedText, CITIZENSHIP_MANDATORY_PATTERNS);
+    if (citizenshipMatch) {
+      return {
+        passes: false,
+        reason: `Requires mandatory Russian citizenship — detected: "${citizenshipMatch}"`,
+      };
+    }
   }
 
-  // ── Rule 4: Unpaid / free internship ──────────────────────
+  // ── Rule 5: Unpaid / unpaid internship ────────────────────
   const unpaidMatch = containsAny(combinedText, UNPAID_PATTERNS);
   if (unpaidMatch) {
     return {
       passes: false,
-      reason: `Appears to be unpaid — detected: "${unpaidMatch}"`,
+      reason: `Appears to be unpaid role — detected: "${unpaidMatch}"`,
     };
   }
 
-  // ── Rule 5: Payment requested from applicant (scam) ───────
+  // ── Rule 6: Payment requested from applicant (scam) ───────
   const paymentMatch = containsAny(combinedText, PAYMENT_REQUEST_PATTERNS);
   if (paymentMatch) {
     return {
       passes: false,
-      reason: `Requests payment from applicant — detected: "${paymentMatch}"`,
+      reason: `Requests financial payment from applicant — detected: "${paymentMatch}"`,
     };
   }
 
-  // ── Rule 6: OTP / passport / SMS code requests ────────────
+  // ── Rule 7: OTP / sensitive document requests (scam) ──────
   const otpMatch = containsAny(combinedText, OTP_PASSPORT_PATTERNS);
   if (otpMatch) {
     return {
       passes: false,
-      reason: `Requests personal documents or OTP code — detected: "${otpMatch}"`,
+      reason: `Requests sensitive personal documents or OTP code — detected: "${otpMatch}"`,
     };
   }
 

@@ -52,7 +52,7 @@ export interface HHLoginResult {
  */
 import os from "os";
 
-export async function performBrowserLogin(timeoutMs: number = 180000): Promise<HHLoginResult> {
+export async function performBrowserLogin(timeoutMs: number = 240000): Promise<HHLoginResult> {
   const executablePath = findBrowserExecutable();
   const profileDir = path.join(os.tmpdir(), `hh_login_session_${Date.now()}`);
   fs.mkdirSync(profileDir, { recursive: true });
@@ -77,14 +77,14 @@ export async function performBrowserLogin(timeoutMs: number = 180000): Promise<H
       ],
     });
 
-    const pages = await browser.pages();
-    const page = pages[0] || (await browser.newPage());
-    await page.bringToFront().catch(() => {});
+    const initialPages = await browser.pages();
+    const initialPage = initialPages[0] || (await browser.newPage());
+    await initialPage.bringToFront().catch(() => {});
 
     try {
-      await page.goto("https://hh.ru/account/login?backurl=%2Fapplicant%2Fresumes", {
+      await initialPage.goto("https://hh.ru/account/login?backurl=%2Fapplicant%2Fresumes", {
         waitUntil: "domcontentloaded",
-        timeout: 25000,
+        timeout: 30000,
       });
     } catch {
       // If initial domcontentloaded takes longer, page remains open and responsive in browser window
@@ -92,6 +92,7 @@ export async function performBrowserLogin(timeoutMs: number = 180000): Promise<H
 
     const startTime = Date.now();
     let loginDetected = false;
+    let targetPage = initialPage;
     let targetCookies: any[] = [];
 
     // Poll until login is completed or timeout is reached
@@ -102,23 +103,46 @@ export async function performBrowserLogin(timeoutMs: number = 180000): Promise<H
 
       try {
         const currentPages = await browser.pages();
-        const activePage = currentPages[0] || page;
-        const currentUrl = activePage.url();
 
-        // Check current cookies
-        const cookies = await activePage.cookies("https://hh.ru", "https://api.hh.ru");
-        const hhtokenCookie = cookies.find((c) => c.name === "hhtoken");
+        // Inspect every open tab/window for authentication indicators
+        for (const p of currentPages) {
+          const currentUrl = p.url();
 
-        // Check if logged in: hhtoken present AND not on the login/otp page
-        if (
-          hhtokenCookie &&
-          hhtokenCookie.value &&
-          !currentUrl.includes("/account/login") &&
-          !currentUrl.includes("/account/signup") &&
-          !currentUrl.includes("/account/verification")
-        ) {
-          loginDetected = true;
-          targetCookies = cookies;
+          // 1. Check all cookies in current page context and hh.ru domains
+          const pageCookies = await p.cookies().catch(() => []);
+          const domainCookies = await p.cookies("https://hh.ru", "https://api.hh.ru", "https://spb.hh.ru").catch(() => []);
+          
+          const cookieMap = new Map<string, any>();
+          for (const c of [...pageCookies, ...domainCookies]) {
+            if (c?.name && c?.value) {
+              cookieMap.set(c.name, c);
+            }
+          }
+          const allCookies = Array.from(cookieMap.values());
+          const hhtokenCookie = allCookies.find((c) => c.name === "hhtoken" && c.value);
+
+          const isAuthUrl =
+            currentUrl.includes("/applicant/") ||
+            currentUrl.includes("/resume/") ||
+            (currentUrl.includes("hh.ru") &&
+              !currentUrl.includes("/account/login") &&
+              !currentUrl.includes("/account/signup") &&
+              !currentUrl.includes("/account/verification") &&
+              !currentUrl.includes("/account/otp") &&
+              !currentUrl.includes("/account/code") &&
+              !currentUrl.includes("/account/captcha") &&
+              currentUrl !== "about:blank");
+
+          // Check if session token exists and user navigated away from login screens
+          if ((hhtokenCookie && isAuthUrl) || (currentUrl.includes("/applicant/resumes"))) {
+            loginDetected = true;
+            targetPage = p;
+            targetCookies = allCookies;
+            break;
+          }
+        }
+
+        if (loginDetected) {
           break;
         }
       } catch {
@@ -129,41 +153,48 @@ export async function performBrowserLogin(timeoutMs: number = 180000): Promise<H
     }
 
     if (!loginDetected) {
-      throw new Error("Login timed out. Please complete the login in the browser window.");
+      throw new Error(
+        "Login timed out (4 minutes). Please complete the sign-in inside the opened browser window, or use 'Advanced: Manual Cookie String Input (Fallback)' below."
+      );
     }
 
     // Ensure we are on applicant/resumes so we can extract profile & resumes directly
-    const currentPages = await browser.pages();
-    const activePage = currentPages[0] || page;
-    if (!activePage.url().includes("/applicant/resumes")) {
-      await activePage.goto("https://hh.ru/applicant/resumes", {
+    await targetPage.bringToFront().catch(() => {});
+    if (!targetPage.url().includes("/applicant/resumes")) {
+      await targetPage.goto("https://hh.ru/applicant/resumes", {
         waitUntil: "domcontentloaded",
-        timeout: 15000,
+        timeout: 20000,
       }).catch(() => {});
     }
 
     // Wait a brief moment for page rendering
-    await new Promise((r) => setTimeout(r, 2000));
+    await new Promise((r) => setTimeout(r, 2500));
 
     // Refresh cookies list to get all updated session & security cookies
-    targetCookies = await activePage.cookies("https://hh.ru", "https://api.hh.ru");
+    const pCookies = await targetPage.cookies().catch(() => []);
+    const domainCookies = await targetPage.cookies("https://hh.ru", "https://api.hh.ru", "https://spb.hh.ru").catch(() => []);
+    const cookieMap = new Map<string, any>();
+    for (const c of [...targetCookies, ...pCookies, ...domainCookies]) {
+      if (c?.name && c?.value) {
+        cookieMap.set(c.name, c);
+      }
+    }
+    const finalCookies = Array.from(cookieMap.values());
 
     // Format cookie string: "name1=val1; name2=val2"
-    const cookieString = targetCookies.map((c) => `${c.name}=${c.value}`).join("; ");
+    const cookieString = finalCookies.map((c) => `${c.name}=${c.value}`).join("; ");
 
     // Extract expiration date from hhtoken or fallback to 30 days
-    const hhtokenCookie = targetCookies.find((c) => c.name === "hhtoken");
+    const hhtokenCookie = finalCookies.find((c) => c.name === "hhtoken");
     let expiresAt: Date | null = null;
     if (hhtokenCookie && hhtokenCookie.expires && hhtokenCookie.expires > 0) {
-      // Puppeteer cookie.expires is in seconds
       expiresAt = new Date(hhtokenCookie.expires * 1000);
     } else {
-      // Default estimate: 30 days from now
       expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
     }
 
-    // Extract HTML directly from the logged-in page
-    const html = await page.content();
+    // Extract HTML directly from the active logged-in page
+    const html = await targetPage.content();
     const $ = cheerio.load(html);
 
     // Extract Resumes
@@ -187,6 +218,28 @@ export async function performBrowserLogin(timeoutMs: number = 180000): Promise<H
         }
       }
     });
+
+    // Check SSR state if resumes not found in DOM
+    if (resumes.length === 0) {
+      try {
+        const luxMatch = html.match(/<template[^>]*HH-Lux-InitialState[^>]*>([\s\S]*?)<\/template>/i);
+        const stateObj = luxMatch ? JSON.parse(luxMatch[1]) : null;
+        if (stateObj?.resumes && Array.isArray(stateObj.resumes)) {
+          for (const r of stateObj.resumes) {
+            if (r.id && !seenIds.has(r.id)) {
+              seenIds.add(r.id);
+              resumes.push({
+                id: r.id,
+                title: r.title || "Resume",
+                updated_at: r.updatedAt || new Date().toISOString(),
+                url: `https://hh.ru/resume/${r.id}`,
+                status: { id: r.status?.id || "published", name: r.status?.name || "Active" },
+              });
+            }
+          }
+        }
+      } catch {}
+    }
 
     // Extract Profile info
     const name = $('[data-qa="profile-activator-fullname"]').text().trim() || null;

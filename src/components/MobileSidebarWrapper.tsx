@@ -4,6 +4,8 @@ import { useState } from "react";
 import { Menu, X } from "lucide-react";
 import SidebarNav from "./SidebarNav";
 
+import { BRAND_NAME } from "@/lib/brand";
+
 export default function MobileSidebarWrapper() {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -15,7 +17,7 @@ export default function MobileSidebarWrapper() {
           <div className="w-7 h-7 rounded-lg bg-emerald-600 flex items-center justify-center shrink-0">
             <span className="text-white font-bold text-xs">AI</span>
           </div>
-          <span className="text-sm font-semibold text-zinc-100">Nanda AI Job Assistant</span>
+          <span className="text-sm font-semibold text-zinc-100">{BRAND_NAME}</span>
         </div>
         <button
           onClick={() => setIsOpen(!isOpen)}

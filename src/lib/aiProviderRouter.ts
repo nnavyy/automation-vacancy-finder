@@ -16,6 +16,7 @@ import Groq from "groq-sdk";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import type { AIProvider } from "@/types";
 import prisma from "@/lib/db";
+import { BRAND_NAME } from "@/lib/brand";
 
 // ── Model Defaults (overridable via env) ─────────────────────
 
@@ -48,6 +49,8 @@ export interface CallAIOptions {
   requestType: string;
   /** Maximum tokens in the completion (default: 2000) */
   maxTokens?: number;
+  /** Optional custom provider failover order (e.g. from user search preference) */
+  providerOrder?: (AIProvider | string)[];
 }
 
 export interface AICallResult {
@@ -168,7 +171,7 @@ export async function callOpenRouter(options: CallAIOptions): Promise<string> {
         // OpenRouter requires these headers for attribution / rate-limit buckets
         "HTTP-Referer":
           process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000",
-        "X-Title": "Nanda AI Job Assistant",
+        "X-Title": BRAND_NAME,
       },
       body: JSON.stringify({
         model: modelName,
@@ -249,12 +252,21 @@ export async function logAIUsage(
  * @returns AICallResult — content, provider, model, and rate-limit flag
  */
 export async function callAI(options: CallAIOptions): Promise<AICallResult> {
-  // Build the ordered provider list from environment variables
-  const providerOrder: AIProvider[] = [
+  const defaultOrder: AIProvider[] = [
     (process.env.AI_PROVIDER_PRIMARY as AIProvider | undefined) ?? "groq",
     (process.env.AI_PROVIDER_FALLBACK_1 as AIProvider | undefined) ?? "gemini",
     (process.env.AI_PROVIDER_FALLBACK_2 as AIProvider | undefined) ?? "openrouter",
   ];
+
+  let providerOrder: AIProvider[] = defaultOrder;
+  if (options.providerOrder && Array.isArray(options.providerOrder) && options.providerOrder.length > 0) {
+    const valid = options.providerOrder
+      .map((p) => p.toLowerCase().trim() as AIProvider)
+      .filter((p) => ["groq", "gemini", "openrouter"].includes(p));
+    if (valid.length > 0) {
+      providerOrder = valid;
+    }
+  }
 
   // Map each provider name to its caller function and model resolver
   const providerRegistry: Record<

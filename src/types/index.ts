@@ -107,6 +107,7 @@ export interface RuleScoreResult {
 // ------------------------------------------------------------
 export interface SearchPreferenceData {
   id: string;
+  userId?: string;
   name: string;
   targetRoles: string[];
   searchKeywordsEn: string[];

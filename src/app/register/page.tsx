@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
 import Link from "next/link";
 import { Loader2, Mail, Lock, User, Cpu, ArrowRight } from "lucide-react";
+import { BRAND_NAME } from "@/lib/brand";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -74,7 +75,7 @@ export default function RegisterPage() {
             <Cpu size={22} className="text-emerald-400" />
           </div>
           <h1 className="text-xl font-bold text-zinc-100 tracking-tight">
-            Nanda AI Job Assistant
+            {BRAND_NAME}
           </h1>
           <p className="text-xs text-zinc-400 mt-1">
             Create your account to start automated vacancy finding
@@ -102,7 +103,7 @@ export default function RegisterPage() {
                   type="text"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="Nanda Zhafran"
+                  placeholder="Your Full Name"
                   required
                   className="w-full bg-zinc-950 border border-zinc-800 rounded-lg pl-9 pr-3.5 py-2.5 text-sm text-zinc-100 placeholder-zinc-600 focus:border-emerald-500/60 focus:ring-1 focus:ring-emerald-500/30 focus:outline-none transition-colors"
                 />

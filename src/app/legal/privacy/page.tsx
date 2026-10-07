@@ -1,8 +1,9 @@
 import Link from "next/link";
+import { BRAND_NAME } from "@/lib/brand";
 
 export const metadata = {
-  title: "Privacy Policy — Nanda AI Job Assistant",
-  description: "Privacy Policy explaining how Nanda AI Job Assistant handles user data.",
+  title: `Privacy Policy — ${BRAND_NAME}`,
+  description: `Privacy Policy explaining how ${BRAND_NAME} handles user data.`,
 };
 
 export default function PrivacyPage() {
@@ -30,7 +31,7 @@ export default function PrivacyPage() {
           <section className="bg-zinc-900/60 border border-zinc-800 rounded-xl p-5">
             <h2 className="text-base font-semibold text-zinc-100 mb-2">Overview</h2>
             <p>
-              Nanda AI Job Assistant is a self-hosted, open-source application. This means the
+              {BRAND_NAME} is a self-hosted, open-source application. This means the
               project maintainers have no access to your data, your database, your API keys, or
               any information you enter into the Software. All data resides in the PostgreSQL
               database that you provision and control.
@@ -225,7 +226,7 @@ export default function PrivacyPage() {
             Settings
           </Link>
           <span>&middot;</span>
-          <span>Nanda AI Job Assistant</span>
+          <span>{BRAND_NAME}</span>
         </div>
       </div>
     </main>

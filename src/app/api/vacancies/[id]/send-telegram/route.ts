@@ -3,6 +3,7 @@ import prisma from "@/lib/db";
 import { sendVacancyNotification } from "@/lib/telegram";
 import type { AIAnalysisResult, NormalizedVacancy, HHSalary } from "@/types";
 import { buildRuleBasedResult } from "@/lib/aiAnalyzer";
+import { getApiUser, getOwnedVacancy } from "@/lib/auth-helpers";
 
 function toNormalizedVacancy(v: any): NormalizedVacancy {
   return {
@@ -30,13 +31,14 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const user = await getApiUser();
+    if (!user) {
+      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
+
     const { id } = await params;
 
-    const dbVacancy = await prisma.vacancy.findUnique({
-      where: { id },
-      include: { analysis: true },
-    });
-
+    const dbVacancy = await getOwnedVacancy(id, user.id);
     if (!dbVacancy) {
       return NextResponse.json({ success: false, error: "Vacancy not found" }, { status: 404 });
     }
@@ -63,7 +65,7 @@ export async function POST(
       const fallback = buildRuleBasedResult(toNormalizedVacancy(dbVacancy));
       aiAnalysis = fallback as AIAnalysisResult;
       
-      // If we have a cover letter (e.g. from the old bug), preserve it
+      // If we have a cover letter, preserve it
       if (a?.coverLetter) {
         aiAnalysis.cover_letter = a.coverLetter;
       }

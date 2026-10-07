@@ -5,15 +5,13 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/db";
-import { requireUser } from "@/lib/auth-helpers";
+import { getApiUser } from "@/lib/auth-helpers";
 import { callAI } from "@/lib/aiProviderRouter";
 
 export async function POST(req: NextRequest) {
   try {
-    let user;
-    try {
-      user = await requireUser();
-    } catch {
+    const user = await getApiUser();
+    if (!user?.id) {
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
     }
 

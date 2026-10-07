@@ -27,40 +27,62 @@ import { requireUser } from "@/lib/auth-helpers";
 
 export default async function DashboardPage() {
   const user = await requireUser();
-  let all: any[] = [];
   let total = 0;
+  let applied = 0;
+  let skipped = 0;
+  let saved = 0;
+  let aiPending = 0;
+  let avgScore = 0;
+  let highCount = 0;
+  let maybeCount = 0;
+  let lowCount = 0;
+  let analyzedCount = 0;
+  let lastSyncIso: string | undefined;
   let topMatches: any[] = [];
   let userPref: any = null;
 
   try {
-    const [allVacancies, allCount, topVacancies, pref] = await withRetry(() =>
+    const [
+      allCount,
+      statusGroups,
+      scoreAgg,
+      pendingCount,
+      highScoreCount,
+      maybeScoreCount,
+      lowScoreCount,
+      latestVacancy,
+      topVacancies,
+      pref,
+    ] = await withRetry(() =>
       Promise.all([
-        prisma.vacancy.findMany({
-          where: { userId: user.id },
-          take: 1000,
-          orderBy: { createdAt: "desc" },
-          select: {
-            id: true,
-            hhId: true,
-            title: true,
-            company: true,
-            area: true,
-            salary: true,
-            url: true,
-            status: true,
-            createdAt: true,
-            analysis: {
-              select: {
-                matchScore: true,
-                recommendation: true,
-                aiStatus: true,
-                summary: true,
-                matchReasons: true,
-              },
-            },
-          },
-        }),
         prisma.vacancy.count({ where: { userId: user.id } }),
+        prisma.vacancy.groupBy({
+          by: ["status"],
+          where: { userId: user.id },
+          _count: { _all: true },
+        }),
+        prisma.vacancyAnalysis.aggregate({
+          where: { vacancy: { userId: user.id } },
+          _avg: { matchScore: true },
+          _count: { matchScore: true },
+        }),
+        prisma.vacancyAnalysis.count({
+          where: { vacancy: { userId: user.id }, aiStatus: "pending_limit" },
+        }),
+        prisma.vacancyAnalysis.count({
+          where: { vacancy: { userId: user.id }, matchScore: { gte: 75 } },
+        }),
+        prisma.vacancyAnalysis.count({
+          where: { vacancy: { userId: user.id }, matchScore: { gte: 50, lt: 75 } },
+        }),
+        prisma.vacancyAnalysis.count({
+          where: { vacancy: { userId: user.id }, matchScore: { lt: 50 } },
+        }),
+        prisma.vacancy.findFirst({
+          where: { userId: user.id },
+          orderBy: { createdAt: "desc" },
+          select: { createdAt: true },
+        }),
         prisma.vacancy.findMany({
           where: {
             userId: user.id,
@@ -93,42 +115,37 @@ export default async function DashboardPage() {
         }),
       ])
     );
-    all = allVacancies;
+
     total = allCount;
     topMatches = topVacancies;
     userPref = pref;
+    aiPending = pendingCount;
+    avgScore = scoreAgg._avg.matchScore ? Math.round(scoreAgg._avg.matchScore) : 0;
+    analyzedCount = scoreAgg._count.matchScore ?? 0;
+    highCount = highScoreCount;
+    maybeCount = maybeScoreCount;
+    lowCount = lowScoreCount;
+    lastSyncIso = latestVacancy?.createdAt ? latestVacancy.createdAt.toISOString() : undefined;
+
+    for (const group of statusGroups) {
+      const count = group._count._all;
+      if (group.status === "applied_manual" || group.status === "applied_hh" || group.status === "applied_auto") {
+        applied += count;
+      } else if (group.status === "skipped" || group.status === "ignored") {
+        skipped += count;
+      } else if (group.status === "saved") {
+        saved += count;
+      }
+    }
   } catch (err) {
     console.error("[Dashboard] Failed to fetch data:", err);
     throw err;
   }
 
-  const applied = all.filter(
-    (v) => v.status === "applied_manual" || v.status === "applied_hh"
-  ).length;
-  const skipped = all.filter(
-    (v) => v.status === "skipped" || v.status === "ignored"
-  ).length;
-  const saved = all.filter((v) => v.status === "saved").length;
-  const aiPending = all.filter(
-    (v) => v.analysis?.aiStatus === "pending_limit"
-  ).length;
-
-  const analyzedVacancies = all.filter((v) => v.analysis?.matchScore !== undefined);
-  const scores = analyzedVacancies.map((v) => v.analysis!.matchScore);
-  const avgScore =
-    scores.length > 0
-      ? Math.round(scores.reduce((a: number, b: number) => a + b, 0) / scores.length)
-      : 0;
-
-  const highCount = scores.filter((s) => s >= 75).length;
-  const maybeCount = scores.filter((s) => s >= 50 && s < 75).length;
-  const lowCount = scores.filter((s) => s < 50).length;
-
   const conversionRate =
     total > 0 ? ((applied / total) * 100).toFixed(1) : "0.0";
 
   const targetRoles = userPref?.targetRoles ?? ["Frontend Developer", "Full Stack", "AI Engineer"];
-  const lastSyncIso = all[0]?.createdAt ? all[0].createdAt.toISOString() : undefined;
 
   const formattedTopMatches = topMatches.map((v) => ({
     id: v.id,
@@ -272,7 +289,7 @@ export default async function DashboardPage() {
                 Average Match Score
               </span>
               <span className="text-xs text-zinc-500 font-mono">
-                Based on {analyzedVacancies.length} analyzed vacancies
+                Based on {analyzedCount} analyzed vacancies
               </span>
             </div>
 
@@ -293,18 +310,15 @@ export default async function DashboardPage() {
             </div>
 
             {/* Score Breakdown Pills */}
-            <div className="flex items-center gap-3 text-xs flex-wrap">
-              <span className="flex items-center gap-1 text-zinc-300">
-                <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                HIGH (&gt;75%): <strong className="text-white">{highCount}</strong>
+            <div className="flex items-center gap-2 text-xs flex-wrap">
+              <span className="px-2.5 py-1 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-medium">
+                HIGH (&gt;75%): <strong className="text-white ml-1">{highCount}</strong>
               </span>
-              <span className="flex items-center gap-1 text-zinc-300">
-                <span className="w-2 h-2 rounded-full bg-amber-400" />
-                MAYBE (50-74%): <strong className="text-white">{maybeCount}</strong>
+              <span className="px-2.5 py-1 rounded-md bg-amber-500/10 border border-amber-500/20 text-amber-400 font-medium">
+                MAYBE (50-74%): <strong className="text-white ml-1">{maybeCount}</strong>
               </span>
-              <span className="flex items-center gap-1 text-zinc-300">
-                <span className="w-2 h-2 rounded-full bg-zinc-500" />
-                LOW (&lt;50%): <strong className="text-white">{lowCount}</strong>
+              <span className="px-2.5 py-1 rounded-md bg-zinc-800/80 border border-zinc-700/60 text-zinc-400 font-medium">
+                LOW (&lt;50%): <strong className="text-white ml-1">{lowCount}</strong>
               </span>
             </div>
           </div>
@@ -316,7 +330,7 @@ export default async function DashboardPage() {
               AI Optimization Suggestion
             </span>
             <p className="text-xs text-zinc-400 leading-relaxed">
-              Adding Next.js 14, Docker containerization, and PostgreSQL architectural patterns to your active resume would elevate estimated match confidence to ~68% for currently crawled positions.
+              Aligning your required skills and search keywords in Settings with recent vacancy patterns increases match calibration score across automated screening pipelines.
             </p>
           </div>
         </div>

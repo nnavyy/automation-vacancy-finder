@@ -1,6 +1,6 @@
-# Nanda AI Job Assistant
+# HH Job Copilot
 
-A self-hosted, AI-powered job search automation tool for HH.ru. Nanda continuously scrapes vacancies, evaluates them against your profile using large language models, alerts you via Telegram when a strong match is found, and provides an OSINT toolkit to locate recruiter contact information directly.
+A self-hosted, multi-user AI job search copilot for HH.ru. HH Job Copilot continuously gathers vacancies matching your customizable profile, screens them with deterministic filters and multi-provider AI (Groq, Gemini, OpenRouter), delivers instant interactive Telegram alerts with one-tap actions, and features company OSINT intelligence for recruiter outreach.
 
 ---
 
@@ -11,21 +11,22 @@ A self-hosted, AI-powered job search automation tool for HH.ru. Nanda continuous
 - [Architecture](#architecture)
 - [Getting Started](#getting-started)
 - [Configuration](#configuration)
-- [Automation with n8n](#automation-with-n8n)
+- [Automation & Cron](#automation-with-n8n)
 - [Usage](#usage)
-- [Contributing](#contributing)
+- [Testing](#testing)
 - [License](#license)
 
 ---
 
 ## Overview
 
-Traditional job search on HH.ru is manual and time-consuming. Nanda replaces that workflow with an automated pipeline:
+Traditional job search on HH.ru is manual and time-consuming. HH Job Copilot streamlines that workflow with an automated pipeline:
 
-1. A background scheduler fetches new vacancies matching your keywords every 30 minutes.
-2. An AI pipeline (Groq LLaMA-3 with Gemini fallback) reads every job description and scores it 0–100 against your profile.
-3. High-scoring vacancies trigger an instant Telegram notification.
-4. A dashboard lets you review scored vacancies, generate personalized cover letters, and run OSINT searches to find recruiter contacts.
+1. A background scheduler or cron fetches new vacancies matching your target roles and keywords.
+2. A fast rule-based pre-filter discards obvious scams, unpaid work, and strict constraint mismatches.
+3. An AI pipeline (configurable priority: Groq, Gemini, OpenRouter) analyzes job descriptions and generates a 0–100 match score with actionable insights.
+4. High-scoring vacancies trigger an instant Telegram alert with interactive callbacks (`Approve`, `Skip`, `Save`, `Edit Letter`).
+5. A dark, modern dashboard lets you review scored vacancies, translate Russian job descriptions, copy vacancy text with one click, manage multiple search profiles, and discover recruiter contacts.
 
 All processing happens on your own infrastructure. No data is sent to the project maintainers.
 
@@ -285,6 +286,23 @@ The default schedule is every 30 minutes for vacancy collection and analysis.
 
 - Open **Analytics** to view your collection-to-application funnel.
 - Use the 14-day, 30-day, or all-time filters to review performance trends.
+
+---
+
+## Testing
+
+The project includes automated unit test suites covering the profile autocomplete catalog, rule-based scorer, pre-filter heuristics, red flag detector, AI response parser, cryptographic helpers, rate limiting, and UI components using Vitest and React Testing Library:
+
+```bash
+# Run all unit test suites
+npm run test
+
+# Run tests in interactive watch mode
+npm run test:watch
+
+# Run tests with coverage reporting
+npm run test:coverage
+```
 
 ---
 

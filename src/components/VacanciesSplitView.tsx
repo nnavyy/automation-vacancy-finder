@@ -114,6 +114,7 @@ export default function VacanciesSplitView({
   const [translations, setTranslations] = useState<Record<string, string>>({});
   const [translating, setTranslating] = useState(false);
   const [showTranslated, setShowTranslated] = useState(false);
+  const [copiedDesc, setCopiedDesc] = useState(false);
 
   // Analysis on-demand state
   const [analyzingId, setAnalyzingId] = useState<string | null>(null);
@@ -317,6 +318,12 @@ export default function VacanciesSplitView({
     await navigator.clipboard.writeText(text);
     setCopiedPitch(true);
     setTimeout(() => setCopiedPitch(false), 2000);
+  };
+
+  const copyDescriptionText = async (text: string) => {
+    await navigator.clipboard.writeText(text);
+    setCopiedDesc(true);
+    setTimeout(() => setCopiedDesc(false), 2000);
   };
 
   const generateLivePitch = async () => {
@@ -850,18 +857,42 @@ export default function VacanciesSplitView({
                     <span className="text-xs font-semibold text-zinc-300">
                       {showTranslated ? "Translated English Text" : "Original Vacancy Text"}
                     </span>
-                    <button
-                      onClick={handleTranslate}
-                      disabled={translating}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-medium text-zinc-200 border border-zinc-700 transition-colors"
-                    >
-                      {translating ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      ) : (
-                        <Languages className="w-3.5 h-3.5 text-sky-400" />
-                      )}
-                      {showTranslated ? "Show Original" : "Translate to English"}
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => {
+                          const text = (showTranslated && translations[selectedVacancy.id])
+                            ? translations[selectedVacancy.id]
+                            : selectedVacancy.description || selectedVacancy.title;
+                          if (text) copyDescriptionText(text);
+                        }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-medium text-zinc-200 border border-zinc-700 transition-colors"
+                        title="Copy job description text to clipboard"
+                      >
+                        {copiedDesc ? (
+                          <>
+                            <CheckCheck className="w-3.5 h-3.5 text-emerald-400" />
+                            <span className="text-emerald-400">Copied</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3.5 h-3.5 text-zinc-400" />
+                            <span>Copy Text</span>
+                          </>
+                        )}
+                      </button>
+                      <button
+                        onClick={handleTranslate}
+                        disabled={translating}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-medium text-zinc-200 border border-zinc-700 transition-colors"
+                      >
+                        {translating ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Languages className="w-3.5 h-3.5 text-sky-400" />
+                        )}
+                        {showTranslated ? "Show Original" : "Translate to English"}
+                      </button>
+                    </div>
                   </div>
 
                   <div className="p-4 rounded-xl bg-zinc-950/50 border border-zinc-800 text-xs text-zinc-300 leading-relaxed whitespace-pre-wrap font-sans max-h-96 overflow-y-auto">

@@ -9,9 +9,11 @@ const inter = Inter({
   display: "swap",
 });
 
+import { BRAND_NAME, BRAND_TAGLINE } from "@/lib/brand";
+
 export const metadata: Metadata = {
-  title: "Nanda AI Job Assistant",
-  description: "Semi-automated HH.ru job search assistant",
+  title: `${BRAND_NAME} — ${BRAND_TAGLINE}`,
+  description: BRAND_TAGLINE,
 };
 
 export default function RootLayout({
