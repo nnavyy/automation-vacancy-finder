@@ -17,29 +17,33 @@ import {
   Users,
   LucideIcon,
   ChevronDown,
-  LogOut
+  LogOut,
+  Globe
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { BRAND_NAME, BRAND_SHORT } from "@/lib/brand";
+import { useLanguage } from "@/lib/i18n";
 
 interface NavItem {
   icon: LucideIcon;
-  label: string;
+  labelKey: string;
+  defaultLabel: string;
   href: string;
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { icon: LayoutDashboard, label: "Overview", href: "/dashboard" },
-  { icon: Briefcase, label: "Vacancies", href: "/dashboard/vacancies" },
-  { icon: Bookmark, label: "Saved", href: "/dashboard/saved" },
-  { icon: CheckCircle, label: "Applied", href: "/dashboard/applied" },
-  { icon: Users, label: "Company Intel", href: "/dashboard/company-intel" },
-  { icon: BarChart2, label: "Analytics", href: "/dashboard/analytics" },
-  { icon: Settings, label: "Settings", href: "/dashboard/settings" },
+  { icon: LayoutDashboard, labelKey: "nav.overview", defaultLabel: "Overview", href: "/dashboard" },
+  { icon: Briefcase, labelKey: "nav.vacancies", defaultLabel: "Vacancies", href: "/dashboard/vacancies" },
+  { icon: Bookmark, labelKey: "nav.saved", defaultLabel: "Saved", href: "/dashboard/saved" },
+  { icon: CheckCircle, labelKey: "nav.applied", defaultLabel: "Applied", href: "/dashboard/applied" },
+  { icon: Users, labelKey: "nav.companyIntel", defaultLabel: "Company Intel", href: "/dashboard/company-intel" },
+  { icon: BarChart2, labelKey: "nav.analytics", defaultLabel: "Analytics", href: "/dashboard/analytics" },
+  { icon: Settings, labelKey: "nav.settings", defaultLabel: "Settings", href: "/dashboard/settings" },
 ];
 
 export default function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
+  const { language, setLanguage, t, languages } = useLanguage();
   const [profiles, setProfiles] = useState<{id: string; name: string; isActive: boolean}[]>([]);
   const [loading, setLoading] = useState(true);
   const [userEmail, setUserEmail] = useState<string | null>(null);
@@ -135,7 +139,7 @@ export default function SidebarNav({ onNavigate }: { onNavigate?: () => void }) 
 
       {/* Nav links */}
       <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto custom-scrollbar">
-        {NAV_ITEMS.map(({ icon: Icon, label, href }) => {
+        {NAV_ITEMS.map(({ icon: Icon, labelKey, defaultLabel, href }) => {
           const isActive =
             href === "/dashboard"
               ? pathname === "/dashboard"
@@ -157,14 +161,38 @@ export default function SidebarNav({ onNavigate }: { onNavigate?: () => void }) 
                 strokeWidth={isActive ? 2.2 : 1.8}
                 className={isActive ? "text-emerald-400" : "text-zinc-500"}
               />
-              <span>{label}</span>
+              <span>{t(labelKey, defaultLabel)}</span>
             </Link>
           );
         })}
       </nav>
 
-      {/* Footer — User Email + Version */}
+      {/* Footer — Language Switcher + User Email + Version */}
       <div className="p-4 border-t border-zinc-800/80 space-y-3">
+        {/* Compact Language Selector */}
+        <div className="flex items-center justify-between p-1 bg-zinc-950 border border-zinc-800/80 rounded-lg text-[11px]">
+          <div className="flex items-center gap-1.5 px-2 text-zinc-400">
+            <Globe size={12} className="text-zinc-500" />
+            <span className="font-mono uppercase text-[10px] text-zinc-500">Lang</span>
+          </div>
+          <div className="flex items-center gap-1">
+            {languages.map(({ code }) => (
+              <button
+                key={code}
+                type="button"
+                onClick={() => setLanguage(code)}
+                className={`px-2 py-0.5 rounded font-mono text-[10px] uppercase font-semibold transition-all ${
+                  language === code
+                    ? "bg-zinc-800 text-emerald-400 border border-zinc-700/80"
+                    : "text-zinc-500 hover:text-zinc-300"
+                }`}
+              >
+                {code}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {userEmail && (
           <div className="flex items-center gap-2.5">
             <div className="w-7 h-7 rounded-lg bg-emerald-500/15 border border-emerald-500/25 flex items-center justify-center shrink-0">

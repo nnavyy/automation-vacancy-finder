@@ -39,6 +39,8 @@ next-env.d.ts
 
 # Cache & Legacy
 .cache/
+__pycache__/
+*.pyc
 .upm/
 .replit*
 replit.md

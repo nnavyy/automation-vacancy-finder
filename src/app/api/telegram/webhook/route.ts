@@ -123,33 +123,45 @@ function toNormalizedVacancy(v: {
 
 async function handleApprove(vacancyId: string, userId: string): Promise<string> {
   const v = await prisma.vacancy.findFirst({ where: { id: vacancyId, userId } });
-  if (!v) return "❌ Vacancy not found or access denied.";
+  if (!v) return "[Error] Vacancy not found or access denied.";
   await saveFeedback(vacancyId, "apply");
-  return `✅ <b>Marked as Applied!</b>\n\n<b>Role:</b> ${v.title}\n<b>Company:</b> ${v.company ?? "N/A"}\n\nGood luck! 🍀`;
+  return `<b>[Marked as Applied]</b>\n\n<b>Role:</b> ${v.title}\n<b>Company:</b> ${v.company ?? "N/A"}\n\nGood luck!`;
 }
 
 async function handleSkip(vacancyId: string, userId: string): Promise<string> {
   const v = await prisma.vacancy.findFirst({ where: { id: vacancyId, userId } });
-  if (!v) return "❌ Vacancy not found or access denied.";
+  if (!v) return "[Error] Vacancy not found or access denied.";
   await saveFeedback(vacancyId, "skip");
-  return `🚫 <b>Vacancy Skipped</b>\n\n<b>Role:</b> ${v.title}\n<b>Company:</b> ${v.company ?? "N/A"}\n\nFeedback saved.`;
+  return `<b>[Vacancy Skipped]</b>\n\n<b>Role:</b> ${v.title}\n<b>Company:</b> ${v.company ?? "N/A"}\n\nFeedback saved.`;
 }
 
 async function handleSave(vacancyId: string, userId: string): Promise<string> {
   const v = await prisma.vacancy.findFirst({ where: { id: vacancyId, userId } });
-  if (!v) return "❌ Vacancy not found or access denied.";
+  if (!v) return "[Error] Vacancy not found or access denied.";
   await saveFeedback(vacancyId, "save");
-  return `💾 <b>Saved for Later</b>\n\n<b>Role:</b> ${v.title}\n<b>Company:</b> ${v.company ?? "N/A"}`;
+  return `<b>[Saved for Later]</b>\n\n<b>Role:</b> ${v.title}\n<b>Company:</b> ${v.company ?? "N/A"}`;
 }
 
 async function handleEdit(vacancyId: string, userId: string): Promise<string> {
   const dbVac = await prisma.vacancy.findFirst({ where: { id: vacancyId, userId }, include: { analysis: true } });
-  if (!dbVac) return "❌ Vacancy not found or access denied.";
+  if (!dbVac) return "[Error] Vacancy not found or access denied.";
   const vacancy = toNormalizedVacancy(dbVac);
-  const { positive, negative } = await getSimilarFeedbackExamples(vacancy);
+  const { positive, negative } = await getSimilarFeedbackExamples(vacancy, userId);
+  const similarFeedback = [...positive, ...negative];
   const pref = await prisma.searchPreference.findFirst({ where: { userId, isActive: true } });
-  const prompt = await buildAnalysisPrompt(vacancy, [...positive, ...negative], pref);
-  const aiResult = await callAI({ prompt, requestType: "cover_letter", maxTokens: 2048 });
+  const prompt = await buildAnalysisPrompt(vacancy, similarFeedback, pref);
+  const customConfig =
+    (pref as any)?.aiCustomConfig ??
+    (typeof pref?.aiProviderOrder === "object" && !Array.isArray(pref?.aiProviderOrder)
+      ? (pref?.aiProviderOrder as any)
+      : undefined);
+  const aiResult = await callAI({
+    prompt,
+    requestType: "cover_letter",
+    maxTokens: 2048,
+    providerOrder: Array.isArray(pref?.aiProviderOrder) ? (pref.aiProviderOrder as string[]) : customConfig?.order,
+    customConfig,
+  });
 
   let coverLetter: string;
   if (aiResult.isRateLimited || !aiResult.content.trim()) {
@@ -172,7 +184,7 @@ async function handleEdit(vacancyId: string, userId: string): Promise<string> {
   });
 
   const truncated = coverLetter.length > 3500 ? `${coverLetter.slice(0, 3500)}…\n\n<i>(truncated)</i>` : coverLetter;
-  return `✍️ <b>New Cover Letter for "${dbVac.title}"</b>\n\n<i>${truncated}</i>\n\n<b>Provider:</b> ${aiResult.provider}`;
+  return `<b>[New Cover Letter] "${dbVac.title}"</b>\n\n<i>${truncated}</i>\n\n<b>Provider:</b> ${aiResult.provider}`;
 }
 
 // ── GET: Health check ─────────────────────────────────────────
@@ -232,7 +244,7 @@ export async function POST(req: NextRequest) {
             try {
               const linked = await prisma.telegramLink.findFirst({ where: { telegramChatId: chatId, isActive: true } });
               if (!linked) {
-                await tgSend(chatId, "❌ Account not linked. Use /link first.");
+                await tgSend(chatId, "[Error] Account not linked. Use /link first.");
                 return NextResponse.json({ ok: true });
               }
               const dbVac = await prisma.vacancy.findFirst({ where: { id: vacancyId, userId: linked.userId }, include: { analysis: true } });
@@ -241,7 +253,7 @@ export async function POST(req: NextRequest) {
                   where: { vacancyId },
                   data: { coverLetter: text }
                 });
-                await tgSend(chatId, `✅ <b>Cover letter saved!</b>\nYour manual edit for "${dbVac.title}" has been saved successfully.`);
+                await tgSend(chatId, `<b>[Cover Letter Saved]</b>\nYour manual edit for "${dbVac.title}" has been saved successfully.`);
                 return NextResponse.json({ ok: true });
               }
             } catch (err) {
@@ -255,7 +267,7 @@ export async function POST(req: NextRequest) {
       if (text === "/start") {
         console.log("[Webhook] Handling /start...");
         const result = await tgSend(chatId,
-          `👋 <b>Welcome to ${BRAND_NAME}!</b>\n\n` +
+          `<b>Welcome to ${BRAND_NAME}!</b>\n\n` +
           `To connect this bot with your dashboard:\n` +
           `1. Go to Settings in your dashboard\n` +
           `2. Click "Generate Telegram Token"\n` +
@@ -275,14 +287,14 @@ export async function POST(req: NextRequest) {
       if (text.startsWith("/link ")) {
         const token = text.slice(6).trim().toUpperCase();
         if (!token || token.length < 4) {
-          await tgSend(chatId, "❌ Invalid token. Please check and try again.");
+          await tgSend(chatId, "[Error] Invalid token. Please check and try again.");
           return NextResponse.json({ ok: true });
         }
 
         try {
           const link = await prisma.telegramLink.findFirst({ where: { token, isActive: true } });
           if (!link) {
-            await tgSend(chatId, "❌ Token not found or expired.\nGenerate a new one from the dashboard Settings.");
+            await tgSend(chatId, "[Error] Token not found or expired.\nGenerate a new one from the dashboard Settings.");
             return NextResponse.json({ ok: true });
           }
           await prisma.telegramLink.update({
@@ -290,14 +302,14 @@ export async function POST(req: NextRequest) {
             data: { telegramChatId: chatId, telegramUsername: username, linkedAt: new Date() },
           });
           await tgSend(chatId,
-            `✅ <b>Successfully linked!</b>\n\n` +
+            `<b>[Successfully Linked]</b>\n\n` +
             `Your Telegram is now connected to the dashboard.\n` +
             `You will receive vacancy notifications here.\n\n` +
             `Try /profiles to switch your active profile.`
           );
         } catch (err) {
           console.error("[Webhook] /link DB error:", err);
-          await tgSend(chatId, "⚠️ Error linking account. Please try again.");
+          await tgSend(chatId, "[Error] Error linking account. Please try again.");
         }
         return NextResponse.json({ ok: true });
       }
@@ -307,7 +319,7 @@ export async function POST(req: NextRequest) {
         try {
           const linked = await prisma.telegramLink.findFirst({ where: { telegramChatId: chatId, isActive: true } });
           if (!linked) {
-            await tgSend(chatId, "❌ Not linked yet. Use /link &lt;TOKEN&gt; first.");
+            await tgSend(chatId, "[Error] Not linked yet. Use /link &lt;TOKEN&gt; first.");
             return NextResponse.json({ ok: true });
           }
           const profiles = await prisma.searchPreference.findMany({
@@ -317,12 +329,12 @@ export async function POST(req: NextRequest) {
           if (profiles.length === 0) {
             await tgSend(chatId, "No profiles found. Create one in the dashboard first.");
           } else {
-            const kb = profiles.map((p) => [{ text: `${p.isActive ? "✅" : "⚪"} ${p.name}`, callback_data: `profile:${p.id}` }]);
+            const kb = profiles.map((p) => [{ text: `${p.isActive ? "[Active] " : ""}${p.name}`, callback_data: `profile:${p.id}` }]);
             await tgSend(chatId, "Select your active profile:", { inline_keyboard: kb });
           }
         } catch (err) {
           console.error("[Webhook] /profiles error:", err);
-          await tgSend(chatId, "⚠️ Error loading profiles.");
+          await tgSend(chatId, "[Error] Error loading profiles.");
         }
         return NextResponse.json({ ok: true });
       }
@@ -331,24 +343,24 @@ export async function POST(req: NextRequest) {
       if (text === "/saved") {
         try {
           const linked = await prisma.telegramLink.findFirst({ where: { telegramChatId: chatId, isActive: true } });
-          if (!linked) { await tgSend(chatId, "❌ Not linked. Use /link first."); return NextResponse.json({ ok: true }); }
+          if (!linked) { await tgSend(chatId, "[Error] Not linked. Use /link first."); return NextResponse.json({ ok: true }); }
           const saved = await prisma.vacancy.findMany({
             where: { userId: linked.userId, status: "saved" },
             orderBy: { updatedAt: "desc" }, take: 10,
             include: { analysis: { select: { matchScore: true, recommendation: true } } },
           });
           if (saved.length === 0) {
-            await tgSend(chatId, "📌 No saved vacancies yet.");
+            await tgSend(chatId, "No saved vacancies yet.");
           } else {
             const lines = saved.map((v, i) => {
               const score = v.analysis?.matchScore ?? "—";
-              return `${i + 1}. <b>${v.title}</b>\n   ${v.company ?? "—"} • Score: ${score}\n   🔗 ${v.url ?? `https://hh.ru/vacancy/${v.hhId}`}`;
+              return `${i + 1}. <b>${v.title}</b>\n   ${v.company ?? "—"} • Score: ${score}\n   ${v.url ?? `https://hh.ru/vacancy/${v.hhId}`}`;
             });
-            await tgSend(chatId, `📌 <b>Saved</b> (${saved.length})\n\n${lines.join("\n\n")}`);
+            await tgSend(chatId, `<b>[Saved]</b> (${saved.length})\n\n${lines.join("\n\n")}`);
           }
         } catch (err) {
           console.error("[Webhook] /saved error:", err);
-          await tgSend(chatId, "⚠️ Error loading saved vacancies.");
+          await tgSend(chatId, "[Error] Error loading saved vacancies.");
         }
         return NextResponse.json({ ok: true });
       }
@@ -357,24 +369,24 @@ export async function POST(req: NextRequest) {
       if (text === "/applied") {
         try {
           const linked = await prisma.telegramLink.findFirst({ where: { telegramChatId: chatId, isActive: true } });
-          if (!linked) { await tgSend(chatId, "❌ Not linked. Use /link first."); return NextResponse.json({ ok: true }); }
+          if (!linked) { await tgSend(chatId, "[Error] Not linked. Use /link first."); return NextResponse.json({ ok: true }); }
           const applied = await prisma.vacancy.findMany({
             where: { userId: linked.userId, status: "applied_manual" },
             orderBy: { updatedAt: "desc" }, take: 10,
             include: { analysis: { select: { matchScore: true } } },
           });
           if (applied.length === 0) {
-            await tgSend(chatId, "📋 No applied vacancies yet.");
+            await tgSend(chatId, "No applied vacancies yet.");
           } else {
             const lines = applied.map((v, i) => {
               const score = v.analysis?.matchScore ?? "—";
-              return `${i + 1}. <b>${v.title}</b>\n   ${v.company ?? "—"} • Score: ${score}\n   🔗 ${v.url ?? `https://hh.ru/vacancy/${v.hhId}`}`;
+              return `${i + 1}. <b>${v.title}</b>\n   ${v.company ?? "—"} • Score: ${score}\n   ${v.url ?? `https://hh.ru/vacancy/${v.hhId}`}`;
             });
-            await tgSend(chatId, `📋 <b>Applied</b> (${applied.length})\n\n${lines.join("\n\n")}`);
+            await tgSend(chatId, `<b>[Applied]</b> (${applied.length})\n\n${lines.join("\n\n")}`);
           }
         } catch (err) {
           console.error("[Webhook] /applied error:", err);
-          await tgSend(chatId, "⚠️ Error loading applied vacancies.");
+          await tgSend(chatId, "[Error] Error loading applied vacancies.");
         }
         return NextResponse.json({ ok: true });
       }
@@ -423,8 +435,8 @@ export async function POST(req: NextRequest) {
       where: { telegramChatId: cbChatId, isActive: true },
     });
     if (!linked) {
-      await tgAnswerCallback(cb.id, "❌ Not linked");
-      await tgSend(cbChatId, "❌ Account not linked. Use /link with your token from Settings first.");
+      await tgAnswerCallback(cb.id, "Not linked");
+      await tgSend(cbChatId, "[Error] Account not linked. Use /link with your token from Settings first.");
       return NextResponse.json({ ok: true });
     }
 
@@ -436,7 +448,7 @@ export async function POST(req: NextRequest) {
     switch (action) {
       case "approve":
         reply = await handleApprove(targetId, linked.userId);
-        toast = "✅ Applied!";
+        toast = "Applied!";
         break;
 
       case "profile": {
@@ -446,10 +458,10 @@ export async function POST(req: NextRequest) {
         if (pref) {
           await prisma.searchPreference.updateMany({ where: { userId: linked.userId }, data: { isActive: false } });
           await prisma.searchPreference.update({ where: { id: targetId, userId: linked.userId }, data: { isActive: true } });
-          reply = `✅ Active profile: ${pref.name}`;
+          reply = `[Active] Profile: ${pref.name}`;
           toast = "Profile updated";
         } else {
-          reply = "❌ Profile not found.";
+          reply = "[Error] Profile not found.";
           toast = "Profile not found";
         }
         break;
@@ -457,22 +469,22 @@ export async function POST(req: NextRequest) {
 
       case "skip":
         reply = await handleSkip(targetId, linked.userId);
-        toast = "🚫 Skipped";
+        toast = "Skipped";
         break;
 
       case "save":
         reply = await handleSave(targetId, linked.userId);
-        toast = "💾 Saved";
+        toast = "Saved";
         break;
 
       case "edit":
-        await tgAnswerCallback(cb.id, "✍️ Regenerating...");
+        await tgAnswerCallback(cb.id, "Regenerating...");
         reply = await handleEdit(targetId, linked.userId);
         if (cbChatId) await tgSend(cbChatId, reply);
         return NextResponse.json({ ok: true });
 
       case "edit_man":
-        await tgAnswerCallback(cb.id, "✏️ Please type your cover letter...");
+        await tgAnswerCallback(cb.id, "Please type your cover letter...");
         if (cbChatId) {
           const forceReplyMarkup = { force_reply: true, selective: true };
           await tgSend(cbChatId, `Reply to this message to manually edit cover letter for Vacancy ID:\n${targetId}`, { reply_markup: forceReplyMarkup });

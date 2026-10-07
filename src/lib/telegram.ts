@@ -147,16 +147,16 @@ export async function sendMessage(
  * Composes and sends a richly formatted vacancy notification to Telegram.
  *
  * Message layout:
- *   🔥 New HH Job Match
+ *   [Job Match] HeadHunter
  *   Role / Company / Location / Salary / Experience / Format
  *   Score / Recommendation / Confidence
  *   Why it matches / Missing / Red flags
  *   Suggested language / Cover letter preview (200 chars)
  *
  * Inline keyboard buttons (two rows + URL row):
- *   [✅ Mark Applied]  [❌ Skip]
- *   [💾 Save]          [✍️ Edit Letter]
- *   [🔗 Open Vacancy]  ← url button, opens vacancy directly
+ *   [Mark Applied]  [Skip]
+ *   [Save]          [Edit Letter]
+ *   [Open Vacancy]  <- url button, opens vacancy directly
  *
  * callback_data format: "<action>:<vacancyId>"
  *   approve:xyz | skip:xyz | save:xyz | edit:xyz
@@ -171,42 +171,41 @@ export async function sendVacancyNotification(
   analysis: AIAnalysisResult,
   vacancyId: string
 ): Promise<boolean> {
-  // ── Emoji for recommendation ──────────────────────────────
-  const recEmoji: Record<string, string> = {
-    apply: "✅",
-    maybe: "🤔",
-    skip: "❌",
+  const recTag: Record<string, string> = {
+    apply: "[APPLY]",
+    maybe: "[MAYBE]",
+    skip: "[SKIP]",
   };
-  const recommendationIcon = recEmoji[analysis.recommendation] ?? "❓";
+  const recommendationIcon = recTag[analysis.recommendation] ?? `[${analysis.recommendation.toUpperCase()}]`;
 
   // ── Format match reasons ──────────────────────────────────
   const matchReasonsText =
     analysis.match_reasons.length > 0
-      ? analysis.match_reasons.map((r) => `  ✓ ${r}`).join("\n")
+      ? analysis.match_reasons.map((r) => `  - ${r}`).join("\n")
       : "  (none detected)";
 
   // ── Format missing requirements ───────────────────────────
   const missingText =
     analysis.missing_requirements.length > 0
-      ? analysis.missing_requirements.map((r) => `  • ${r}`).join("\n")
+      ? analysis.missing_requirements.map((r) => `  - ${r}`).join("\n")
       : "  (none)";
 
   // ── Format red flags ──────────────────────────────────────
-  const redFlagEmoji: Record<string, string> = {
-    high: "🚨",
-    medium: "⚠️",
-    low: "💡",
+  const redFlagTag: Record<string, string> = {
+    high: "[HIGH]",
+    medium: "[MEDIUM]",
+    low: "[LOW]",
   };
   const redFlagsText =
     analysis.red_flags.length > 0
       ? analysis.red_flags
           .map(
             (f) =>
-              `  ${redFlagEmoji[f.severity] ?? "⚠️"} [${f.severity.toUpperCase()}] ` +
+              `  ${redFlagTag[f.severity] ?? "[ALERT]"} [${f.severity.toUpperCase()}] ` +
               `${f.trigger_text}: ${f.reason}`
           )
           .join("\n")
-      : "  None detected ✅";
+      : "  None detected";
 
   // ── Cover letter preview (max 200 chars) ─────────────────
   const coverPreview =
@@ -217,7 +216,7 @@ export async function sendVacancyNotification(
   // ── Compose the full message ──────────────────────────────
   // All dynamic strings are HTML-escaped before insertion
   const message = [
-    `🔥 <b>New HH Job Match</b>`,
+    `<b>[Job Match] HeadHunter</b>`,
     ``,
     `<b>Role:</b> ${escapeHtml(vacancy.title)}`,
     `<b>Company:</b> ${escapeHtml(vacancy.company ?? "Not specified")}`,
@@ -249,21 +248,21 @@ export async function sendVacancyNotification(
     inline_keyboard: [
       [
         // Row 1: primary actions
-        { text: "✅ Mark Applied", callback_data: `approve:${vacancyId}` },
-        { text: "❌ Skip",         callback_data: `skip:${vacancyId}` },
+        { text: "Mark Applied", callback_data: `approve:${vacancyId}` },
+        { text: "Skip",         callback_data: `skip:${vacancyId}` },
       ],
       [
         // Row 2: secondary actions
-        { text: "💾 Save",           callback_data: `save:${vacancyId}` },
-        { text: "✍️ Regenerate",     callback_data: `edit:${vacancyId}` },
+        { text: "Save",         callback_data: `save:${vacancyId}` },
+        { text: "Regenerate",   callback_data: `edit:${vacancyId}` },
       ],
       [
-        { text: "✏️ Type Manual",    callback_data: `edit_man:${vacancyId}` },
+        { text: "Type Manual",  callback_data: `edit_man:${vacancyId}` },
       ],
       [
         // Row 3: direct link to vacancy on HH
         {
-          text: "🔗 Open Vacancy",
+          text: "Open Vacancy",
           url: vacancy.url ?? `https://hh.ru/vacancy/${vacancy.hhId}`,
         },
       ],
@@ -283,28 +282,28 @@ export async function sendVacancyNotificationToUser(
   vacancyId: string,
   chatId: string
 ): Promise<boolean> {
-  const recEmoji: Record<string, string> = { apply: "✅", maybe: "🤔", skip: "❌" };
-  const recommendationIcon = recEmoji[analysis.recommendation] ?? "❓";
+  const recTag: Record<string, string> = { apply: "[APPLY]", maybe: "[MAYBE]", skip: "[SKIP]" };
+  const recommendationIcon = recTag[analysis.recommendation] ?? `[${analysis.recommendation.toUpperCase()}]`;
 
   const matchReasonsText = analysis.match_reasons.length > 0
-    ? analysis.match_reasons.map((r) => `  ✓ ${r}`).join("\n")
+    ? analysis.match_reasons.map((r) => `  - ${r}`).join("\n")
     : "  (none detected)";
 
   const missingText = analysis.missing_requirements.length > 0
-    ? analysis.missing_requirements.map((r) => `  • ${r}`).join("\n")
+    ? analysis.missing_requirements.map((r) => `  - ${r}`).join("\n")
     : "  (none)";
 
-  const redFlagEmoji: Record<string, string> = { high: "🚨", medium: "⚠️", low: "💡" };
+  const redFlagTag: Record<string, string> = { high: "[HIGH]", medium: "[MEDIUM]", low: "[LOW]" };
   const redFlagsText = analysis.red_flags.length > 0
-    ? analysis.red_flags.map((f) => `  ${redFlagEmoji[f.severity] ?? "⚠️"} [${f.severity.toUpperCase()}] ${f.trigger_text}: ${f.reason}`).join("\n")
-    : "  None detected ✅";
+    ? analysis.red_flags.map((f) => `  ${redFlagTag[f.severity] ?? "[ALERT]"} [${f.severity.toUpperCase()}] ${f.trigger_text}: ${f.reason}`).join("\n")
+    : "  None detected";
 
   const coverPreview = analysis.cover_letter.length > 200
     ? `${analysis.cover_letter.slice(0, 200)}…`
     : analysis.cover_letter;
 
   const message = [
-    `🔥 <b>New HH Job Match</b>`,
+    `<b>[Job Match] HeadHunter</b>`,
     ``,
     `<b>Role:</b> ${escapeHtml(vacancy.title)}`,
     `<b>Company:</b> ${escapeHtml(vacancy.company ?? "Not specified")}`,
@@ -333,18 +332,18 @@ export async function sendVacancyNotificationToUser(
   const replyMarkup = {
     inline_keyboard: [
       [
-        { text: "✅ Mark Applied", callback_data: `approve:${vacancyId}` },
-        { text: "❌ Skip",         callback_data: `skip:${vacancyId}` },
+        { text: "Mark Applied", callback_data: `approve:${vacancyId}` },
+        { text: "Skip",         callback_data: `skip:${vacancyId}` },
       ],
       [
-        { text: "💾 Save",           callback_data: `save:${vacancyId}` },
-        { text: "✍️ Regenerate",     callback_data: `edit:${vacancyId}` },
+        { text: "Save",         callback_data: `save:${vacancyId}` },
+        { text: "Regenerate",   callback_data: `edit:${vacancyId}` },
       ],
       [
-        { text: "✏️ Type Manual",    callback_data: `edit_man:${vacancyId}` },
+        { text: "Type Manual",  callback_data: `edit_man:${vacancyId}` },
       ],
       [
-        { text: "🔗 Open Vacancy", url: vacancy.url ?? `https://hh.ru/vacancy/${vacancy.hhId}` },
+        { text: "Open Vacancy", url: vacancy.url ?? `https://hh.ru/vacancy/${vacancy.hhId}` },
       ],
     ],
   };

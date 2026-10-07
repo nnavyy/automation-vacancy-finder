@@ -43,6 +43,9 @@ const RETRYABLE_ERRORS = [
   "Unable to open a connection",
   "Pool timeout",
   "Error { kind: Closed }",
+  "Error in PostgreSQL connection",
+  "kind: Closed",
+  "Closed, cause: None",
 ];
 
 function isTransientError(err: unknown): boolean {

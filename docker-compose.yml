@@ -45,7 +45,10 @@ services:
       - CRON_SECRET=local-cron-secret-key
       - HH_USER_AGENT=HHJobCopilot/1.0 (selfhost@localhost)
     env_file:
-      - .env.local
+      - path: .env
+        required: false
+      - path: .env.local
+        required: false
 
 volumes:
   postgres_data:

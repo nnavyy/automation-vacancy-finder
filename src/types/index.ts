@@ -123,6 +123,7 @@ export interface SearchPreferenceData {
   minimumScoreToNotify: number;
   maxNotificationsPerDay: number;
   aiProviderOrder: string[];
+  aiCustomConfig?: AiPreferenceConfig | null;
   coverLetterLanguage: string;
   resumeText?: string | null;
   portfolioUrl?: string | null;
@@ -171,7 +172,33 @@ export interface ApiResponse<T = unknown> {
 // ------------------------------------------------------------
 // AI Provider config
 // ------------------------------------------------------------
-export type AIProvider = "groq" | "gemini" | "openrouter" | "openai" | "ollama" | "rule_based";
+export type AIProvider =
+  | "groq"
+  | "gemini"
+  | "openrouter"
+  | "openai"
+  | "deepseek"
+  | "anthropic"
+  | "custom"
+  | "ollama"
+  | "rule_based";
+
+export interface CustomAiProviderConfig {
+  apiKey?: string;
+  model?: string;
+  baseUrl?: string;
+}
+
+export interface AiTaskRouting {
+  deepAnalysis?: string;
+  coverLetter?: string;
+}
+
+export interface AiPreferenceConfig {
+  order?: string[];
+  taskRouting?: AiTaskRouting;
+  customProviders?: Record<string, CustomAiProviderConfig>;
+}
 
 export interface AIProviderConfig {
   provider: AIProvider;

@@ -8,19 +8,32 @@ import type { HHResume } from "./hhPrivateClient";
  * Searches common Windows install locations for Google Chrome or Microsoft Edge.
  */
 export function findBrowserExecutable(): string {
+  // If running in cloud serverless environment like Vercel or AWS Lambda
+  if (process.env.VERCEL || process.env.AWS_REGION) {
+    throw new Error(
+      "Automatic Browser Login is only available when running locally on your computer (localhost / desktop). On cloud deployments (Vercel), the server cannot open a browser window on your screen. Please use the 'Advanced: Manual Cookie String Input (Fallback)' section below to paste your hhtoken or cookie string."
+    );
+  }
+
   const localAppData = process.env.LOCALAPPDATA || "";
   const programFiles = process.env["ProgramFiles"] || "C:\\Program Files";
   const programFilesX86 = process.env["ProgramFiles(x86)"] || "C:\\Program Files (x86)";
 
   const candidates = [
-    // Google Chrome
+    // Windows Google Chrome
     path.join(programFiles, "Google\\Chrome\\Application\\chrome.exe"),
     path.join(programFilesX86, "Google\\Chrome\\Application\\chrome.exe"),
     path.join(localAppData, "Google\\Chrome\\Application\\chrome.exe"),
-    // Microsoft Edge
+    // Windows Microsoft Edge
     path.join(programFilesX86, "Microsoft\\Edge\\Application\\msedge.exe"),
     path.join(programFiles, "Microsoft\\Edge\\Application\\msedge.exe"),
     path.join(localAppData, "Microsoft\\Edge\\Application\\msedge.exe"),
+    // Linux Chrome / Chromium (for self-hosted servers)
+    "/usr/bin/google-chrome",
+    "/usr/bin/google-chrome-stable",
+    "/usr/bin/chromium",
+    "/usr/bin/chromium-browser",
+    "/snap/bin/chromium",
   ];
 
   for (const candidate of candidates) {
@@ -29,7 +42,9 @@ export function findBrowserExecutable(): string {
     }
   }
 
-  throw new Error("Neither Google Chrome nor Microsoft Edge could be found on this system.");
+  throw new Error(
+    "Neither Google Chrome nor Microsoft Edge could be found on the server running this application. If you are on cloud hosting (Vercel), serverless functions cannot open a local browser window. Please use the 'Advanced: Manual Cookie String Input (Fallback)' section below to enter your HeadHunter token/cookie."
+  );
 }
 
 export interface HHLoginResult {
@@ -154,7 +169,7 @@ export async function performBrowserLogin(timeoutMs: number = 240000): Promise<H
 
     if (!loginDetected) {
       throw new Error(
-        "Login timed out (4 minutes). Please complete the sign-in inside the opened browser window, or use 'Advanced: Manual Cookie String Input (Fallback)' below."
+        "Login timed out. Please complete sign-in in the opened browser window, or use the Console F12 method in Settings."
       );
     }
 

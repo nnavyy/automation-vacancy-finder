@@ -99,11 +99,18 @@ export async function POST(
         `to reflect this instruction while keeping all other fields accurate.`;
     }
 
+    const customConfig =
+      (pref as any)?.aiCustomConfig ??
+      (typeof pref?.aiProviderOrder === "object" && !Array.isArray(pref?.aiProviderOrder)
+        ? (pref?.aiProviderOrder as any)
+        : undefined);
+
     const aiResult = await callAI({
       prompt,
       requestType: "cover_letter",
       maxTokens: 2048,
-      providerOrder: (pref?.aiProviderOrder as string[]) ?? undefined,
+      providerOrder: Array.isArray(pref?.aiProviderOrder) ? (pref.aiProviderOrder as string[]) : customConfig?.order,
+      customConfig,
     });
 
     let newCoverLetter = "";

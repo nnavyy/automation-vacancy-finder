@@ -35,7 +35,15 @@ import {
   Sparkles,
   ArrowUp,
   ArrowDown,
+  Terminal,
+  Key,
+  Eye,
+  EyeOff,
+  Cpu,
+  Zap,
+  Play,
 } from "lucide-react";
+import { AIProvider, CustomAiProviderConfig, AiPreferenceConfig } from "@/types";
 import TagInput from "@/components/ui/TagInput";
 import {
   ROLES,
@@ -45,6 +53,7 @@ import {
   RED_FLAG_KEYWORDS,
 } from "@/lib/catalog/data";
 import { BRAND_NAME } from "@/lib/brand";
+import { useLanguage } from "@/lib/i18n";
 
 // ── Types ─────────────────────────────────────────────────────
 
@@ -65,6 +74,7 @@ interface FormState {
   salaryMinimum: string;
   salaryCurrency: string;
   aiProviderOrder: string[];
+  aiCustomConfig?: AiPreferenceConfig;
   coverLetterLanguage: string;
   resumeText: string;
   portfolioUrl: string;
@@ -86,6 +96,82 @@ interface Msg {
 
 // ── Default State & Options ───────────────────────────────────
 
+const AI_PROVIDERS_CONFIG: Array<{
+  id: AIProvider;
+  label: string;
+  tag: string;
+  defaultModel: string;
+  presets: string[];
+  keyPlaceholder: string;
+  desc: string;
+  isLocal?: boolean;
+}> = [
+  {
+    id: "deepseek",
+    label: "DeepSeek",
+    tag: "High Reasoning / Cost-Efficient",
+    defaultModel: "deepseek-chat",
+    presets: ["deepseek-chat", "deepseek-reasoner"],
+    keyPlaceholder: "sk-...",
+    desc: "Direct DeepSeek engine (deepseek-chat for fast scoring, deepseek-reasoner R1 for deep analysis).",
+  },
+  {
+    id: "openai",
+    label: "OpenAI",
+    tag: "Standard Reference",
+    defaultModel: "gpt-4o-mini",
+    presets: ["gpt-4o-mini", "gpt-4o", "o3-mini"],
+    keyPlaceholder: "sk-proj-...",
+    desc: "OpenAI foundation models with state-of-the-art instruction compliance and multilingual fluency.",
+  },
+  {
+    id: "anthropic",
+    label: "Anthropic Claude",
+    tag: "Nuanced & Natural Writing",
+    defaultModel: "claude-3-5-haiku-20241022",
+    presets: ["claude-3-5-haiku-20241022", "claude-3-7-sonnet-20250219"],
+    keyPlaceholder: "sk-ant-...",
+    desc: "Claude models known for empathetic, tailored cover letters without mechanical robotic phrasing.",
+  },
+  {
+    id: "gemini",
+    label: "Google Gemini",
+    tag: "Long Context Window",
+    defaultModel: "gemini-2.5-flash",
+    presets: ["gemini-2.5-flash", "gemini-2.5-pro"],
+    keyPlaceholder: "AIzaSy...",
+    desc: "Google AI Gemini with large context support for cross-referencing complex candidate resumes.",
+  },
+  {
+    id: "groq",
+    label: "Groq LPU",
+    tag: "Sub-Second Inference",
+    defaultModel: "llama-3.3-70b-versatile",
+    presets: ["llama-3.3-70b-versatile", "qwen-2.5-32b"],
+    keyPlaceholder: "gsk_...",
+    desc: "Sub-second inference powered by Groq LPUs, ideal for lightning-fast vacancy filtration.",
+  },
+  {
+    id: "openrouter",
+    label: "OpenRouter",
+    tag: "Universal Gateway",
+    defaultModel: "anthropic/claude-3.5-sonnet",
+    presets: ["anthropic/claude-3.5-sonnet", "deepseek/deepseek-r1", "meta-llama/llama-3.3-70b-instruct"],
+    keyPlaceholder: "sk-or-v1-...",
+    desc: "Universal proxy routing to 200+ models with unified balance.",
+  },
+  {
+    id: "custom",
+    label: "Custom / Localhost",
+    tag: "Ollama / vLLM / LM Studio",
+    defaultModel: "llama3.2",
+    presets: ["llama3.2", "qwen2.5:14b", "deepseek-r1:8b", "mistral-small"],
+    keyPlaceholder: "Optional API Bearer token",
+    desc: "OpenAI-compatible local server (e.g. Ollama, LM Studio, vLLM) for offline, privacy-first processing.",
+    isLocal: true,
+  },
+];
+
 const DEFAULT_FORM: FormState = {
   name: "Default Profile",
   targetRoles: ["Frontend Developer"],
@@ -101,7 +187,15 @@ const DEFAULT_FORM: FormState = {
   redFlagKeywords: ["паспорт", "залог", "unpaid"],
   salaryMinimum: "",
   salaryCurrency: "RUR",
-  aiProviderOrder: ["groq", "gemini", "openrouter"],
+  aiProviderOrder: ["deepseek", "groq", "gemini", "openrouter"],
+  aiCustomConfig: {
+    order: ["deepseek", "groq", "gemini", "openrouter"],
+    taskRouting: {
+      deepAnalysis: "deepseek",
+      coverLetter: "deepseek",
+    },
+    customProviders: {},
+  },
   coverLetterLanguage: "Auto (Match Vacancy Language)",
   resumeText: "",
   portfolioUrl: "",
@@ -158,6 +252,7 @@ function formatRelativeTime(dateStr?: string | Date | null): string {
 // ── Main Page Component ───────────────────────────────────────
 
 export default function SettingsPage() {
+  const { language, setLanguage, t } = useLanguage();
   const [form, setForm] = useState<FormState>(DEFAULT_FORM);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -176,6 +271,7 @@ export default function SettingsPage() {
   const [hhResumes, setHhResumes] = useState<Array<{ id: string; title: string; status?: { name: string } }>>([]);
   const [browserLoggingIn, setBrowserLoggingIn] = useState(false);
   const [checkingSession, setCheckingSession] = useState(false);
+  const [hhConnectMode, setHhConnectMode] = useState<"console" | "oauth" | "local">("console");
   const [showManualCookie, setShowManualCookie] = useState(false);
 
   // Portfolio crawling test state
@@ -187,6 +283,7 @@ export default function SettingsPage() {
   const [tgUsername, setTgUsername] = useState<string | null>(null);
   const [generatingTg, setGeneratingTg] = useState(false);
   const [copiedTg, setCopiedTg] = useState(false);
+  const [copiedSnippet, setCopiedSnippet] = useState(false);
 
   // Live telemetry stats loaded from backend
   const [stats, setStats] = useState({
@@ -195,7 +292,69 @@ export default function SettingsPage() {
     avgScore: 0,
   });
 
-  // Provider reordering handler
+  // AI Configurator & BYOK state
+  const [selectedAiTab, setSelectedAiTab] = useState<AIProvider>("deepseek");
+  const [showAiKeys, setShowAiKeys] = useState<Record<string, boolean>>({});
+  const [testingAi, setTestingAi] = useState(false);
+  const [testAiResult, setTestAiResult] = useState<{
+    provider: string;
+    success: boolean;
+    message: string;
+    latencyMs?: number;
+    modelUsed?: string;
+  } | null>(null);
+
+  // AI Helper: Update provider config (API key, model, baseUrl)
+  const updateProviderConfig = (provider: AIProvider, patch: Partial<CustomAiProviderConfig>) => {
+    setForm((prev) => {
+      const currentConfig = prev.aiCustomConfig || {
+        order: prev.aiProviderOrder as AIProvider[],
+        taskRouting: { deepAnalysis: "deepseek", coverLetter: "deepseek" },
+        customProviders: {},
+      };
+      const existingProviderConfig = currentConfig.customProviders?.[provider] || {};
+
+      const updatedConfig: AiPreferenceConfig = {
+        ...currentConfig,
+        customProviders: {
+          ...currentConfig.customProviders,
+          [provider]: {
+            ...existingProviderConfig,
+            ...patch,
+          },
+        },
+      };
+
+      return {
+        ...prev,
+        aiCustomConfig: updatedConfig,
+      };
+    });
+  };
+
+  // AI Helper: Update dedicated task routing (deepAnalysis vs coverLetter)
+  const updateTaskRouting = (task: "deepAnalysis" | "coverLetter", provider: AIProvider) => {
+    setForm((prev) => {
+      const currentConfig = prev.aiCustomConfig || {
+        order: prev.aiProviderOrder as AIProvider[],
+        taskRouting: { deepAnalysis: "deepseek", coverLetter: "deepseek" },
+        customProviders: {},
+      };
+
+      return {
+        ...prev,
+        aiCustomConfig: {
+          ...currentConfig,
+          taskRouting: {
+            ...currentConfig.taskRouting,
+            [task]: provider,
+          },
+        },
+      };
+    });
+  };
+
+  // AI Helper: Move provider in cascade priority chain
   const moveProvider = (index: number, direction: "up" | "down") => {
     setForm((prev) => {
       const list = [...prev.aiProviderOrder];
@@ -204,8 +363,53 @@ export default function SettingsPage() {
       const temp = list[index];
       list[index] = list[targetIdx];
       list[targetIdx] = temp;
-      return { ...prev, aiProviderOrder: list };
+
+      return {
+        ...prev,
+        aiProviderOrder: list,
+        aiCustomConfig: {
+          ...(prev.aiCustomConfig || {
+            order: list as AIProvider[],
+            taskRouting: { deepAnalysis: list[0] as AIProvider, coverLetter: list[0] as AIProvider },
+            customProviders: {},
+          }),
+          order: list as AIProvider[],
+        },
+      };
     });
+  };
+
+  // AI Helper: Ping/test live connection to provider
+  const handleTestAi = async (provider: AIProvider) => {
+    setTestingAi(true);
+    setTestAiResult(null);
+    try {
+      const currentConfig = form.aiCustomConfig?.customProviders?.[provider];
+      const res = await fetch("/api/settings/test-ai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          provider,
+          config: currentConfig,
+        }),
+      });
+      const data = await res.json();
+      setTestAiResult({
+        provider,
+        success: Boolean(data.success),
+        message: data.message || (data.success ? "Connection established successfully!" : "Connection failed."),
+        latencyMs: data.latencyMs,
+        modelUsed: data.modelUsed,
+      });
+    } catch {
+      setTestAiResult({
+        provider,
+        success: false,
+        message: "Network error trying to reach AI test API.",
+      });
+    } finally {
+      setTestingAi(false);
+    }
   };
 
   // Refs for tracking changes and debounce
@@ -225,6 +429,10 @@ export default function SettingsPage() {
               setStats(json.stats);
             }
             const d = json.data;
+            const parsedOrder = Array.isArray(d.aiProviderOrder) && d.aiProviderOrder.length > 0
+              ? d.aiProviderOrder
+              : DEFAULT_FORM.aiProviderOrder;
+
             setForm({
               id: d.id,
               name: d.name ?? DEFAULT_FORM.name,
@@ -241,7 +449,15 @@ export default function SettingsPage() {
               redFlagKeywords: Array.isArray(d.redFlagKeywords) ? d.redFlagKeywords : [],
               salaryMinimum: d.salaryMinimum != null ? String(d.salaryMinimum) : "",
               salaryCurrency: d.salaryCurrency ?? DEFAULT_FORM.salaryCurrency,
-              aiProviderOrder: Array.isArray(d.aiProviderOrder) && d.aiProviderOrder.length > 0 ? d.aiProviderOrder : DEFAULT_FORM.aiProviderOrder,
+              aiProviderOrder: parsedOrder,
+              aiCustomConfig: d.aiCustomConfig || {
+                order: parsedOrder as AIProvider[],
+                taskRouting: {
+                  deepAnalysis: (parsedOrder[0] as AIProvider) || "deepseek",
+                  coverLetter: (parsedOrder[0] as AIProvider) || "deepseek",
+                },
+                customProviders: {},
+              },
               coverLetterLanguage: d.coverLetterLanguage ?? DEFAULT_FORM.coverLetterLanguage,
               resumeText: d.resumeText ?? "",
               portfolioUrl: d.portfolioUrl ?? "",
@@ -283,6 +499,58 @@ export default function SettingsPage() {
       .catch(() => {});
 
     load();
+
+    // ── Handle URL Search Parameters (OAuth & 1-Click Bookmarklet / Extension Sync) ──
+    if (typeof window !== "undefined") {
+      const urlParams = new URLSearchParams(window.location.search);
+      const importToken = urlParams.get("import_token");
+      const oauthSuccess = urlParams.get("oauth_success");
+      const oauthError = urlParams.get("oauth_error");
+
+      if (oauthSuccess) {
+        setMsg({ text: "HeadHunter official account successfully connected via OAuth 2.0!", type: "success" });
+        window.history.replaceState({}, document.title, window.location.pathname);
+      } else if (oauthError) {
+        setMsg({ text: `OAuth Error: ${oauthError}`, type: "error" });
+        window.history.replaceState({}, document.title, window.location.pathname);
+      } else if (importToken) {
+        setMsg({ text: "Syncing session from 1-Click Sync... Validating resumes...", type: "warn" });
+        fetch("/api/settings/validate-hh", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token: importToken }),
+        })
+          .then((r) => r.json())
+          .then((json) => {
+            if (json.success && isMounted) {
+              setForm((prev) => ({
+                ...prev,
+                hhToken: importToken,
+                hhSessionStatus: "active",
+                hhLastVerifiedAt: new Date().toISOString(),
+                hhProfileName: json.profile?.name || prev.hhProfileName,
+                hhProfileAvatar: json.profile?.avatar || prev.hhProfileAvatar,
+                hhTotalApplications: json.profile?.totalApplications || prev.hhTotalApplications,
+                ...(json.resumes && json.resumes.length > 0
+                  ? { hhResumeId: json.resumes[0].id, hhResumeTitle: json.resumes[0].title }
+                  : {}),
+              }));
+              if (json.resumes) setHhResumes(json.resumes);
+              setMsg({
+                text: `HeadHunter Session Connected: ${json.profile?.name || "Connected"}!`,
+                type: "success",
+              });
+              window.history.replaceState({}, document.title, window.location.pathname);
+            } else if (isMounted) {
+              setMsg({ text: json.error || "Failed to validate token from 1-Click Sync.", type: "error" });
+            }
+          })
+          .catch(() => {
+            if (isMounted) setMsg({ text: "Failed to reach validation API.", type: "error" });
+          });
+      }
+    }
+
     return () => {
       isMounted = false;
     };
@@ -314,6 +582,7 @@ export default function SettingsPage() {
             formData.salaryMinimum.trim() !== "" ? parseInt(formData.salaryMinimum, 10) || null : null,
           salaryCurrency: formData.salaryCurrency,
           aiProviderOrder: formData.aiProviderOrder,
+          aiCustomConfig: formData.aiCustomConfig,
           coverLetterLanguage: formData.coverLetterLanguage,
           resumeText: formData.resumeText,
           portfolioUrl: formData.portfolioUrl,
@@ -452,10 +721,57 @@ export default function SettingsPage() {
   const handleBrowserLogin = async () => {
     setBrowserLoggingIn(true);
     setMsg({
-      text: "Opening browser window... Please sign in to your HeadHunter account in the opened window.",
+      text: "Checking connection... Preparing to open browser for HeadHunter login.",
       type: "warn",
     });
     try {
+      // 1. Try local Python companion bridge on 127.0.0.1:7890 if running on user machine
+      let companionActive = false;
+      try {
+        const ping = await fetch("http://127.0.0.1:7890/health", {
+          signal: AbortSignal.timeout(1200),
+        });
+        if (ping.ok) companionActive = true;
+      } catch {}
+
+      if (companionActive) {
+        setMsg({
+          text: "Local Python Companion detected! Launching Google Chrome on your computer...",
+          type: "warn",
+        });
+        const compRes = await fetch("http://127.0.0.1:7890/launch", { method: "POST" });
+        const compData = await compRes.json();
+        if (compData.success && compData.token) {
+          const valRes = await fetch("/api/settings/validate-hh", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ token: compData.token }),
+          });
+          const valData = await valRes.json();
+          if (valData.success) {
+            setForm((prev) => ({
+              ...prev,
+              hhToken: compData.token,
+              hhSessionStatus: "active",
+              hhLastVerifiedAt: new Date().toISOString(),
+              hhProfileName: valData.profile?.name || prev.hhProfileName,
+              hhProfileAvatar: valData.profile?.avatar || prev.hhProfileAvatar,
+              hhTotalApplications: valData.profile?.totalApplications || prev.hhTotalApplications,
+              ...(valData.resumes && valData.resumes.length > 0
+                ? { hhResumeId: valData.resumes[0].id, hhResumeTitle: valData.resumes[0].title }
+                : {}),
+            }));
+            if (valData.resumes) setHhResumes(valData.resumes);
+            setMsg({
+              text: `Successfully linked HeadHunter via Local Chrome: ${valData.profile?.name || "Connected"}! Session active.`,
+              type: "success",
+            });
+            return;
+          }
+        }
+      }
+
+      // 2. Fallback to server-side browser login
       const res = await fetch("/api/settings/hh-browser-login", { method: "POST" });
       const data = await res.json();
       if (data.success) {
@@ -481,11 +797,13 @@ export default function SettingsPage() {
           type: "success",
         });
       } else {
+        setShowManualCookie(true);
         setMsg({ text: data.error || "Failed to complete browser login.", type: "error" });
       }
     } catch {
+      setShowManualCookie(true);
       setMsg({
-        text: "Browser login failed or window was closed before completing login.",
+        text: "Browser login failed. If accessing via Vercel, run login_hh.bat on your laptop or use Manual Cookie Input below.",
         type: "error",
       });
     } finally {
@@ -669,6 +987,9 @@ export default function SettingsPage() {
           data.coverLetterContext?.portfolioWebsiteUrl ||
           form.portfolioUrl;
 
+        const newAiCustomConfig = data.aiCustomConfig || form.aiCustomConfig;
+        const newAiOrder = data.aiCustomConfig?.order || data.aiProviderOrder || form.aiProviderOrder;
+
         setForm((prev) => ({
           ...prev,
           name: data.profileName || data.name || prev.name,
@@ -679,6 +1000,8 @@ export default function SettingsPage() {
           searchKeywordsRu: newKeywordsRu.length > 0 ? newKeywordsRu : prev.searchKeywordsRu,
           excludeKeywords: newExclude.length > 0 ? newExclude : prev.excludeKeywords,
           redFlagKeywords: newRedFlags.length > 0 ? newRedFlags : prev.redFlagKeywords,
+          aiCustomConfig: newAiCustomConfig,
+          aiProviderOrder: Array.isArray(newAiOrder) ? newAiOrder : prev.aiProviderOrder,
           resumeText: newBio,
           portfolioUrl: newPortfolio,
         }));
@@ -725,6 +1048,7 @@ export default function SettingsPage() {
         redFlagKeywords: form.redFlagKeywords,
       },
       aiProviderOrder: form.aiProviderOrder,
+      aiCustomConfig: form.aiCustomConfig,
       coverLetterContext: {
         resumeBackgroundText: form.resumeText,
         portfolioWebsiteUrl: form.portfolioUrl,
@@ -823,18 +1147,27 @@ export default function SettingsPage() {
           {/* Strict rule: NO round colored dot! Icon is clean and safe */}
           <Activity size={13} className="text-emerald-400 shrink-0" />
           <span>
-            Database state synced &bull; Last snapshot updated {lastSavedTime} via WebSocket stream.
-            {autoSaveStatus === "saving" && (
-              <span className="ml-2 text-amber-300 font-medium animate-pulse">(Auto-saving...)</span>
-            )}
-            {autoSaveStatus === "saved" && (
-              <span className="ml-2 text-emerald-400 font-medium">(Auto-saved)</span>
-            )}
+            Database state synced &bull; Last snapshot updated {lastSavedTime}
           </span>
         </div>
-        <span className="text-[10px] font-mono text-emerald-400/80 uppercase font-semibold">
-          200 OK
-        </span>
+        <div className="text-[11px] font-mono uppercase font-medium flex items-center gap-1.5">
+          {autoSaveStatus === "saving" ? (
+            <span className="text-amber-300 flex items-center gap-1.5 font-semibold">
+              <RefreshCw size={11} className="animate-spin text-amber-300" />
+              Auto-saving...
+            </span>
+          ) : autoSaveStatus === "saved" ? (
+            <span className="text-emerald-400 flex items-center gap-1.5 font-semibold">
+              <Check size={11} className="text-emerald-400" />
+              Auto-saved
+            </span>
+          ) : (
+            <span className="text-emerald-400/80 font-semibold flex items-center gap-1">
+              <Check size={11} className="text-emerald-400/80" />
+              Auto-save active
+            </span>
+          )}
+        </div>
       </div>
 
       {/* ── Toast message if any ── */}
@@ -957,12 +1290,55 @@ export default function SettingsPage() {
             </div>
           </section>
 
-          {/* ── 3. HH.ru Account & Session Sync ── */}
+          {/* ── 3. Interface Language & Localization ── */}
+          <section id="section-language" className="bg-zinc-900/70 border border-zinc-800/90 rounded-xl p-5 backdrop-blur-sm space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-zinc-800/60">
+              <div className="flex items-center gap-2">
+                <Globe size={16} className="text-emerald-400" />
+                <h2 className="text-sm font-semibold text-zinc-100">{t("lang.title", "Interface Language & Localization")}</h2>
+              </div>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-zinc-700 uppercase font-semibold">
+                {language === "en" ? "DEFAULT (EN)" : language.toUpperCase()}
+              </span>
+            </div>
+
+            <p className="text-xs text-zinc-400 leading-relaxed">
+              {t("lang.subtitle", "Choose your preferred language for the assistant dashboard. English is enabled by default.")}
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {[
+                { code: "en", name: "English", desc: "Default System Language (Global / CIS)" },
+                { code: "ru", name: "Русский (СНГ)", desc: "HeadHunter Native & CIS Region" },
+              ].map((item) => (
+                <button
+                  key={item.code}
+                  type="button"
+                  onClick={() => setLanguage(item.code as any)}
+                  className={`p-3.5 rounded-lg border text-left transition-all ${
+                    language === item.code
+                      ? "bg-zinc-800/90 border-emerald-500/50 shadow-sm"
+                      : "bg-zinc-950/60 border-zinc-800/80 hover:bg-zinc-800/40 text-zinc-400"
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className={`text-xs font-semibold ${language === item.code ? "text-emerald-400" : "text-zinc-200"}`}>
+                      {item.name}
+                    </span>
+                    {language === item.code && <Check size={13} className="text-emerald-400" />}
+                  </div>
+                  <p className="text-[10px] text-zinc-500 font-mono">{item.desc}</p>
+                </button>
+              ))}
+            </div>
+          </section>
+
+          {/* ── 4. HH.ru Account & Session Sync ── */}
           <section id="section-hh-sync" className="bg-zinc-900/70 border border-zinc-800/90 rounded-xl p-5 backdrop-blur-sm space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-zinc-800/60">
               <div className="flex items-center gap-2">
                 <Globe size={16} className="text-emerald-400" />
-                <h2 className="text-sm font-semibold text-zinc-100">HH.ru Account &amp; Session Sync</h2>
+                <h2 className="text-sm font-semibold text-zinc-100">{t("hh.sectionTitle", "HH.ru Account & Session Sync")}</h2>
               </div>
               <div className="flex items-center gap-2">
                 {/* Clean text pills, NO circular dot */}
@@ -982,67 +1358,177 @@ export default function SettingsPage() {
                   className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-[11px] text-zinc-300 border border-zinc-700/80 transition-colors disabled:opacity-50"
                 >
                   <RefreshCw size={11} className={checkingSession ? "animate-spin text-emerald-400" : "text-zinc-400"} />
-                  Check Session
+                  {t("hh.checkSession", "Check Session")}
                 </button>
               </div>
             </div>
 
-            {/* Session Alert Box */}
+            {/* Session Status Banner */}
             <div
-              className={`p-3.5 rounded-lg border text-xs flex items-start gap-3 ${
+              className={`px-3.5 py-2.5 rounded-lg border text-xs flex items-center justify-between gap-3 ${
                 form.hhSessionStatus === "active"
-                  ? "bg-emerald-950/20 border-emerald-500/30 text-emerald-300"
-                  : "bg-red-950/25 border-red-500/30 text-red-300"
+                  ? "bg-emerald-950/20 border-emerald-500/20 text-zinc-300"
+                  : "bg-red-950/20 border-red-500/20 text-zinc-300"
               }`}
             >
-              <AlertTriangle size={16} className={`shrink-0 mt-0.5 ${form.hhSessionStatus === "active" ? "text-emerald-400" : "text-red-400"}`} />
-              <div className="flex-1">
-                <div className="font-semibold text-zinc-100">
+              <div className="flex items-center gap-2">
+                {form.hhSessionStatus === "active" ? (
+                  <Check size={14} className="text-emerald-400 shrink-0" />
+                ) : (
+                  <AlertTriangle size={14} className="text-red-400 shrink-0" />
+                )}
+                <span className="font-medium text-zinc-200">
                   {form.hhSessionStatus === "active"
-                    ? "HeadHunter Session: Active & Connected"
-                    : "HeadHunter Session: Expired / Logged Out"}
-                </div>
-                <div className="text-[11px] text-zinc-400 mt-0.5">
-                  {form.hhSessionStatus === "active"
-                    ? "Session cookies are active and verified. Auto-apply and resume sync pipelines are running."
-                    : "Session was rejected by HH.ru (403 / Logged out). Automation is paused until you reconnect."}
-                </div>
-                <div className="flex items-center gap-4 mt-2 text-[10px] text-zinc-500 font-mono">
-                  <span>Session TTL: ~30 days</span>
-                  <span>Last verified: {formatRelativeTime(form.hhLastVerifiedAt)}</span>
-                </div>
+                    ? t("hh.active", "HeadHunter Session: Active & Connected")
+                    : t("hh.disconnected", "HeadHunter Session: Disconnected / Expired (403)")}
+                </span>
+              </div>
+              <div className="flex items-center gap-3 text-[10px] text-zinc-500 font-mono">
+                <span>{t("hh.ttl", "TTL: ~30 days")}</span>
+                <span>Last: {formatRelativeTime(form.hhLastVerifiedAt)}</span>
               </div>
             </div>
 
-            {/* Automatic Browser Login Box */}
-            <div className="bg-zinc-950/80 border border-zinc-800/80 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div>
-                <h3 className="text-xs font-semibold text-zinc-100 flex items-center gap-2">
-                  <Shield size={14} className="text-emerald-400" />
-                  Automatic Browser Login (Chrome / Edge)
-                </h3>
-                <p className="text-[11px] text-zinc-400 mt-1 max-w-lg">
-                  Opens an official browser window on your machine. Simply sign in to HeadHunter as usual, and the system will{" "}
-                  <strong className="text-zinc-200">automatically capture your session cookies &amp; expiry date</strong> without needing DevTools.
-                </p>
-                <div className="flex items-center gap-3 mt-2 text-[10px] text-zinc-500 font-mono">
-                  <span>1. Launch instance</span>
-                  <span>&rarr;</span>
-                  <span>2. SMS / Password</span>
-                  <span>&rarr;</span>
-                  <span>3. Auto Sync</span>
-                </div>
+            {/* Segmented Mode Switcher */}
+            <div className="space-y-2">
+              <div className="flex items-center gap-1 p-1 bg-zinc-950 border border-zinc-800/80 rounded-lg text-xs">
+                <button
+                  type="button"
+                  onClick={() => setHhConnectMode("console")}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md font-medium transition-all ${
+                    hhConnectMode === "console"
+                      ? "bg-zinc-800 text-zinc-100 shadow-sm"
+                      : "text-zinc-400 hover:text-zinc-200"
+                  }`}
+                >
+                  <Terminal size={13} className={hhConnectMode === "console" ? "text-emerald-400" : "text-zinc-400"} />
+                  <span>{t("hh.modeConsole", "Console F12 (Cloud)")}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setHhConnectMode("oauth")}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md font-medium transition-all ${
+                    hhConnectMode === "oauth"
+                      ? "bg-zinc-800 text-zinc-100 shadow-sm"
+                      : "text-zinc-400 hover:text-zinc-200"
+                  }`}
+                >
+                  <Globe size={13} className={hhConnectMode === "oauth" ? "text-emerald-400" : "text-zinc-400"} />
+                  <span>{t("hh.modeOAuth", "Official OAuth")}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setHhConnectMode("local")}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md font-medium transition-all ${
+                    hhConnectMode === "local"
+                      ? "bg-zinc-800 text-zinc-100 shadow-sm"
+                      : "text-zinc-400 hover:text-zinc-200"
+                  }`}
+                >
+                  <Shield size={13} className={hhConnectMode === "local" ? "text-amber-400" : "text-zinc-400"} />
+                  <span>{t("hh.modeLocal", "Localhost Browser")}</span>
+                </button>
               </div>
 
-              <button
-                type="button"
-                onClick={handleBrowserLogin}
-                disabled={browserLoggingIn}
-                className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-xs font-semibold shrink-0 transition-colors disabled:opacity-50"
-              >
-                {browserLoggingIn ? <RefreshCw size={13} className="animate-spin" /> : <Globe size={13} />}
-                <span>{browserLoggingIn ? "Waiting for Login..." : "Launch Browser Login"}</span>
-              </button>
+              {/* Active Mode Panel */}
+              <div className="bg-zinc-950 border border-zinc-800/80 rounded-lg p-3.5 space-y-3">
+                {hhConnectMode === "console" && (
+                  <div className="space-y-2.5">
+                    <div className="flex items-center justify-between text-[11px] text-zinc-400">
+                      <span className="font-mono text-zinc-400">
+                        {t("hh.consoleSteps", "Steps: 1. Open hh.ru -> 2. F12 Console -> 3. Run Script -> 4. Paste Token")}
+                      </span>
+                      <span className="text-[9px] font-mono uppercase px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                        {t("hh.cloudCompatible", "100% Cloud Compatible")}
+                      </span>
+                    </div>
+
+                    {/* Compact Command Bar */}
+                    <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-2 flex items-center justify-between gap-2">
+                      <code className="text-[11px] font-mono text-emerald-300/90 truncate select-all pl-1">
+                        copy(document.cookie.match(/(?:^|;\s*)hhtoken=([^;]+)/)?.[1])
+                      </code>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const snippet = `(() => { const m = document.cookie.match(/(?:^|;\\s*)hhtoken=([^;]+)/); if (!m) return alert("[HeadHunter Copilot] Login session not detected. Please log in to your hh.ru account first!"); const token = decodeURIComponent(m[1]); navigator.clipboard.writeText(token).then(() => alert("[HeadHunter Copilot] Token copied to clipboard. Return to Dashboard and paste in the token field.")).catch(() => prompt("Copy HeadHunter token:", token)); })();`;
+                          navigator.clipboard.writeText(snippet);
+                          setCopiedSnippet(true);
+                          setTimeout(() => setCopiedSnippet(false), 3000);
+                        }}
+                        className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200 hover:text-white text-[11px] font-semibold border border-zinc-700 shrink-0 transition-colors"
+                      >
+                        {copiedSnippet ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
+                        <span>{copiedSnippet ? t("action.copied", "Copied") : t("hh.copyScript", "Copy F12 Script")}</span>
+                      </button>
+                    </div>
+
+                    {/* Integrated Token Paste & Connect */}
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-0.5">
+                      <input
+                        type="text"
+                        value={form.hhToken}
+                        onChange={(e) => setForm((p) => ({ ...p, hhToken: e.target.value.trim() }))}
+                        placeholder={t("hh.tokenPlaceholder", "Paste HeadHunter token here (Ctrl + V)...")}
+                        className="flex-1 bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-xs font-mono text-zinc-100 placeholder-zinc-600 focus:border-emerald-500/60 focus:outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleValidateHH}
+                        disabled={validatingHH || !form.hhToken}
+                        className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-xs font-bold transition-all disabled:opacity-50 shrink-0 shadow-sm"
+                      >
+                        {validatingHH ? <RefreshCw size={12} className="animate-spin text-zinc-950" /> : <Check size={12} />}
+                        <span>{validatingHH ? t("action.validating", "Validating...") : t("action.connect", "Connect Account")}</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {hhConnectMode === "oauth" && (
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                    <div>
+                      <div className="font-medium text-zinc-200">{t("hh.oauthTitle", "Official HeadHunter OAuth 2.0")}</div>
+                      <div className="text-[11px] text-zinc-400 mt-0.5">
+                        {t("hh.oauthDesc", "Authorize directly via official HeadHunter servers. Works on mobile, desktop, and cloud.")}
+                      </div>
+                    </div>
+                    {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
+                    <a
+                      href="/api/auth/hh/login"
+                      className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 hover:text-white text-xs font-medium border border-zinc-700 shrink-0 transition-colors"
+                    >
+                      <Globe size={13} />
+                      <span>{t("hh.oauthBtn", "Official Login (OAuth)")}</span>
+                    </a>
+                  </div>
+                )}
+
+                {hhConnectMode === "local" && (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[9px] font-mono uppercase px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/30 font-medium">
+                        {t("hh.localBadge", "Self-Hosted Only (Localhost / Docker)")}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-zinc-400 leading-relaxed">
+                      {t("hh.localDesc", "Launches local Chrome browser for direct login. Requires physical desktop display (self-hosted only, unavailable on cloud Vercel).")}
+                    </p>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1">
+                      <span className="text-[10px] text-zinc-500 font-mono">{t("hh.localSteps", "1. Chrome Popup -> 2. Login SMS/Pass -> 3. Auto Link")}</span>
+                      <button
+                        type="button"
+                        onClick={handleBrowserLogin}
+                        disabled={browserLoggingIn}
+                        className="flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 hover:text-white text-xs font-medium border border-zinc-700 disabled:opacity-50 transition-colors"
+                      >
+                        {browserLoggingIn ? <RefreshCw size={12} className="animate-spin" /> : <Globe size={12} />}
+                        <span>{browserLoggingIn ? t("hh.localWaiting", "Waiting for Login...") : t("hh.localBtn", "Launch Local Browser")}</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Connected Resume Box */}
@@ -1110,50 +1596,6 @@ export default function SettingsPage() {
                   <span className="text-[10px] text-emerald-400 font-mono">Active Daemon</span>
                 </div>
               </div>
-            </div>
-
-            {/* Accordion: Manual Cookie Fallback */}
-            <div className="pt-2">
-              <button
-                type="button"
-                onClick={() => setShowManualCookie(!showManualCookie)}
-                className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-zinc-200 transition-colors"
-              >
-                {showManualCookie ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-                <span>Advanced: Manual Cookie String Input (Fallback)</span>
-              </button>
-
-              {showManualCookie && (
-                <div className="mt-3 space-y-3 p-3 bg-zinc-950 border border-zinc-800 rounded-lg">
-                  <div>
-                    <label className="block text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-1">
-                      FULL COOKIE STRING
-                    </label>
-                    <textarea
-                      rows={2}
-                      value={form.hhToken}
-                      onChange={(e) => setForm((p) => ({ ...p, hhToken: e.target.value }))}
-                      placeholder="hhtoken=...; hhuid=...; _xsrf=..."
-                      className="w-full bg-zinc-900 border border-zinc-800 rounded-lg p-2.5 text-xs font-mono text-zinc-200 focus:border-emerald-500/60 focus:outline-none"
-                    />
-                    <p className="text-[10px] text-zinc-500 mt-1">
-                      Copy from browser DevTools Request Headers (Network tab &rarr; Cookie). Encrypted automatically on save.
-                    </p>
-                  </div>
-
-                  <div className="flex justify-end">
-                    <button
-                      type="button"
-                      onClick={handleValidateHH}
-                      disabled={validatingHH || !form.hhToken}
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-medium text-zinc-200 border border-zinc-700 transition-colors disabled:opacity-50"
-                    >
-                      {validatingHH ? <RefreshCw size={12} className="animate-spin text-emerald-400" /> : <Check size={12} />}
-                      <span>Validate &amp; Load Resumes</span>
-                    </button>
-                  </div>
-                </div>
-              )}
             </div>
           </section>
 
@@ -1426,81 +1868,394 @@ export default function SettingsPage() {
             </div>
           </section>
 
-          {/* ── 7. AI Providers & Failover Cluster ── */}
-          <section className="bg-zinc-900/70 border border-zinc-800/90 rounded-xl p-5 backdrop-blur-sm space-y-4">
+          {/* ── 7. AI Model Strategy, BYOK & Task Routing ── */}
+          <section className="bg-zinc-900/70 border border-zinc-800/90 rounded-xl p-5 backdrop-blur-sm space-y-5">
             <div className="flex items-center justify-between pb-3 border-b border-zinc-800/60">
               <div className="flex items-center gap-2">
                 <Bot size={16} className="text-emerald-400" />
-                <h2 className="text-sm font-semibold text-zinc-100">AI Providers &amp; Failover Priority</h2>
+                <h2 className="text-sm font-semibold text-zinc-100">AI Model Strategy &amp; BYOK Configuration</h2>
               </div>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 border border-zinc-700 font-medium">
-                Cascade Priority
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-800 text-emerald-400 border border-zinc-700 font-medium">
+                Multi-Engine Cluster
               </span>
             </div>
 
-            <p className="text-xs text-zinc-400">
-              Configure which AI service is called first for resume analysis and letter drafting. If the primary service fails or hits rate limits, the system automatically falls back to subsequent providers in this order.
+            <p className="text-xs text-zinc-400 leading-relaxed">
+              Assign dedicated AI engines to specific tasks (Deep Context Analysis vs. Cover Letter Drafting), bring your own API keys (BYOK) from any provider, connect local models (Ollama/vLLM), and configure cascade failover priority.
             </p>
 
-            <div className="space-y-2.5">
-              {form.aiProviderOrder.map((providerKey, idx) => {
-                const meta: Record<string, { label: string; model: string; desc: string }> = {
-                  groq: { label: "Groq", model: "Llama-3.3-70b", desc: "Ultra-fast inference & high throughput" },
-                  gemini: { label: "Google Gemini", model: "Gemini 2.5 Flash", desc: "Deep context window & reasoning" },
-                  openrouter: { label: "OpenRouter", model: "Claude-3.5 Sonnet", desc: "Universal multi-model fallback" },
-                };
-                const info = meta[providerKey.toLowerCase()] || {
-                  label: providerKey,
-                  model: "Custom Model",
-                  desc: "External API Provider",
-                };
+            {/* Subsection 1: Task-Specific Routing */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Deep Context & Scoring Analysis */}
+              <div className="bg-zinc-950/80 border border-zinc-800/90 rounded-lg p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-zinc-200">
+                    <Cpu size={15} className="text-blue-400" />
+                    <span className="text-xs font-semibold">Deep Context &amp; Scoring</span>
+                  </div>
+                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                    Reasoning
+                  </span>
+                </div>
+                <p className="text-[11px] text-zinc-400">
+                  Engine used to score job-resume compatibility, identify red flags, and analyze vacancy requirements.
+                </p>
+                <div>
+                  <label className="text-[11px] font-mono text-zinc-400 mb-1 block">Assigned Provider</label>
+                  <select
+                    value={form.aiCustomConfig?.taskRouting?.deepAnalysis || form.aiProviderOrder[0] || "deepseek"}
+                    onChange={(e) => updateTaskRouting("deepAnalysis", e.target.value as AIProvider)}
+                    className="w-full bg-zinc-900 border border-zinc-700/80 rounded-lg px-3 py-2 text-xs text-zinc-100 focus:outline-none focus:border-blue-500"
+                  >
+                    <option value="deepseek">DeepSeek (V3 / R1 Reasoning)</option>
+                    <option value="gemini">Google Gemini (Gemini 2.5 Flash / Pro)</option>
+                    <option value="openai">OpenAI (GPT-4o / o3-mini)</option>
+                    <option value="anthropic">Anthropic Claude (Sonnet 3.7 / Haiku)</option>
+                    <option value="groq">Groq (Llama-3.3-70b / Fast LPU)</option>
+                    <option value="openrouter">OpenRouter (Universal Gateway)</option>
+                    <option value="custom">Custom / Local LLM (Ollama, vLLM)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Cover Letter Generation */}
+              <div className="bg-zinc-950/80 border border-zinc-800/90 rounded-lg p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-zinc-200">
+                    <Zap size={15} className="text-emerald-400" />
+                    <span className="text-xs font-semibold">Cover Letter Generation</span>
+                  </div>
+                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                    Writing &amp; Tone
+                  </span>
+                </div>
+                <p className="text-[11px] text-zinc-400">
+                  Engine used to draft tailored, human-sounding cover letters adapted to your portfolio and resume.
+                </p>
+                <div>
+                  <label className="text-[11px] font-mono text-zinc-400 mb-1 block">Assigned Provider</label>
+                  <select
+                    value={form.aiCustomConfig?.taskRouting?.coverLetter || form.aiProviderOrder[0] || "deepseek"}
+                    onChange={(e) => updateTaskRouting("coverLetter", e.target.value as AIProvider)}
+                    className="w-full bg-zinc-900 border border-zinc-700/80 rounded-lg px-3 py-2 text-xs text-zinc-100 focus:outline-none focus:border-emerald-500"
+                  >
+                    <option value="deepseek">DeepSeek (V3 / R1 Reasoning)</option>
+                    <option value="openai">OpenAI (GPT-4o / o3-mini)</option>
+                    <option value="anthropic">Anthropic Claude (Sonnet 3.7 / Haiku)</option>
+                    <option value="gemini">Google Gemini (Gemini 2.5 Flash / Pro)</option>
+                    <option value="groq">Groq (Llama-3.3-70b / Fast LPU)</option>
+                    <option value="openrouter">OpenRouter (Universal Gateway)</option>
+                    <option value="custom">Custom / Local LLM (Ollama, vLLM)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* Subsection 2: BYOK Provider Configurator */}
+            <div className="bg-zinc-950/90 border border-zinc-800/90 rounded-xl p-4 space-y-4">
+              <div className="flex items-center justify-between border-b border-zinc-800/60 pb-3">
+                <div className="flex items-center gap-2">
+                  <Key size={14} className="text-amber-400" />
+                  <span className="text-xs font-semibold text-zinc-200">Custom Provider Credentials (BYOK)</span>
+                </div>
+                <span className="text-[10px] font-mono text-zinc-400">
+                  Config stored per profile
+                </span>
+              </div>
+
+              {/* Provider Tab Bar */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
+                {AI_PROVIDERS_CONFIG.map((prov) => {
+                  const isCurrent = selectedAiTab === prov.id;
+                  const hasCustomKey = Boolean(form.aiCustomConfig?.customProviders?.[prov.id]?.apiKey);
+                  const hasCustomModel = Boolean(form.aiCustomConfig?.customProviders?.[prov.id]?.model);
+
+                  return (
+                    <button
+                      key={prov.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedAiTab(prov.id);
+                        setTestAiResult(null);
+                      }}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors border ${
+                        isCurrent
+                          ? "bg-zinc-800 text-zinc-100 border-emerald-500/50 shadow-sm"
+                          : "bg-zinc-900/60 text-zinc-400 border-zinc-800 hover:text-zinc-200 hover:border-zinc-700"
+                      }`}
+                    >
+                      <span>{prov.label}</span>
+                      {(hasCustomKey || hasCustomModel) && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" title="Custom config active" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Selected Tab Form Panel */}
+              {(() => {
+                const provMeta = AI_PROVIDERS_CONFIG.find((p) => p.id === selectedAiTab) || AI_PROVIDERS_CONFIG[0];
+                const currentProvConfig = form.aiCustomConfig?.customProviders?.[selectedAiTab] || {};
+                const isKeyVisible = Boolean(showAiKeys[selectedAiTab]);
 
                 return (
-                  <div
-                    key={providerKey}
-                    className="flex items-center justify-between bg-zinc-950 border border-zinc-800/90 rounded-lg p-3 hover:border-zinc-700 transition-colors"
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className="w-6 h-6 rounded flex items-center justify-center bg-zinc-900 border border-zinc-800 text-xs font-mono font-bold text-zinc-300">
-                        {idx + 1}
-                      </span>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-semibold text-zinc-100">{info.label}</span>
-                          <span className="text-[10px] font-mono text-zinc-400">({info.model})</span>
-                          {idx === 0 && (
-                            <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 uppercase font-semibold">
-                              Primary
-                            </span>
-                          )}
-                        </div>
-                        <div className="text-[11px] text-zinc-500 mt-0.5">{info.desc}</div>
+                  <div className="space-y-3.5 pt-2">
+                    <div>
+                      <div className="text-xs font-semibold text-zinc-100 flex items-center gap-2">
+                        <span>{provMeta.label} Configuration</span>
+                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300 border border-zinc-700">
+                          {provMeta.tag}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-zinc-400 mt-0.5">{provMeta.desc}</p>
+                    </div>
+
+                    {/* API Key */}
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[11px] font-mono text-zinc-300">
+                          {provMeta.isLocal ? "Bearer Token (Optional for Localhost)" : "API Key (BYOK)"}
+                        </label>
+                        <span className="text-[10px] text-zinc-500">
+                          {currentProvConfig.apiKey ? "Custom key active" : "Using system environment if empty"}
+                        </span>
+                      </div>
+                      <div className="relative">
+                        <input
+                          type={isKeyVisible ? "text" : "password"}
+                          value={currentProvConfig.apiKey || ""}
+                          onChange={(e) => updateProviderConfig(selectedAiTab, { apiKey: e.target.value })}
+                          placeholder={provMeta.keyPlaceholder}
+                          className="w-full bg-zinc-900 border border-zinc-700/80 rounded-lg pl-3 pr-10 py-2 text-xs font-mono text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-emerald-500"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowAiKeys((prev) => ({ ...prev, [selectedAiTab]: !prev[selectedAiTab] }))}
+                          aria-label="Toggle API Key visibility"
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-200 transition-colors"
+                        >
+                          {isKeyVisible ? <EyeOff size={14} /> : <Eye size={14} />}
+                        </button>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-1.5">
+                    {/* Base URL (if custom) */}
+                    {provMeta.isLocal && (
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-mono text-zinc-300">Base URL</label>
+                        <input
+                          type="text"
+                          value={currentProvConfig.baseUrl || ""}
+                          onChange={(e) => updateProviderConfig(selectedAiTab, { baseUrl: e.target.value })}
+                          placeholder="http://localhost:11434/v1"
+                          className="w-full bg-zinc-900 border border-zinc-700/80 rounded-lg px-3 py-2 text-xs font-mono text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-emerald-500"
+                        />
+                        <span className="text-[10px] text-zinc-500">
+                          e.g. Ollama: http://localhost:11434/v1 &bull; LM Studio: http://localhost:1234/v1 &bull; vLLM: http://localhost:8000/v1
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Model Name & Presets */}
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-mono text-zinc-300">Model Name</label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={currentProvConfig.model || ""}
+                          onChange={(e) => updateProviderConfig(selectedAiTab, { model: e.target.value })}
+                          placeholder={`Default: ${provMeta.defaultModel}`}
+                          className="flex-1 bg-zinc-900 border border-zinc-700/80 rounded-lg px-3 py-2 text-xs font-mono text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-emerald-500"
+                        />
+                        {currentProvConfig.model && (
+                          <button
+                            type="button"
+                            onClick={() => updateProviderConfig(selectedAiTab, { model: "" })}
+                            className="px-2.5 py-2 rounded-lg bg-zinc-800 text-zinc-400 hover:text-zinc-200 text-xs border border-zinc-700 transition-colors"
+                          >
+                            Reset
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Quick Model Presets */}
+                      <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                        <span className="text-[10px] font-mono text-zinc-500">Presets:</span>
+                        {provMeta.presets.map((preset) => (
+                          <button
+                            key={preset}
+                            type="button"
+                            onClick={() => updateProviderConfig(selectedAiTab, { model: preset })}
+                            className={`text-[10px] font-mono px-2 py-0.5 rounded border transition-colors ${
+                              currentProvConfig.model === preset || (!currentProvConfig.model && preset === provMeta.defaultModel)
+                                ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-400"
+                                : "bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700"
+                            }`}
+                          >
+                            {preset}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Test Connection Button & Result */}
+                    <div className="pt-2 flex items-center justify-between border-t border-zinc-800/60">
                       <button
                         type="button"
-                        onClick={() => moveProvider(idx, "up")}
-                        disabled={idx === 0}
-                        aria-label={`Move ${info.label} up`}
-                        className="p-1.5 rounded bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-zinc-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                        onClick={() => handleTestAi(selectedAiTab)}
+                        disabled={testingAi}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-100 text-xs font-medium border border-zinc-700 transition-colors disabled:opacity-50"
                       >
-                        <ArrowUp size={13} />
+                        {testingAi ? <RefreshCw size={13} className="animate-spin text-emerald-400" /> : <Play size={13} />}
+                        <span>{testingAi ? "Testing Ping..." : "Test Connection"}</span>
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => moveProvider(idx, "down")}
-                        disabled={idx === form.aiProviderOrder.length - 1}
-                        aria-label={`Move ${info.label} down`}
-                        className="p-1.5 rounded bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-zinc-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                      >
-                        <ArrowDown size={13} />
-                      </button>
+
+                      {testAiResult && testAiResult.provider === selectedAiTab && (
+                        <div
+                          className={`flex items-center gap-2 text-xs font-mono px-2.5 py-1 rounded border ${
+                            testAiResult.success
+                              ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+                              : "bg-red-500/10 border-red-500/30 text-red-400"
+                          }`}
+                        >
+                          {testAiResult.success ? <Check size={12} /> : <AlertTriangle size={12} />}
+                          <span>
+                            {testAiResult.message}
+                            {testAiResult.latencyMs ? ` (${testAiResult.latencyMs}ms)` : ""}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
-              })}
+              })()}
+            </div>
+
+            {/* Subsection 3: Cascade Failover Order */}
+            <div className="space-y-2.5 pt-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-semibold text-zinc-200">Cascade Failover Priority</span>
+                  <p className="text-[11px] text-zinc-400">
+                    Failover sequence if primary engines encounter rate limits or temporary network errors.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const allProviders: AIProvider[] = ["deepseek", "groq", "gemini", "openrouter", "openai", "anthropic", "custom"];
+                    const currentSet = new Set(form.aiProviderOrder);
+                    const next = allProviders.find((p) => !currentSet.has(p));
+                    if (next) {
+                      const updated = [...form.aiProviderOrder, next];
+                      setForm((prev) => ({
+                        ...prev,
+                        aiProviderOrder: updated,
+                        aiCustomConfig: {
+                          ...(prev.aiCustomConfig || {
+                            order: updated,
+                            taskRouting: { deepAnalysis: updated[0] as AIProvider, coverLetter: updated[0] as AIProvider },
+                            customProviders: {},
+                          }),
+                          order: updated as AIProvider[],
+                        },
+                      }));
+                    }
+                  }}
+                  disabled={form.aiProviderOrder.length >= 7}
+                  className="text-[11px] px-2.5 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                >
+                  + Add Provider to Chain
+                </button>
+              </div>
+
+              <div className="space-y-2">
+                {form.aiProviderOrder.map((providerKey, idx) => {
+                  const provMeta = AI_PROVIDERS_CONFIG.find((p) => p.id === providerKey) || {
+                    id: providerKey as AIProvider,
+                    label: providerKey,
+                    tag: "Custom Engine",
+                    defaultModel: "Default Model",
+                    presets: [],
+                    keyPlaceholder: "",
+                    desc: "External API Provider",
+                  };
+
+                  const customModel = form.aiCustomConfig?.customProviders?.[providerKey as AIProvider]?.model;
+                  const activeModel = customModel || provMeta.defaultModel;
+
+                  return (
+                    <div
+                      key={`${providerKey}-${idx}`}
+                      className="flex items-center justify-between bg-zinc-950 border border-zinc-800/90 rounded-lg p-3 hover:border-zinc-700 transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="w-6 h-6 rounded flex items-center justify-center bg-zinc-900 border border-zinc-800 text-xs font-mono font-bold text-zinc-300">
+                          {idx + 1}
+                        </span>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-semibold text-zinc-100">{provMeta.label}</span>
+                            <span className="text-[10px] font-mono text-zinc-400">({activeModel})</span>
+                            {idx === 0 && (
+                              <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 uppercase font-semibold">
+                                Primary
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-[11px] text-zinc-500 mt-0.5">{provMeta.tag}</div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => moveProvider(idx, "up")}
+                          disabled={idx === 0}
+                          aria-label={`Move ${provMeta.label} up`}
+                          className="p-1.5 rounded bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-zinc-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                        >
+                          <ArrowUp size={13} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => moveProvider(idx, "down")}
+                          disabled={idx === form.aiProviderOrder.length - 1}
+                          aria-label={`Move ${provMeta.label} down`}
+                          className="p-1.5 rounded bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-zinc-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                        >
+                          <ArrowDown size={13} />
+                        </button>
+                        {form.aiProviderOrder.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updated = form.aiProviderOrder.filter((_, i) => i !== idx);
+                              setForm((prev) => ({
+                                ...prev,
+                                aiProviderOrder: updated,
+                                aiCustomConfig: {
+                                  ...(prev.aiCustomConfig || {
+                                    order: updated,
+                                    taskRouting: { deepAnalysis: updated[0] as AIProvider, coverLetter: updated[0] as AIProvider },
+                                    customProviders: {},
+                                  }),
+                                  order: updated as AIProvider[],
+                                },
+                              }));
+                            }}
+                            title="Remove from cascade chain"
+                            className="p-1.5 rounded bg-zinc-900 hover:bg-red-950/40 text-zinc-500 hover:text-red-400 border border-zinc-800 transition-colors"
+                          >
+                            &times;
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </section>
 

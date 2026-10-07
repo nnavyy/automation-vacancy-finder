@@ -64,7 +64,21 @@ function serializePref(pref: any) {
     workFormat:            Array.isArray(pref.workFormat)            ? pref.workFormat            : [],
     excludeKeywords:       Array.isArray(pref.excludeKeywords)       ? pref.excludeKeywords       : [],
     redFlagKeywords:       Array.isArray(pref.redFlagKeywords)       ? pref.redFlagKeywords       : [],
-    aiProviderOrder:       Array.isArray(pref.aiProviderOrder)       ? pref.aiProviderOrder       : ["groq", "gemini", "openrouter"],
+    aiProviderOrder:       Array.isArray(pref.aiProviderOrder)
+      ? pref.aiProviderOrder
+      : (typeof pref.aiProviderOrder === "object" && pref.aiProviderOrder !== null && Array.isArray((pref.aiProviderOrder as any).order)
+          ? (pref.aiProviderOrder as any).order
+          : ["deepseek", "groq", "gemini", "openrouter"]),
+    aiCustomConfig:        typeof pref.aiProviderOrder === "object" && pref.aiProviderOrder !== null && !Array.isArray(pref.aiProviderOrder)
+      ? pref.aiProviderOrder
+      : {
+          order: Array.isArray(pref.aiProviderOrder) ? pref.aiProviderOrder : ["deepseek", "groq", "gemini", "openrouter"],
+          taskRouting: {
+            deepAnalysis: Array.isArray(pref.aiProviderOrder) ? pref.aiProviderOrder[0] || "deepseek" : "deepseek",
+            coverLetter: Array.isArray(pref.aiProviderOrder) ? pref.aiProviderOrder[0] || "deepseek" : "deepseek",
+          },
+          customProviders: {},
+        },
   };
 }
 
@@ -169,7 +183,18 @@ export async function POST(req: NextRequest) {
       "aiProviderOrder",
     ];
     for (const key of arrayKeys) {
-      if (key in body && Array.isArray(body[key])) jsonFields[key] = body[key];
+      if (key in body && Array.isArray((body as any)[key])) jsonFields[key] = (body as any)[key];
+    }
+
+    // Handle rich AI provider config (BYOK + Task-Specific Routing)
+    if (body.aiCustomConfig) {
+      jsonFields.aiProviderOrder = {
+        order: Array.isArray(body.aiCustomConfig.order)
+          ? body.aiCustomConfig.order
+          : (Array.isArray(body.aiProviderOrder) ? body.aiProviderOrder : ["deepseek", "groq", "gemini", "openrouter"]),
+        taskRouting: body.aiCustomConfig.taskRouting || {},
+        customProviders: body.aiCustomConfig.customProviders || {},
+      };
     }
 
     const safeData = { ...scalarFields, ...jsonFields };

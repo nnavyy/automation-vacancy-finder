@@ -422,12 +422,19 @@ export async function analyzeVacancy(
 }> {
   const prompt = await buildAnalysisPrompt(vacancy, similarFeedback, pref);
 
+  const customConfig =
+    pref?.aiCustomConfig ??
+    (typeof pref?.aiProviderOrder === "object" && !Array.isArray(pref?.aiProviderOrder)
+      ? pref?.aiProviderOrder
+      : undefined);
+
   // ── Step 1: Call AI provider chain ───────────────────────
   const aiResult = await callAI({
     prompt,
     requestType: "analyze",
     maxTokens: 2048,
-    providerOrder: pref?.aiProviderOrder,
+    providerOrder: Array.isArray(pref?.aiProviderOrder) ? pref.aiProviderOrder : customConfig?.order,
+    customConfig,
   });
 
   // ── Step 2: Handle total AI failure ──────────────────────
