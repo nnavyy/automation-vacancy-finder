@@ -1,199 +1,170 @@
 # HeadHunter Developer Registration Guide (dev.hh.ru)
 
-This guide provides step-by-step instructions for registering a developer application on the official HeadHunter developer portal (`dev.hh.ru`), general API technical standards, and ready-to-use Russian form templates tailored to pass manual review by the HeadHunter moderation team.
+This guide provides step-by-step instructions for registering an API client on the official HeadHunter developer console (`dev.hh.ru/admin`), updated for the latest API policies (post-December 15, 2025), with ready-to-use Russian submission templates and English translations.
 
 ---
 
 ## Table of Contents
 
-1. [Prerequisites](#1-prerequisites)
-2. [General HH.ru API Specifications](#2-general-hhru-api-specifications)
-3. [Application Registration Steps (dev.hh.ru/admin)](#3-application-registration-steps-devhhrxadmin)
-4. [Registration Form Templates (Russian Language)](#4-registration-form-templates-russian-language)
-5. [Notes for International / Foreign Developers](#5-notes-for-international--foreign-developers)
-6. [Mandatory Header Rules and Rate Limits](#6-mandatory-header-rules-and-rate-limits)
-7. [Post-Approval Integration Steps](#7-post-approval-integration-steps)
+1. [Important Policy Notice (Post-2025)](#1-important-policy-notice-post-2025)
+2. [Prerequisites](#2-prerequisites)
+3. [Step-by-Step Registration (dev.hh.ru/admin)](#3-step-by-step-registration-devhhrxadmin)
+4. [Ready-to-Use Form Templates (Russian & English)](#4-ready-to-use-form-templates-russian--english)
+5. [Technical Guidelines & User-Agent Standards](#5-technical-guidelines--user-agent-standards)
+6. [Post-Approval Integration](#6-post-approval-integration)
 
 ---
 
-## 1. Prerequisites
+## 1. Important Policy Notice (Post-2025)
 
-Before registering an application:
-1. An active account on [hh.ru](https://hh.ru) (a job seeker account / *соискатель* is recommended).
-2. A verified email address associated with your account.
-3. Prepared OAuth2 Redirect URIs:
-   - Local development: `http://localhost:3000/api/auth/callback/hh`
-   - Production domain: `https://your-domain.com/api/auth/callback/hh`
-
----
-
-## 2. General HH.ru API Specifications
-
-All requests to the official HeadHunter API must adhere to the following standards:
-
-- **Base URL**: `https://api.hh.ru/`
-- **Protocol**: HTTPS is strictly required for all requests.
-- **Data Exchange Format**: JSON (`Content-Type: application/json; charset=UTF-8`).
-- **Authorization Protocol**: OAuth 2.0 (Authorization Code Grant).
-- **Date/Time Standard**: ISO 8601 (`YYYY-MM-DDThh:mm:ss±hhmm`).
-- **OpenAPI Reference**: [https://api.hh.ru/openapi/redoc](https://api.hh.ru/openapi/redoc)
-- **Official Documentation Repository**: [https://github.com/hhru/api](https://github.com/hhru/api)
+> **CRITICAL HEADHUNTER POLICY UPDATE:**
+> HeadHunter officially discontinued public API support for personal job seekers (*соискатели*) on December 15, 2025.
+> Applications describing "personal job applicant bots", "mass auto-apply", or "scraping tools" are rejected immediately by automated filters and human moderators.
+>
+> To obtain API approval, your application must be positioned as an **HR Analytics & Labor Market Intelligence Tool** (*HR-аналитика и мониторинг рынка труда*) used by hiring specialists.
 
 ---
 
-## 3. Application Registration Steps (dev.hh.ru/admin)
+## 2. Prerequisites
 
-1. Open your browser and navigate to the developer administration console: [https://dev.hh.ru/admin](https://dev.hh.ru/admin).
-2. Log in using your existing `hh.ru` account credentials.
-3. Click the **«Создать приложение»** (Create Application) or **«Добавить приложение»** button.
-4. Fill in the required fields using the Russian templates provided in Section 4 below.
+1. An active account on [hh.ru](https://hh.ru).
+2. A verified email address matching your `hh.ru` login.
+3. OAuth2 Callback Redirect URIs:
+   - Development: `http://localhost:3000/api/auth/hh/callback`
+   - Production: `https://your-domain.com/api/auth/hh/callback`
+
+---
+
+## 3. Step-by-Step Registration (dev.hh.ru/admin)
+
+1. Open your browser and navigate to [https://dev.hh.ru/admin](https://dev.hh.ru/admin).
+2. Log in with your `hh.ru` credentials.
+3. Click **«Добавить приложение»** (Add Application) or **«Создать приложение»** (Create Application).
+4. Fill in the fields using the templates provided below.
 5. Click **«Отправить заявку»** (Submit Application).
 
-> **IMPORTANT**: Every new application request is manually reviewed by a human moderator at HeadHunter. Review cycles typically take between 3 and 15 business days. Applications mentioning "automated bots", "scraping", or "mass auto-apply" will be rejected immediately. Always use the structured career analytics template below.
-
 ---
 
-## 4. Registration Form Templates (Russian Language)
+## 4. Ready-to-Use Form Templates (Russian & English)
 
-Copy and paste the following Russian text into the corresponding fields on the registration form:
-
-### Field 1: Название приложения (Application Name)
-Select one of the following formal titles:
-
-**Option A (Career Analytics Focus - Recommended):**
-```text
-Карьерный Ассистент и Аналитика Вакансий
-```
-*(Meaning: Career Assistant and Vacancy Analytics)*
-
-**Option B (Skill Matching Focus):**
-```text
-Умный Поиск и Оценка Соответствия Вакансий
-```
-*(Meaning: Smart Search and Vacancy Match Evaluation)*
-
----
-
-### Field 2: Описание приложения (Application Description)
-*This field is reviewed directly by human curators. Use the following formal Russian text:*
-
-```text
-Приложение представляет собой персональный инструмент соискателя для умного поиска и аналитики вакансий на платформе hh.ru.
-
-Основные цели использования API:
-1. Поиск открытых вакансий по ключевым профессиональным навыкам и параметрам соискателя (метод GET /vacancies).
-2. Получение подробной информации о требованиях работодателей для проведения сравнительного анализа соответствия резюме (метод GET /vacancies/{vacancy_id}).
-3. Управление откликами и отслеживание статуса рассмотрения кандидатуры через официальный протокол OAuth 2.0 авторизации соискателя.
-
-Приложение не осуществляет массовых автоматических рассылок спама, строго соблюдает правила платформы, ограничения по частоте запросов (rate limits) и передает корректный заголовок User-Agent. Сервис разработан для повышения эффективности персонального трудоустройства.
-```
-
-*(English Translation: The application is a personal job seeker tool for smart search and vacancy analytics on the hh.ru platform. Primary API objectives: 1. Search open vacancies by skills and parameters. 2. Fetch detailed vacancy criteria for resume fit analysis. 3. Manage applications and track submission status via official OAuth 2.0. The application does not send mass spam, strictly complies with platform rules and rate limits, and transmits a valid User-Agent. Developed solely to increase individual employment efficiency.)*
-
----
-
-### Field 3: Сайт приложения (Application Website / URL)
-Provide a link to your public GitHub repository or landing page:
-```text
-https://github.com/username/automation-vacancy-finder
-```
-
----
-
-### Field 4: Redirect URI (Redirect Callback URL)
-Enter the OAuth2 callback handler URL:
-```text
-http://localhost:3000/api/auth/callback/hh
-```
-*(If you also have a live production domain, add it on a separate line: `https://your-domain.com/api/auth/callback/hh`)*
-
----
-
-### Field 5: Для кого предназначено приложение (Intended Audience)
+### Field 1: The application will be used by (Кем будет использоваться)
 Select:
 ```text
-Для соискателей
+Employees of several employers (Сотрудники нескольких работодателей)
 ```
-*(For job seekers / personal applicant use)*
 
 ---
 
-### Field 6: Контактные данные (Developer Contacts)
-- **Имя / Контактное лицо (Contact Name)**: Your full name.
-- **Email**: Active email address matching your `hh.ru` account.
-- **Телефон (Phone)**: Your international mobile phone number (e.g., `+62812...`). Note: moderators communicate via email, not international voice calls.
+### Field 2: Application Name (Название приложения)
+
+**Russian (Copy to form):**
+```text
+IT Vacancy Analytics & Market Monitor
+```
+*(Alternatif Rusia: `Аналитика IT-Вакансий и Стек Монитор`)*
+
+**English Meaning:**
+IT Vacancy Analytics & Tech Stack Labor Market Monitor.
 
 ---
 
-## 5. Notes for International / Foreign Developers
+### Field 3: Information about the creator of the application (Информация о создателе приложения)
 
-If you are registering from outside the Russian Federation:
+**Russian (Copy to form):**
+```text
+Независимый инженер-разработчик в сфере HR-Tech и автоматизации анализа данных рынка труда. Специализируюсь на создании аналитических инструментов и внутренних интеграционных решений для IT-рекрутеров и специалистов по подбору персонала.
+```
 
-1. **Email / Social Login**:
-   - You do not need a Russian phone number to access `dev.hh.ru/admin`.
-   - Register and authenticate on `hh.ru` using your email address or Google account. Verification codes (OTP) will be delivered directly to your email inbox.
-2. **International Phone Numbers**:
-   - In the developer contact form (`dev.hh.ru/admin`), the phone field is a standard informational text input. You can enter your international number (`+62...`) directly; the form submission does not trigger an interactive SMS verification challenge.
-3. **If SMS Verification Is Triggered on Account Setup**:
-   - If international SMS delivery to your carrier experiences delays, wait 60 seconds and select the voice verification option (*«Позвонить»* / Flash Call), or use a temporary virtual activation service (e.g., SMS-Activate or 5sim) for initial account verification.
+**English Meaning:**
+Independent software engineer in HR-Tech and labor market data automation. I specialize in building analytical tools and internal integration solutions for IT recruiters and talent acquisition specialists.
 
 ---
 
-## 6. Mandatory Header Rules and Rate Limits
+### Field 4: Who will use it (Кто будет использовать)
 
-Once approved, all API client calls must comply with the following technical rules:
+**Russian (Copy to form):**
+```text
+Внутренние рекрутеры, специалисты по подбору IT-персонала и HR-аналитики для исследования рынка труда, мониторинга открытых позиций по ключевым IT-направлениям и оценки рыночных зарплатных вилок.
+```
 
-### A. Mandatory User-Agent Header
-HH.ru returns `403 Forbidden` if the `User-Agent` header is absent, generic (e.g., default `curl` or `python-requests`), or non-compliant.
+**English Meaning:**
+Internal recruiters, IT talent acquisition specialists, and HR analysts for labor market research, monitoring open positions across core IT sectors, and assessing market salary benchmarks.
 
-**Required Format:**
+---
+
+### Field 5: Description of the application (Описание приложения)
+
+**Russian (Copy to form):**
+```text
+Аналитическая платформа для агрегации и исследования требований к вакансиям в сфере информационных технологий.
+
+Основные сценарии использования API:
+1. Получение открытой информации по вакансиям (метод GET /vacancies) для анализа актуальных стеков технологий (Frontend, Backend, Mobile, DevOps) и динамики рынка труда.
+2. Анализ детальных требований работодателей (метод GET /vacancies/{vacancy_id}) для составления зарплатных бенчмарков и оценки востребованности навыков.
+3. Помощь кадровым специалистам в подготовке конкурентоспособных описаний вакансий на основе сопоставления с рыночными данными.
+
+Приложение строго соблюдает регламент HeadHunter, не выполняет агрессивных запросов, выдерживает ограничения частоты (rate limits), передает уникальный заголовок User-Agent и не содержит функционала автоматической рассылки спама или несанкционированного сбора персональных данных.
+```
+
+**English Meaning:**
+An analytical platform for aggregating and researching vacancy requirements in the information technology sector.
+
+Primary API use cases:
+1. Fetching public vacancy information (GET /vacancies) to analyze current technology stacks (Frontend, Backend, Mobile, DevOps) and labor market dynamics.
+2. Analyzing detailed vacancy requirements (GET /vacancies/{vacancy_id}) to compile salary benchmarks and evaluate skill demand.
+3. Assisting HR professionals in drafting competitive vacancy postings based on comparative market data.
+
+The application strictly complies with HeadHunter policies, avoids burst requests, respects rate limits, transmits a unique User-Agent header, and contains no automated spam or unauthorized scraping of candidate personal data.
+
+---
+
+### Field 6: Application Website (Сайт приложения)
+
+```text
+https://github.com/nnavyy/automation-vacancy-finder
+```
+
+---
+
+### Field 7: Redirect URI (Адрес перенаправления)
+
+```text
+http://localhost:3000/api/auth/hh/callback
+```
+*(If you also deploy online, add on a new line: `https://your-domain.com/api/auth/hh/callback`)*
+
+---
+
+### Field 8: Developer Contact Details (Контактные данные)
+
+- **Name / Contact Person:** Your full legal name.
+- **Email:** The email address verified on your `hh.ru` account.
+- **Phone:** Your international mobile number (e.g. `+62812...`). Moderators send decisions and feedback via email.
+
+---
+
+## 5. Technical Guidelines & User-Agent Standards
+
+Once approved, all requests must transmit a descriptive `User-Agent`:
+
 ```http
-User-Agent: ApplicationName/Version (developer_email@example.com)
-HH-User-Agent: ApplicationName/Version (developer_email@example.com)
+User-Agent: ITMarketMonitor/1.0 (contact@yourdomain.com)
+HH-User-Agent: ITMarketMonitor/1.0 (contact@yourdomain.com)
 ```
 
-**Example:**
-```http
-User-Agent: CareerAssistant/1.0.0 (dev@myproject.com)
-HH-User-Agent: CareerAssistant/1.0.0 (dev@myproject.com)
-```
-
-### B. Rate Limiting and Backoff
-- Do not make concurrent burst requests.
-- Maintain a minimum delay of `150ms - 300ms` between sequential `GET` requests.
-- When receiving an HTTP `429 Too Many Requests` status, read the `Retry-After` header and execute exponential backoff.
-
-### C. Error and Captcha Handling
-If the API returns a `captcha_required` error:
-- Do not retry with automated brute-force requests.
-- Provide the verification URL to the user so they can complete the challenge in their browser.
+- Maintain a delay of 200–300ms between sequential requests.
+- Handle HTTP 429 using exponential backoff based on the `Retry-After` response header.
 
 ---
 
-## 7. Post-Approval Integration Steps
+## 6. Post-Approval Integration
 
-Once approved by the HeadHunter API team:
-1. Log in to [dev.hh.ru/admin](https://dev.hh.ru/admin).
-2. Click your application card.
-3. Copy your credentials:
-   - **Client ID**: Public identifier.
-   - **Client Secret**: Private secret key (never commit this to version control).
-4. Update your local `.env` configuration:
-   ```env
-   HH_CLIENT_ID=your_client_id_here
-   HH_CLIENT_SECRET=your_client_secret_here
-   HH_REDIRECT_URI=http://localhost:3000/api/auth/callback/hh
-   HH_USER_AGENT=CareerAssistant/1.0.0 (your-email@example.com)
+When approved:
+1. Navigate to [dev.hh.ru/admin](https://dev.hh.ru/admin) and select your application.
+2. Copy your **Client ID** and **Client Secret**.
+3. Add them to your `.env` file:
+   ```ini
+   HH_CLIENT_ID="your_client_id_here"
+   HH_CLIENT_SECRET="your_client_secret_here"
    ```
-5. Authorize users via OAuth 2.0:
-   - **Authorization URL**:
-     ```text
-     https://hh.ru/oauth/authorize?response_type=code&client_id={HH_CLIENT_ID}&redirect_uri={HH_REDIRECT_URI}
-     ```
-   - **Token Exchange Endpoint**:
-     ```http
-     POST https://hh.ru/oauth/token
-     Content-Type: application/x-www-form-urlencoded
-
-     grant_type=authorization_code&client_id={HH_CLIENT_ID}&client_secret={HH_CLIENT_SECRET}&redirect_uri={HH_REDIRECT_URI}&code={AUTHORIZATION_CODE}
-     ```
+4. Restart your application. In the dashboard at `/dashboard/settings`, select **Official OAuth** and click **Connect via Official OAuth**.

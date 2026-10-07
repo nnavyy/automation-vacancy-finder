@@ -34,12 +34,13 @@ export async function POST(req: NextRequest) {
         data: {
           hhSessionStatus: "active",
           hhLastVerifiedAt: now,
-          ...(check.profile?.name
-            ? {
-                hhProfileName: check.profile.name,
-                hhProfileAvatar: check.profile.avatar,
-                hhTotalApplications: check.profile.totalApplications,
-              }
+          ...(check.profile?.name ? { hhProfileName: check.profile.name } : {}),
+          ...(check.profile?.avatar ? { hhProfileAvatar: check.profile.avatar } : {}),
+          ...(typeof check.profile?.totalApplications === "number" && check.profile.totalApplications > 0
+            ? { hhTotalApplications: check.profile.totalApplications }
+            : {}),
+          ...(check.resumes && check.resumes.length > 0 && !pref.hhResumeId
+            ? { hhResumeId: check.resumes[0].id, hhResumeTitle: check.resumes[0].title }
             : {}),
         },
       });

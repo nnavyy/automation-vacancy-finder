@@ -11,14 +11,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
     }
     const body = await req.json().catch(() => ({}));
-    let token = body?.token;
+    let token = typeof body?.token === "string" ? body.token.trim() : "";
 
     const pref = await prisma.searchPreference.findFirst({
       where: { userId: user.id, isActive: true },
     });
 
-    if (!token && pref?.hhToken) {
-      token = decrypt(pref.hhToken);
+    const dbToken = pref?.hhToken ? decrypt(pref.hhToken).trim() : "";
+
+    // Prefer DB token if available and client token is absent or shorter/truncated
+    if (dbToken && (!token || (dbToken.length > token.length && !token.includes("hhuid=")))) {
+      token = dbToken;
+    } else if (!token && dbToken) {
+      token = dbToken;
     }
 
     if (!token) {

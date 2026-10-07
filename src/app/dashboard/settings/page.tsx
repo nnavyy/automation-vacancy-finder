@@ -589,7 +589,8 @@ export default function SettingsPage() {
           coverLetterLanguage: formData.coverLetterLanguage,
           resumeText: formData.resumeText,
           portfolioUrl: formData.portfolioUrl,
-          hhToken: formData.hhToken,
+          // Only send hhToken on manual save or explicit disconnect to prevent typing in the input box from overwriting active token
+          hhToken: isManual || formData.hhSessionStatus === "disconnected" ? formData.hhToken : undefined,
           hhResumeId: formData.hhResumeId,
           hhResumeTitle: formData.hhResumeTitle,
           hhProfileName: formData.hhProfileName,
@@ -688,15 +689,16 @@ export default function SettingsPage() {
             ...prev,
             hhSessionStatus: "active",
             hhLastVerifiedAt: data.lastVerifiedAt ? String(data.lastVerifiedAt) : new Date().toISOString(),
-            ...(data.profile?.name
-              ? {
-                  hhProfileName: data.profile.name,
-                  hhProfileAvatar: data.profile.avatar,
-                  hhTotalApplications: data.profile.totalApplications,
-                }
+            ...(data.profile?.name ? { hhProfileName: data.profile.name } : {}),
+            ...(data.profile?.avatar ? { hhProfileAvatar: data.profile.avatar } : {}),
+            ...(typeof data.profile?.totalApplications === "number" && data.profile.totalApplications > 0
+              ? { hhTotalApplications: data.profile.totalApplications }
+              : {}),
+            ...(data.resumes && data.resumes.length > 0 && !prev.hhResumeId
+              ? { hhResumeId: data.resumes[0].id, hhResumeTitle: data.resumes[0].title }
               : {}),
           }));
-          if (data.resumes) setHhResumes(data.resumes);
+          if (data.resumes && data.resumes.length > 0) setHhResumes(data.resumes);
           setMsg({ text: "HeadHunter session is ACTIVE and verified!", type: "success" });
         } else if (data.status === "expired") {
           setForm((prev) => ({
@@ -811,7 +813,7 @@ export default function SettingsPage() {
       const res = await fetch("/api/settings/sync-history", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token: form.hhToken || undefined }),
+        body: JSON.stringify({}),
       });
       const json = await res.json();
       if (json.success) {
