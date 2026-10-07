@@ -4,10 +4,15 @@ const ALGORITHM = "aes-256-gcm";
 const IV_LENGTH = 12; // 96 bits for GCM
 
 function getMasterKey(): Buffer {
-  const secret = process.env.ENCRYPTION_KEY || process.env.NEXTAUTH_SECRET;
+  const secret =
+    process.env.ENCRYPTION_KEY ||
+    process.env.NEXTAUTH_SECRET ||
+    process.env.AUTH_SECRET ||
+    (process.env.DATABASE_URL ? `db-vault-${process.env.DATABASE_URL}` : undefined);
+
   if (!secret) {
     if (process.env.NODE_ENV === "production") {
-      throw new Error("FATAL: ENCRYPTION_KEY must be set in production environment!");
+      throw new Error("FATAL: ENCRYPTION_KEY must be set in production environment! Please set ENCRYPTION_KEY in your Vercel or .env settings.");
     }
   }
   const effective = secret || "dev-only-secret-key-32-chars-minimum!";

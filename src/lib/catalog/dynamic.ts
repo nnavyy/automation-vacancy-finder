@@ -80,15 +80,21 @@ export async function recordPreferenceCatalogTerms(pref: {
   redFlagKeywords?: string[];
 }): Promise<void> {
   try {
-    await Promise.allSettled([
-      recordCatalogUsage("roles", pref.targetRoles),
-      recordCatalogUsage("skills", pref.requiredSkills),
-      recordCatalogUsage("skills", pref.niceToHaveSkills),
-      recordCatalogUsage("keywords_en", pref.searchKeywordsEn),
-      recordCatalogUsage("keywords_ru", pref.searchKeywordsRu),
-      recordCatalogUsage("exclude", pref.excludeKeywords),
-      recordCatalogUsage("red_flag", pref.redFlagKeywords),
-    ]);
+    const tasks = [
+      { category: "roles", values: pref.targetRoles },
+      { category: "skills", values: pref.requiredSkills },
+      { category: "skills", values: pref.niceToHaveSkills },
+      { category: "keywords_en", values: pref.searchKeywordsEn },
+      { category: "keywords_ru", values: pref.searchKeywordsRu },
+      { category: "exclude", values: pref.excludeKeywords },
+      { category: "red_flag", values: pref.redFlagKeywords },
+    ];
+
+    for (const task of tasks) {
+      if (task.values && task.values.length > 0) {
+        await recordCatalogUsage(task.category, task.values);
+      }
+    }
   } catch (err) {
     console.error("[Catalog] Bulk recording error:", err);
   }

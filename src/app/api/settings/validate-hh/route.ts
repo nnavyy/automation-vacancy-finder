@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { fetchMyResumes, fetchHHProfile } from "@/lib/hhPrivateClient";
+import { fetchMyResumes, fetchHHProfile, syncHHHistory } from "@/lib/hhPrivateClient";
 import prisma from "@/lib/db";
 import { getApiUser } from "@/lib/auth-helpers";
 import { encrypt } from "@/lib/crypto";
@@ -8,6 +8,7 @@ import { encrypt } from "@/lib/crypto";
  * POST /api/settings/validate-hh
  * 
  * Validates the provided hhtoken or cookie string and returns the user's resumes and profile.
+ * Automatically synchronizes applied vacancies to the local database.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -56,10 +57,54 @@ export async function POST(req: NextRequest) {
       });
     }
 
+    // Automatically synchronize previous application history so /dashboard/applied updates immediately
+    let syncedApplications = 0;
+    try {
+      const historyResult = await syncHHHistory(cleanToken);
+      if (historyResult.success && historyResult.history.length > 0) {
+        syncedApplications = historyResult.history.length;
+        for (const item of historyResult.history) {
+          const vacancyIdMatch = item.url ? item.url.match(/vacancy\/(\d+)/) : null;
+          const vacancyId = vacancyIdMatch ? vacancyIdMatch[1] : `manual-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+
+          const exists = await prisma.vacancy.findFirst({
+            where: { hhId: vacancyId, userId: user.id },
+          });
+
+          if (!exists) {
+            const created = await prisma.vacancy.create({
+              data: {
+                userId: user.id,
+                hhId: vacancyId,
+                title: item.title,
+                company: item.company,
+                url: item.url ? (item.url.startsWith("http") ? item.url : `https://hh.ru${item.url}`) : "",
+                status: "applied_manual",
+                sourceKeyword: "HH.ru Sync",
+                createdAt: item.appliedAt,
+                updatedAt: item.appliedAt,
+              },
+            });
+
+            await prisma.applicationLog.create({
+              data: {
+                vacancyId: created.id,
+                action: "HH.ru Sync",
+                notes: `Status on HH: ${item.status}`,
+              },
+            });
+          }
+        }
+      }
+    } catch (syncErr) {
+      console.warn("[validate-hh] Auto-sync history warning:", syncErr);
+    }
+
     return NextResponse.json({
       success: true,
       resumes,
       profile,
+      syncedApplications,
     });
   } catch (error: any) {
     console.error("[POST /api/settings/validate-hh]", error);

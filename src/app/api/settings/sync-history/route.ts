@@ -103,6 +103,17 @@ export async function POST(req: NextRequest) {
       }
     }
     
+    if (pref) {
+      await prisma.searchPreference.update({
+        where: { id: pref.id },
+        data: {
+          hhSessionStatus: "active",
+          hhLastVerifiedAt: new Date(),
+          hhTotalApplications: Math.max(pref.hhTotalApplications || 0, result.history.length),
+        },
+      });
+    }
+    
     return NextResponse.json({ 
       success: true, 
       count: result.history.length,

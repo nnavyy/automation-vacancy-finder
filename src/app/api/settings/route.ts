@@ -8,7 +8,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getApiUser } from "@/lib/auth-helpers";
-import { encrypt } from "@/lib/crypto";
+import { encrypt, decrypt } from "@/lib/crypto";
 import { recordPreferenceCatalogTerms } from "@/lib/catalog/dynamic";
 import type { SearchPreferenceData } from "@/types";
 
@@ -48,12 +48,20 @@ function pick<T extends object, K extends keyof T>(obj: T, keys: K[]): Partial<T
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function serializePref(pref: any) {
   const hasHhToken = Boolean(pref.hhToken);
-  // Clone and redact sensitive session cookies
+  let decryptedHhToken = "";
+  if (pref.hhToken) {
+    try {
+      decryptedHhToken = decrypt(pref.hhToken);
+    } catch {
+      decryptedHhToken = "";
+    }
+  }
+
   const clean = { ...pref };
-  delete clean.hhToken;
 
   return {
     ...clean,
+    hhToken: decryptedHhToken,
     hasHhToken,
     targetRoles:           Array.isArray(pref.targetRoles)           ? pref.targetRoles           : [],
     searchKeywordsEn:      Array.isArray(pref.searchKeywordsEn)      ? pref.searchKeywordsEn      : [],
@@ -168,9 +176,14 @@ export async function POST(req: NextRequest) {
       "hhSessionStatus", "hhLastVerifiedAt", "hhExpiresAt",
     ]);
 
-    // Encrypt hhToken if a fresh token string was provided
-    if (typeof body.hhToken === "string" && body.hhToken.trim().length > 0 && !body.hhToken.includes("***")) {
-      scalarFields.hhToken = encrypt(body.hhToken.trim());
+    // Encrypt and persist hhToken if provided
+    if (typeof body.hhToken === "string") {
+      const trimmed = body.hhToken.trim();
+      if (trimmed.length > 0 && !trimmed.includes("***")) {
+        scalarFields.hhToken = encrypt(trimmed);
+      } else if (trimmed === "" && body.hhSessionStatus === "disconnected") {
+        scalarFields.hhToken = null;
+      }
     }
 
     // JSON array fields

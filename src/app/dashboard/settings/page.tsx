@@ -52,7 +52,6 @@ import {
   EXCLUDE_KEYWORDS,
   RED_FLAG_KEYWORDS,
 } from "@/lib/catalog/data";
-import { BRAND_NAME } from "@/lib/brand";
 import { useLanguage } from "@/lib/i18n";
 
 // ── Types ─────────────────────────────────────────────────────
@@ -269,9 +268,8 @@ export default function SettingsPage() {
   const [validatingHH, setValidatingHH] = useState(false);
   const [syncingHH, setSyncingHH] = useState(false);
   const [hhResumes, setHhResumes] = useState<Array<{ id: string; title: string; status?: { name: string } }>>([]);
-  const [browserLoggingIn, setBrowserLoggingIn] = useState(false);
   const [checkingSession, setCheckingSession] = useState(false);
-  const [hhConnectMode, setHhConnectMode] = useState<"console" | "oauth" | "local">("console");
+  const [hhConnectMode, setHhConnectMode] = useState<"console" | "oauth">("console");
   const [showManualCookie, setShowManualCookie] = useState(false);
 
   // Portfolio crawling test state
@@ -536,8 +534,13 @@ export default function SettingsPage() {
                   : {}),
               }));
               if (json.resumes) setHhResumes(json.resumes);
+              if (typeof json.syncedApplications === "number") {
+                setStats((prev) => ({ ...prev, appliedCount: json.syncedApplications }));
+              }
               setMsg({
-                text: `HeadHunter Session Connected: ${json.profile?.name || "Connected"}!`,
+                text: `HeadHunter Session Connected: ${json.profile?.name || "Connected"}!${
+                  json.syncedApplications ? ` (${json.syncedApplications} applications synced to local DB)` : ""
+                }`,
                 type: "success",
               });
               window.history.replaceState({}, document.title, window.location.pathname);
@@ -718,97 +721,35 @@ export default function SettingsPage() {
     }
   };
 
-  const handleBrowserLogin = async () => {
-    setBrowserLoggingIn(true);
-    setMsg({
-      text: "Checking connection... Preparing to open browser for HeadHunter login.",
-      type: "warn",
-    });
+  const handleDisconnectHH = async () => {
+    setForm((prev) => ({
+      ...prev,
+      hhToken: "",
+      hhSessionStatus: "disconnected",
+      hhResumeId: "",
+      hhResumeTitle: "",
+      hhProfileName: "",
+      hhProfileAvatar: "",
+      hhTotalApplications: 0,
+      hhLastVerifiedAt: "",
+    }));
+    setHhResumes([]);
+    setMsg({ text: "HeadHunter token disconnected and cleared from database.", type: "warn" });
     try {
-      // 1. Try local Python companion bridge on 127.0.0.1:7890 if running on user machine
-      let companionActive = false;
-      try {
-        const ping = await fetch("http://127.0.0.1:7890/health", {
-          signal: AbortSignal.timeout(1200),
-        });
-        if (ping.ok) companionActive = true;
-      } catch {}
-
-      if (companionActive) {
-        setMsg({
-          text: "Local Python Companion detected! Launching Google Chrome on your computer...",
-          type: "warn",
-        });
-        const compRes = await fetch("http://127.0.0.1:7890/launch", { method: "POST" });
-        const compData = await compRes.json();
-        if (compData.success && compData.token) {
-          const valRes = await fetch("/api/settings/validate-hh", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ token: compData.token }),
-          });
-          const valData = await valRes.json();
-          if (valData.success) {
-            setForm((prev) => ({
-              ...prev,
-              hhToken: compData.token,
-              hhSessionStatus: "active",
-              hhLastVerifiedAt: new Date().toISOString(),
-              hhProfileName: valData.profile?.name || prev.hhProfileName,
-              hhProfileAvatar: valData.profile?.avatar || prev.hhProfileAvatar,
-              hhTotalApplications: valData.profile?.totalApplications || prev.hhTotalApplications,
-              ...(valData.resumes && valData.resumes.length > 0
-                ? { hhResumeId: valData.resumes[0].id, hhResumeTitle: valData.resumes[0].title }
-                : {}),
-            }));
-            if (valData.resumes) setHhResumes(valData.resumes);
-            setMsg({
-              text: `Successfully linked HeadHunter via Local Chrome: ${valData.profile?.name || "Connected"}! Session active.`,
-              type: "success",
-            });
-            return;
-          }
-        }
-      }
-
-      // 2. Fallback to server-side browser login
-      const res = await fetch("/api/settings/hh-browser-login", { method: "POST" });
-      const data = await res.json();
-      if (data.success) {
-        setForm((prev) => ({
-          ...prev,
-          hhToken: data.cookieString || prev.hhToken,
-          hhSessionStatus: "active",
-          hhLastVerifiedAt: new Date().toISOString(),
-          hhExpiresAt: data.expiresAt ? String(data.expiresAt) : "",
-          hhProfileName: data.profile?.name || prev.hhProfileName,
-          hhProfileAvatar: data.profile?.avatar || prev.hhProfileAvatar,
-          hhTotalApplications: data.profile?.totalApplications || prev.hhTotalApplications,
-          ...(data.resumes && data.resumes.length > 0
-            ? {
-                hhResumeId: data.resumes[0].id,
-                hhResumeTitle: data.resumes[0].title,
-              }
-            : {}),
-        }));
-        if (data.resumes) setHhResumes(data.resumes);
-        setMsg({
-          text: `Successfully linked HeadHunter account: ${data.profile?.name || "Connected"}! Session active.`,
-          type: "success",
-        });
-      } else {
-        setShowManualCookie(true);
-        setMsg({ text: data.error || "Failed to complete browser login.", type: "error" });
-      }
-    } catch {
-      setShowManualCookie(true);
-      setMsg({
-        text: "Browser login failed. If accessing via Vercel, run login_hh.bat on your laptop or use Manual Cookie Input below.",
-        type: "error",
+      await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          hhToken: "",
+          hhSessionStatus: "disconnected",
+          hhResumeId: "",
+          hhResumeTitle: "",
+          hhProfileName: "",
+          hhProfileAvatar: "",
+          hhTotalApplications: 0,
+        }),
       });
-    } finally {
-      setBrowserLoggingIn(false);
-    }
+    } catch {}
   };
 
   const handleValidateHH = async () => {
@@ -827,7 +768,15 @@ export default function SettingsPage() {
       const json = await res.json();
       if (json.success && json.resumes) {
         setHhResumes(json.resumes);
-        setMsg({ text: `Successfully loaded ${json.resumes.length} resumes!`, type: "success" });
+        setMsg({
+          text: `Successfully loaded ${json.resumes.length} resumes!${
+            json.syncedApplications ? ` (${json.syncedApplications} applications synced to local DB)` : ""
+          }`,
+          type: "success",
+        });
+        if (typeof json.syncedApplications === "number") {
+          setStats((prev) => ({ ...prev, appliedCount: json.syncedApplications }));
+        }
         if (json.resumes.length > 0 && !form.hhResumeId) {
           setForm((prev) => ({
             ...prev,
@@ -868,7 +817,7 @@ export default function SettingsPage() {
       if (json.success) {
         setMsg({ text: json.message || "Successfully synchronized application history!", type: "success" });
         if (typeof json.count === "number") {
-          setForm((prev) => ({ ...prev, hhTotalApplications: json.count }));
+          setForm((prev) => ({ ...prev, hhTotalApplications: json.count, hhSessionStatus: "active" }));
           setStats((prev) => ({ ...prev, appliedCount: json.count }));
         }
       } else {
@@ -1110,16 +1059,7 @@ export default function SettingsPage() {
       {/* ── Top Header Bar ── */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pt-2 pb-5 border-b border-zinc-800/80">
         <div>
-          <div className="flex items-center gap-2.5 flex-wrap">
-            <h1 className="text-2xl font-bold tracking-tight text-zinc-100">Settings</h1>
-            {/* NO circular dot: clean solid text pills */}
-            <span className="text-[11px] font-mono px-2 py-0.5 rounded border border-emerald-500/40 bg-emerald-500/10 text-emerald-400 font-semibold tracking-wider uppercase">
-              {BRAND_NAME}
-            </span>
-            <span className="text-[11px] font-mono px-2 py-0.5 rounded border border-zinc-800 bg-zinc-900 text-zinc-400">
-              CONFIG
-            </span>
-          </div>
+          <h1 className="text-2xl font-bold tracking-tight text-zinc-100">Settings</h1>
           <p className="text-xs text-zinc-400 mt-1 max-w-2xl">
             Configure automated job search preferences, AI evaluation rules, safety heuristics, and HH.ru session sync pipelines.
           </p>
@@ -1195,14 +1135,9 @@ export default function SettingsPage() {
 
           {/* ── 1. Import Profile via JSON ── */}
           <section className="bg-zinc-900/70 border border-zinc-800/90 rounded-xl p-5 backdrop-blur-sm">
-            <div className="flex items-center justify-between pb-3 border-b border-zinc-800/60">
-              <div className="flex items-center gap-2">
-                <FileText size={16} className="text-emerald-400" />
-                <h2 className="text-sm font-semibold text-zinc-100">Import Profile via JSON</h2>
-              </div>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-medium uppercase tracking-wider">
-                AUTO-FILL AVAILABLE
-              </span>
+            <div className="flex items-center gap-2 pb-3 border-b border-zinc-800/60">
+              <FileText size={16} className="text-emerald-400" />
+              <h2 className="text-sm font-semibold text-zinc-100">Import Profile via JSON</h2>
             </div>
 
             <div className="mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -1292,14 +1227,9 @@ export default function SettingsPage() {
 
           {/* ── 3. Interface Language & Localization ── */}
           <section id="section-language" className="bg-zinc-900/70 border border-zinc-800/90 rounded-xl p-5 backdrop-blur-sm space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-zinc-800/60">
-              <div className="flex items-center gap-2">
-                <Globe size={16} className="text-emerald-400" />
-                <h2 className="text-sm font-semibold text-zinc-100">{t("lang.title", "Interface Language & Localization")}</h2>
-              </div>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-zinc-700 uppercase font-semibold">
-                {language === "en" ? "DEFAULT (EN)" : language.toUpperCase()}
-              </span>
+            <div className="flex items-center gap-2 pb-3 border-b border-zinc-800/60">
+              <Globe size={16} className="text-emerald-400" />
+              <h2 className="text-sm font-semibold text-zinc-100">{t("lang.title", "Interface Language & Localization")}</h2>
             </div>
 
             <p className="text-xs text-zinc-400 leading-relaxed">
@@ -1340,27 +1270,15 @@ export default function SettingsPage() {
                 <Globe size={16} className="text-emerald-400" />
                 <h2 className="text-sm font-semibold text-zinc-100">{t("hh.sectionTitle", "HH.ru Account & Session Sync")}</h2>
               </div>
-              <div className="flex items-center gap-2">
-                {/* Clean text pills, NO circular dot */}
-                <span
-                  className={`text-[10px] font-mono px-2 py-0.5 rounded font-semibold tracking-wider uppercase border ${
-                    form.hhSessionStatus === "active"
-                      ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
-                      : "bg-red-500/10 text-red-400 border-red-500/30"
-                  }`}
-                >
-                  {form.hhSessionStatus === "active" ? "ACTIVE (200)" : "EXPIRED (403)"}
-                </span>
-                <button
-                  type="button"
-                  onClick={handleCheckSession}
-                  disabled={checkingSession}
-                  className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-[11px] text-zinc-300 border border-zinc-700/80 transition-colors disabled:opacity-50"
-                >
-                  <RefreshCw size={11} className={checkingSession ? "animate-spin text-emerald-400" : "text-zinc-400"} />
-                  {t("hh.checkSession", "Check Session")}
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={handleCheckSession}
+                disabled={checkingSession}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-[11px] text-zinc-300 border border-zinc-700/80 transition-colors disabled:opacity-50"
+              >
+                <RefreshCw size={11} className={checkingSession ? "animate-spin text-emerald-400" : "text-zinc-400"} />
+                {t("hh.checkSession", "Check Session")}
+              </button>
             </div>
 
             {/* Session Status Banner */}
@@ -1380,7 +1298,7 @@ export default function SettingsPage() {
                 <span className="font-medium text-zinc-200">
                   {form.hhSessionStatus === "active"
                     ? t("hh.active", "HeadHunter Session: Active & Connected")
-                    : t("hh.disconnected", "HeadHunter Session: Disconnected / Expired (403)")}
+                    : t("hh.disconnected", "HeadHunter Session: Disconnected / Expired")}
                 </span>
               </div>
               <div className="flex items-center gap-3 text-[10px] text-zinc-500 font-mono">
@@ -1402,7 +1320,7 @@ export default function SettingsPage() {
                   }`}
                 >
                   <Terminal size={13} className={hhConnectMode === "console" ? "text-emerald-400" : "text-zinc-400"} />
-                  <span>{t("hh.modeConsole", "Console F12 (Cloud)")}</span>
+                  <span>{t("hh.modeConsole", "Session Token / Cookie")}</span>
                 </button>
                 <button
                   type="button"
@@ -1416,18 +1334,6 @@ export default function SettingsPage() {
                   <Globe size={13} className={hhConnectMode === "oauth" ? "text-emerald-400" : "text-zinc-400"} />
                   <span>{t("hh.modeOAuth", "Official OAuth")}</span>
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setHhConnectMode("local")}
-                  className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md font-medium transition-all ${
-                    hhConnectMode === "local"
-                      ? "bg-zinc-800 text-zinc-100 shadow-sm"
-                      : "text-zinc-400 hover:text-zinc-200"
-                  }`}
-                >
-                  <Shield size={13} className={hhConnectMode === "local" ? "text-amber-400" : "text-zinc-400"} />
-                  <span>{t("hh.modeLocal", "Localhost Browser")}</span>
-                </button>
               </div>
 
               {/* Active Mode Panel */}
@@ -1436,31 +1342,26 @@ export default function SettingsPage() {
                   <div className="space-y-2.5">
                     <div className="flex items-center justify-between text-[11px] text-zinc-400">
                       <span className="font-mono text-zinc-400">
-                        {t("hh.consoleSteps", "Steps: 1. Open hh.ru -> 2. F12 Console -> 3. Run Script -> 4. Paste Token")}
+                        Method: DevTools (F12) Network/Application OR 1-Click Chrome Extension
                       </span>
                       <span className="text-[9px] font-mono uppercase px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
                         {t("hh.cloudCompatible", "100% Cloud Compatible")}
                       </span>
                     </div>
 
-                    {/* Compact Command Bar */}
-                    <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-2 flex items-center justify-between gap-2">
-                      <code className="text-[11px] font-mono text-emerald-300/90 truncate select-all pl-1">
-                        copy(document.cookie.match(/(?:^|;\s*)hhtoken=([^;]+)/)?.[1])
-                      </code>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const snippet = `(() => { const m = document.cookie.match(/(?:^|;\\s*)hhtoken=([^;]+)/); if (!m) return alert("[HeadHunter Copilot] Login session not detected. Please log in to your hh.ru account first!"); const token = decodeURIComponent(m[1]); navigator.clipboard.writeText(token).then(() => alert("[HeadHunter Copilot] Token copied to clipboard. Return to Dashboard and paste in the token field.")).catch(() => prompt("Copy HeadHunter token:", token)); })();`;
-                          navigator.clipboard.writeText(snippet);
-                          setCopiedSnippet(true);
-                          setTimeout(() => setCopiedSnippet(false), 3000);
-                        }}
-                        className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-200 hover:text-white text-[11px] font-semibold border border-zinc-700 shrink-0 transition-colors"
-                      >
-                        {copiedSnippet ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
-                        <span>{copiedSnippet ? t("action.copied", "Copied") : t("hh.copyScript", "Copy F12 Script")}</span>
-                      </button>
+                    <div className="bg-zinc-900/90 border border-zinc-800 rounded-lg p-2.5 space-y-1.5 text-xs text-zinc-300">
+                      <div className="text-[11px] text-zinc-300 leading-relaxed whitespace-pre-line">
+                        {t(
+                          "hh.consoleInstructions",
+                          "1. In F12 DevTools on hh.ru, go to Application > Cookies > https://hh.ru (or Network tab > Request Headers > Cookie).\n2. Copy the hhtoken value or the full cookie string (hhtoken, _xsrf, hhuid), paste below, and click Connect."
+                        )}
+                      </div>
+                      <div className="text-[10px] text-zinc-500 font-mono">
+                        {t(
+                          "hh.consoleNote",
+                          "Note: hh.ru protects hhtoken with HttpOnly flag, which prevents document.cookie in Console. Extracting from Application tab, Network tab, or the 1-Click Sync Chrome Extension captures all session cookies."
+                        )}
+                      </div>
                     </div>
 
                     {/* Integrated Token Paste & Connect */}
@@ -1479,8 +1380,18 @@ export default function SettingsPage() {
                         className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-xs font-bold transition-all disabled:opacity-50 shrink-0 shadow-sm"
                       >
                         {validatingHH ? <RefreshCw size={12} className="animate-spin text-zinc-950" /> : <Check size={12} />}
-                        <span>{validatingHH ? t("action.validating", "Validating...") : t("action.connect", "Connect Account")}</span>
+                        <span>{validatingHH ? t("action.validating", "Validating & Saving...") : t("action.connect", "Connect & Save Token")}</span>
                       </button>
+                      {form.hhToken && form.hhSessionStatus === "active" && (
+                        <button
+                          type="button"
+                          onClick={handleDisconnectHH}
+                          className="flex items-center justify-center gap-1 px-3 py-2 rounded-lg bg-zinc-800 hover:bg-red-950/40 hover:text-red-400 text-zinc-400 text-xs border border-zinc-700 transition-colors shrink-0"
+                          title="Clear and disconnect this token"
+                        >
+                          <span>Disconnect</span>
+                        </button>
+                      )}
                     </div>
                   </div>
                 )}
@@ -1501,31 +1412,6 @@ export default function SettingsPage() {
                       <Globe size={13} />
                       <span>{t("hh.oauthBtn", "Official Login (OAuth)")}</span>
                     </a>
-                  </div>
-                )}
-
-                {hhConnectMode === "local" && (
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[9px] font-mono uppercase px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/30 font-medium">
-                        {t("hh.localBadge", "Self-Hosted Only (Localhost / Docker)")}
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-zinc-400 leading-relaxed">
-                      {t("hh.localDesc", "Launches local Chrome browser for direct login. Requires physical desktop display (self-hosted only, unavailable on cloud Vercel).")}
-                    </p>
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-1">
-                      <span className="text-[10px] text-zinc-500 font-mono">{t("hh.localSteps", "1. Chrome Popup -> 2. Login SMS/Pass -> 3. Auto Link")}</span>
-                      <button
-                        type="button"
-                        onClick={handleBrowserLogin}
-                        disabled={browserLoggingIn}
-                        className="flex items-center justify-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 hover:text-white text-xs font-medium border border-zinc-700 disabled:opacity-50 transition-colors"
-                      >
-                        {browserLoggingIn ? <RefreshCw size={12} className="animate-spin" /> : <Globe size={12} />}
-                        <span>{browserLoggingIn ? t("hh.localWaiting", "Waiting for Login...") : t("hh.localBtn", "Launch Local Browser")}</span>
-                      </button>
-                    </div>
                   </div>
                 )}
               </div>
@@ -1601,14 +1487,9 @@ export default function SettingsPage() {
 
           {/* ── 4. Search & Matching Criteria ── */}
           <section id="section-search-filters" className="bg-zinc-900/70 border border-zinc-800/90 rounded-xl p-5 backdrop-blur-sm space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-zinc-800/60">
-              <div className="flex items-center gap-2">
-                <Search size={16} className="text-emerald-400" />
-                <h2 className="text-sm font-semibold text-zinc-100">Search &amp; Matching Criteria</h2>
-              </div>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-zinc-700">
-                Elastic Query Engine
-              </span>
+            <div className="flex items-center gap-2 pb-3 border-b border-zinc-800/60">
+              <Search size={16} className="text-emerald-400" />
+              <h2 className="text-sm font-semibold text-zinc-100">Search &amp; Matching Criteria</h2>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1817,14 +1698,9 @@ export default function SettingsPage() {
 
           {/* ── 6. Cover Letter Context & AI Generation ── */}
           <section id="section-ai-context" className="bg-zinc-900/70 border border-zinc-800/90 rounded-xl p-5 backdrop-blur-sm space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-zinc-800/60">
-              <div className="flex items-center gap-2">
-                <Sparkles size={16} className="text-emerald-400" />
-                <h2 className="text-sm font-semibold text-zinc-100">Cover Letter Context &amp; AI Generation</h2>
-              </div>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-zinc-700">
-                OUTPUT: Auto (Match Vacancy Language)
-              </span>
+            <div className="flex items-center gap-2 pb-3 border-b border-zinc-800/60">
+              <Sparkles size={16} className="text-emerald-400" />
+              <h2 className="text-sm font-semibold text-zinc-100">Cover Letter Context &amp; AI Generation</h2>
             </div>
 
             <div>
@@ -1870,14 +1746,9 @@ export default function SettingsPage() {
 
           {/* ── 7. AI Model Strategy, BYOK & Task Routing ── */}
           <section className="bg-zinc-900/70 border border-zinc-800/90 rounded-xl p-5 backdrop-blur-sm space-y-5">
-            <div className="flex items-center justify-between pb-3 border-b border-zinc-800/60">
-              <div className="flex items-center gap-2">
-                <Bot size={16} className="text-emerald-400" />
-                <h2 className="text-sm font-semibold text-zinc-100">AI Model Strategy &amp; BYOK Configuration</h2>
-              </div>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-800 text-emerald-400 border border-zinc-700 font-medium">
-                Multi-Engine Cluster
-              </span>
+            <div className="flex items-center gap-2 pb-3 border-b border-zinc-800/60">
+              <Bot size={16} className="text-emerald-400" />
+              <h2 className="text-sm font-semibold text-zinc-100">AI Model Strategy &amp; BYOK Configuration</h2>
             </div>
 
             <p className="text-xs text-zinc-400 leading-relaxed">
@@ -1888,14 +1759,9 @@ export default function SettingsPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Deep Context & Scoring Analysis */}
               <div className="bg-zinc-950/80 border border-zinc-800/90 rounded-lg p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-zinc-200">
-                    <Cpu size={15} className="text-blue-400" />
-                    <span className="text-xs font-semibold">Deep Context &amp; Scoring</span>
-                  </div>
-                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">
-                    Reasoning
-                  </span>
+                <div className="flex items-center gap-2 text-zinc-200">
+                  <Cpu size={15} className="text-blue-400" />
+                  <span className="text-xs font-semibold">Deep Context &amp; Scoring</span>
                 </div>
                 <p className="text-[11px] text-zinc-400">
                   Engine used to score job-resume compatibility, identify red flags, and analyze vacancy requirements.
@@ -1920,14 +1786,9 @@ export default function SettingsPage() {
 
               {/* Cover Letter Generation */}
               <div className="bg-zinc-950/80 border border-zinc-800/90 rounded-lg p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-zinc-200">
-                    <Zap size={15} className="text-emerald-400" />
-                    <span className="text-xs font-semibold">Cover Letter Generation</span>
-                  </div>
-                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                    Writing &amp; Tone
-                  </span>
+                <div className="flex items-center gap-2 text-zinc-200">
+                  <Zap size={15} className="text-emerald-400" />
+                  <span className="text-xs font-semibold">Cover Letter Generation</span>
                 </div>
                 <p className="text-[11px] text-zinc-400">
                   Engine used to draft tailored, human-sounding cover letters adapted to your portfolio and resume.
@@ -2313,25 +2174,34 @@ export default function SettingsPage() {
           {/* ── Card 1: User Profile Card ── */}
           <div className="bg-zinc-900/80 border border-zinc-800 rounded-xl p-5 shadow-sm sticky top-6 space-y-5">
             <div className="flex items-start justify-between">
-              {/* Avatar Initial with gradient */}
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-600 to-teal-800 border border-emerald-500/30 flex items-center justify-center text-white font-bold text-lg shadow-sm">
-                {form.hhProfileName
-                  ? form.hhProfileName
-                      .split(" ")
-                      .map((s) => s[0])
-                      .join("")
-                      .slice(0, 2)
-                      .toUpperCase()
-                  : form.name
-                  ? form.name.slice(0, 2).toUpperCase()
-                  : "CV"}
+              {/* Avatar Photo / Initial with gradient */}
+              <div className="relative w-12 h-12 rounded-xl overflow-hidden border border-emerald-500/30 shadow-sm shrink-0 bg-gradient-to-br from-emerald-600 to-teal-800 flex items-center justify-center text-white font-bold text-lg">
+                {form.hhProfileAvatar ? (
+                  <img
+                    src={form.hhProfileAvatar}
+                    alt={form.hhProfileName || form.name}
+                    className="absolute inset-0 w-full h-full object-cover"
+                    onError={(e) => {
+                      (e.target as HTMLElement).style.display = "none";
+                    }}
+                  />
+                ) : null}
+                <span className="select-none">
+                  {form.hhProfileName
+                    ? form.hhProfileName
+                        .split(" ")
+                        .map((s) => s[0])
+                        .join("")
+                        .slice(0, 2)
+                        .toUpperCase()
+                    : form.name
+                    ? form.name.slice(0, 2).toUpperCase()
+                    : "CV"}
+                </span>
               </div>
 
-              <div className="flex flex-col items-end gap-1.5">
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-zinc-700">
-                  Profile Mode
-                </span>
-                {/* STRICT RULE: NO circular dot! Clean pill badge with text only */}
+              <div className="flex items-center">
+                {/* Clean pill badge with text only */}
                 <span
                   className={`text-[10px] font-mono font-semibold px-2 py-0.5 rounded tracking-wider uppercase border ${
                     form.hhSessionStatus === "active"
@@ -2373,12 +2243,12 @@ export default function SettingsPage() {
             <div className="space-y-2 pt-2">
               <button
                 type="button"
-                onClick={handleBrowserLogin}
-                disabled={browserLoggingIn}
+                onClick={handleCheckSession}
+                disabled={checkingSession}
                 className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-xs font-semibold transition-colors disabled:opacity-50"
               >
-                {browserLoggingIn ? <RefreshCw size={13} className="animate-spin text-zinc-950" /> : <RotateCw size={13} />}
-                <span>Reconnect HeadHunter Session</span>
+                {checkingSession ? <RefreshCw size={13} className="animate-spin text-zinc-950" /> : <RotateCw size={13} />}
+                <span>Check & Refresh Session</span>
               </button>
 
               <button
