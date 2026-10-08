@@ -89,3 +89,7 @@ scripts/
 # Local browser profile directory
 .hh_browser_profile/
 /install_docker_B.bat
+
+# Standalone tools
+tools/
+/tools
