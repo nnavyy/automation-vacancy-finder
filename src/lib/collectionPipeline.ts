@@ -12,6 +12,7 @@ import { calculateRuleScore } from "@/lib/scoring";
 import { getSimilarFeedbackExamples } from "@/lib/feedbackLearning";
 import { analyzeVacancy } from "@/lib/aiAnalyzer";
 import { sendVacancyNotificationToUser } from "@/lib/telegram";
+import { isSafePublicUrl } from "@/lib/security";
 import type { NormalizedVacancy, SearchPreferenceData } from "@/types";
 
 // ── Type Helpers ──────────────────────────────────────────────
@@ -103,8 +104,8 @@ export async function runCollectionPipeline(
 
   const pref = toSearchPrefData(prefRaw);
 
-  // Pre-fetch candidate's portfolio text once for the entire batch
-  if (pref.portfolioUrl) {
+  // Pre-fetch candidate's portfolio text once for the entire batch (SSRF protected)
+  if (pref.portfolioUrl && isSafePublicUrl(pref.portfolioUrl)) {
     try {
       const res = await fetch(pref.portfolioUrl, { signal: AbortSignal.timeout(4000) });
       if (res.ok) {

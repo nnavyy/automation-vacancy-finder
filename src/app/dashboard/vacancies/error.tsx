@@ -1,13 +1,22 @@
 "use client";
 
 // ============================================================
-// Vacancies Page — Error Boundary
-// Specific error page for /dashboard/vacancies crashes
+// wingkiiy Job Copilot — Vacancies View Error Boundary
+// Specific recovery boundary for /dashboard/vacancies
 // ============================================================
 
-import { useEffect } from "react";
+import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
-import { Briefcase, RefreshCw, Home, Database } from "lucide-react";
+import {
+  RotateCcw,
+  LayoutDashboard,
+  Briefcase,
+  Database,
+  ArrowLeft,
+  Copy,
+  Check,
+  Sparkles,
+} from "lucide-react";
 
 export default function VacanciesError({
   error,
@@ -16,74 +25,114 @@ export default function VacanciesError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  const [isPending, startTransition] = useTransition();
+  const [copied, setCopied] = useState(false);
+
   useEffect(() => {
-    console.error("[VacanciesError]", error);
+    console.error("[VacanciesViewIncident]", error);
   }, [error]);
 
-  const isDbError =
+  const isDbTimeout =
     error.message?.toLowerCase().includes("prisma") ||
     error.message?.toLowerCase().includes("database") ||
-    error.message?.toLowerCase().includes("connection");
+    error.message?.toLowerCase().includes("connection") ||
+    error.message?.toLowerCase().includes("p1001");
+
+  const digestId = error.digest || "VACANCY_FEED_FAULT";
 
   return (
-    <div className="max-w-5xl">
-      {/* Page header so layout stays consistent */}
+    <div className="max-w-4xl font-sans">
+      {/* Header bar matching dashboard layout */}
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-white">Vacancies</h1>
-        <p className="text-gray-500 text-sm mt-1">Could not load vacancy list</p>
+        <h1 className="text-2xl font-bold tracking-tight text-white">Vacancies</h1>
+        <p className="text-zinc-400 text-sm mt-1">
+          Smart job collection, AI matching scores, and auto-apply pipeline
+        </p>
       </div>
 
-      {/* Error card */}
-      <div className="bg-gray-900 border border-red-500/20 rounded-2xl p-10 text-center">
-        <div className="flex justify-center mb-5">
-          <div className="w-14 h-14 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center">
-            {isDbError ? (
-              <Database size={26} className="text-yellow-400" />
-            ) : (
-              <Briefcase size={26} className="text-red-400" />
-            )}
+      {/* Incident Recovery Card */}
+      <div className="rounded-2xl bg-zinc-900/80 border border-zinc-800/90 shadow-xl overflow-hidden backdrop-blur-md">
+        <div className="px-6 py-4 bg-zinc-950/80 border-b border-zinc-800/80 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="p-1.5 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400">
+              <Briefcase size={16} />
+            </div>
+            <span className="text-xs font-mono font-medium text-zinc-300 uppercase tracking-wider">
+              Vacancy Index Query Incident
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-mono text-zinc-500">
+              Ref: <span className="text-zinc-300">{digestId}</span>
+            </span>
+            <button
+              onClick={async () => {
+                await navigator.clipboard.writeText(digestId);
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000);
+              }}
+              className="p-1 rounded text-zinc-400 hover:text-zinc-200 transition-colors"
+              title="Copy Reference"
+            >
+              {copied ? <Check size={13} className="text-emerald-400" /> : <Copy size={13} />}
+            </button>
           </div>
         </div>
 
-        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-semibold tracking-wider mb-4">
-          500 — Failed to load
-        </div>
+        <div className="p-6 md:p-8 space-y-6">
+          <div>
+            <h2 className="text-xl font-semibold text-white mb-2">
+              {isDbTimeout ? "Database Connection Waking Up" : "Unable to Index Vacancy Feed"}
+            </h2>
+            <p className="text-zinc-400 text-sm leading-relaxed max-w-2xl">
+              {isDbTimeout
+                ? "The database connection pool encountered an idle latency window on NeonDB. Serverless PostgreSQL instances hibernate when idle, causing the initial handshake to time out."
+                : "An unexpected exception interrupted the retrieval of your saved and analyzed vacancy feed."}
+            </p>
+          </div>
 
-        <h2 className="text-lg font-bold text-white mb-2">
-          {isDbError ? "Database connection timeout" : "Failed to load vacancies"}
-        </h2>
-        <p className="text-gray-400 text-sm max-w-sm mx-auto mb-2">
-          {isDbError
-            ? "The database took too long to respond. This often happens when NeonDB wakes from sleep mode on the free tier."
-            : "An error occurred while fetching your vacancy list from the server."}
-        </p>
-        <p className="text-gray-500 text-xs max-w-sm mx-auto mb-6">
-          {isDbError
-            ? "Click \"Try Again\" — the second attempt usually succeeds once the connection is warmed up."
-            : "Try refreshing or navigate away and come back."}
-        </p>
+          <div className="p-4 rounded-xl bg-zinc-950/60 border border-zinc-800/70 text-xs text-zinc-300 space-y-1.5">
+            <div className="font-semibold text-zinc-200 flex items-center gap-2">
+              <Database size={14} className="text-amber-400" />
+              <span>Recommended Action:</span>
+            </div>
+            <p className="text-zinc-400">
+              {isDbTimeout
+                ? "Click 'Retry Query' below. The database instance has already begun warming up, and the subsequent query will succeed immediately."
+                : "Try reloading the vacancy dataset or return to the overview workspace."}
+            </p>
+          </div>
 
-        {error.digest && (
-          <p className="text-xs text-gray-600 font-mono bg-gray-950 border border-gray-800 rounded-lg px-3 py-2 inline-block mb-6">
-            ref: {error.digest}
-          </p>
-        )}
+          <div className="pt-2 flex flex-wrap items-center gap-3">
+            <button
+              onClick={() => startTransition(() => reset())}
+              disabled={isPending}
+              className="group inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white text-zinc-950 hover:bg-zinc-200 text-sm font-medium transition-all duration-150 active:scale-[0.98] shadow-sm disabled:opacity-70 disabled:pointer-events-none cursor-pointer"
+            >
+              <RotateCcw
+                size={15}
+                className={`transition-transform duration-300 ${isPending ? "animate-spin" : "group-hover:-rotate-45"}`}
+              />
+              <span>{isPending ? "Connecting..." : "Retry Query"}</span>
+            </button>
 
-        <div className="flex items-center justify-center gap-3 flex-wrap">
-          <button
-            onClick={reset}
-            className="flex items-center gap-2 px-5 py-2.5 bg-green-600 hover:bg-green-500 text-white text-sm font-semibold rounded-xl transition-all duration-150 shadow-lg shadow-green-500/20"
-          >
-            <RefreshCw size={14} />
-            Try Again
-          </button>
-          <Link
-            href="/dashboard"
-            className="flex items-center gap-2 px-5 py-2.5 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-200 text-sm font-medium rounded-xl transition-all duration-150"
-          >
-            <Home size={14} />
-            Overview
-          </Link>
+            <Link
+              href="/dashboard"
+              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700/80 border border-zinc-700 text-zinc-200 text-sm font-medium transition-colors"
+            >
+              <LayoutDashboard size={15} />
+              <span>Dashboard Overview</span>
+            </Link>
+
+            <Link
+              href="/dashboard/settings"
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-zinc-400 hover:text-zinc-200 text-sm font-medium transition-colors"
+            >
+              <Sparkles size={14} />
+              <span>AI Profile Settings</span>
+            </Link>
+          </div>
         </div>
       </div>
     </div>

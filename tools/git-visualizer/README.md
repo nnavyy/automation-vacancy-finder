@@ -4,7 +4,7 @@ A standalone, single-file interactive educational tool and simulator for visuali
 
 ## How to Run
 
-Double-click `index.html` in file explorer or open it in any web browser:
+Double-click `index.html` in fileini  explorer or open it in any web browser:
 
 ```bash
 # On Windows PowerShell

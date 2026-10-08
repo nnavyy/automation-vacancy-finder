@@ -4,12 +4,15 @@
 
 import MobileSidebarWrapper from "@/components/MobileSidebarWrapper";
 import { LanguageProvider } from "@/lib/i18n";
+import { requireUser } from "@/lib/auth-helpers";
 
-export default function DashboardLayout({
+export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  await requireUser();
+
   return (
     <LanguageProvider>
       <div className="flex flex-col md:flex-row min-h-[100dvh] bg-zinc-950 text-zinc-100">

@@ -51,6 +51,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   ],
 
   callbacks: {
+    authorized({ auth, request }) {
+      const isLoggedIn = !!auth?.user;
+      const isDashboard = request.nextUrl.pathname.startsWith("/dashboard");
+      if (isDashboard) {
+        return isLoggedIn;
+      }
+      return true;
+    },
     async jwt({ token, user }) {
       if (user) token.id = user.id;
       return token;
