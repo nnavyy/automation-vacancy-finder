@@ -41,12 +41,21 @@ Browse curated vacancies on the left panel while viewing deep compatibility scor
 
 ---
 
-### 3. Recruiter Intelligence & Company OSINT
+### 3. Pipeline Analytics & Skill Gap Insights
+Track application attrition across the conversion funnel, visualize compatibility distribution, and discover recurring skill gaps to optimize candidate profiles.
+
+<div align="center">
+  <img src="screenshots/05_analytics_funnel.png" alt="Analytics Funnel & Skill Gaps" width="90%" />
+</div>
+
+---
+
+### 4. Recruiter Intelligence & Company OSINT
 Bypass the HR black hole. Automatically uncover hiring managers and tech leads via domain OSINT, with tailored cold-outreach drafting adapted to your portfolio.
 
 ---
 
-### 4. Zero-Setup Local Execution & BYOK
+### 5. Zero-Setup Local Execution & BYOK
 - **No mandatory heavy Docker** — run simply with `npm run dev` or a 1-click `setup.bat`.
 - **Bring Your Own Key (BYOK)** — support for DeepSeek (V3/R1), Claude 3.7, OpenAI, Gemini, and local offline models via Ollama.
 - **Privacy & Security** — Self-hosted on your machine; credentials encrypted at rest with AES-256-GCM.
@@ -58,6 +67,7 @@ Bypass the HR black hole. Automatically uncover hiring managers and tech leads v
 - [x] **Core Crawler & HH RSS Ingestion Pipeline**
 - [x] **Multi-Model LLM Reasoning Engine (DeepSeek / Gemini / Groq / Ollama)**
 - [x] **Chrome Extension for 1-Click Session Cookie Sync**
+- [x] **Pipeline Conversion Funnel & Skill Gap Telemetry**
 - [x] **Telegram Real-time Alert Bot**
 - [ ] **Closed Beta Dogfooding & Edge-case Hardening** *(In Progress)*
 - [ ] **🎉 Public Source Code Release (October 24–26, 2026)**
