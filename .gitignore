@@ -92,5 +92,7 @@ tools/
 # Local promotional drafts and Russian assets (DO NOT PUSH)
 HABR_ARTICLE_RU.md
 README_RU.md
+README.ru.md
+README.coming-soon.ru.md
 screenshots/*_ru.png
 
