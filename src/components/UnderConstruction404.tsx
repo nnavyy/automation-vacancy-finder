@@ -2,9 +2,10 @@
 
 // ============================================================
 // HH Job Copilot — 404 & Under Construction Page
-// Premium WordPress / Elementor Pro inspired maintenance layout
-// Features 2D animated engineer scene, live launch countdown,
-// Telegram & Email direct contact, and GitHub teaser link.
+// Professional Elementor Pro / WordPress maintenance kit inspired layout
+// STRICT REQUIREMENT: ZERO EMOJIS (All icons are vector Lucide SVGs)
+// Features: 2D animated engineer scene, live countdown clock,
+// system progress bar, feature pill tags, Telegram & Email direct contact.
 // ============================================================
 
 import { useState, useEffect } from "react";
@@ -16,11 +17,16 @@ import {
   Check,
   Github,
   Clock,
-  Sparkles,
   ShieldAlert,
   ArrowRight,
   Lock,
   ExternalLink,
+  Star,
+  Activity,
+  Cpu,
+  Layers,
+  Sparkles,
+  CheckCircle2,
 } from "lucide-react";
 
 // Target Launch Date: October 24, 2026 00:00:00 UTC
@@ -92,7 +98,9 @@ export default function UnderConstruction404({ is404 = true }: { is404?: boolean
           >
             <Github className="w-3.5 h-3.5 text-zinc-400" />
             <span className="hidden sm:inline">GitHub Repository</span>
-            <span className="text-amber-400 text-[10px] font-bold">★ Star</span>
+            <span className="flex items-center gap-1 text-amber-400 text-[10px] font-bold">
+              <Star className="w-3 h-3 fill-amber-400 text-amber-400" /> Star
+            </span>
           </a>
           <Link
             href="/login"
@@ -106,10 +114,10 @@ export default function UnderConstruction404({ is404 = true }: { is404?: boolean
       </header>
 
       {/* Main Content Area */}
-      <main className="relative z-10 max-w-5xl mx-auto px-6 py-12 sm:py-16 flex-1 flex flex-col items-center justify-center text-center">
+      <main className="relative z-10 max-w-5xl mx-auto px-6 py-10 sm:py-14 flex-1 flex flex-col items-center justify-center text-center">
         
-        {/* 2D Animated Illustration (Elementor Pro / WordPress Error Template Style) */}
-        <div className="relative w-full max-w-md h-64 sm:h-72 mb-6 flex items-center justify-center select-none">
+        {/* 2D Animated Illustration (Elementor Pro / WordPress Vector Technical Scene) */}
+        <div className="relative w-full max-w-md h-64 sm:h-72 mb-4 flex items-center justify-center select-none">
           {/* Pulsing Backlight Glow */}
           <div className="absolute w-56 h-56 rounded-full bg-emerald-500/15 blur-3xl animate-pulse pointer-events-none" />
           <div className="absolute w-44 h-44 rounded-full bg-amber-500/10 blur-2xl pointer-events-none -bottom-4" />
@@ -234,22 +242,51 @@ export default function UnderConstruction404({ is404 = true }: { is404?: boolean
         </div>
 
         {/* Status Pill Badge */}
-        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-zinc-900/90 border border-amber-500/30 text-amber-400 text-xs font-semibold mb-4 shadow-sm">
+        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-zinc-900/90 border border-amber-500/30 text-amber-400 text-xs font-semibold mb-3 shadow-sm">
           <ShieldAlert className="w-3.5 h-3.5 animate-pulse" />
-          <span>{is404 ? "404 · Route Under Construction" : "Private Beta · Maintenance Mode"}</span>
+          <span>{is404 ? "HTTP 404 · Route Under Construction" : "Private Beta · Maintenance Mode"}</span>
         </div>
 
         {/* Big Bold Headline (WordPress / Elementor Pro Style) */}
-        <h1 className="text-3xl sm:text-5xl font-black tracking-tight text-zinc-100 max-w-2xl mb-4 leading-tight">
+        <h1 className="text-3xl sm:text-5xl font-black tracking-tight text-zinc-100 max-w-2xl mb-3 leading-tight">
           We&apos;re Building Something <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-teal-300 to-sky-400">Extraordinary</span>
         </h1>
 
-        <p className="text-sm sm:text-base text-zinc-400 max-w-xl mb-8 leading-relaxed">
+        <p className="text-sm sm:text-base text-zinc-400 max-w-xl mb-6 leading-relaxed">
           The public portal is temporarily closed while our neural scoring engine, HeadHunter session pipeline, and telemetry models undergo final closed-beta calibration.
         </p>
 
+        {/* Feature Pills (Elementor Pro Style) */}
+        <div className="flex flex-wrap items-center justify-center gap-2 mb-8 max-w-xl">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-zinc-900/90 border border-zinc-800 text-[11px] font-mono text-zinc-300">
+            <Cpu className="w-3 h-3 text-emerald-400" /> Neural Vacancy Matching
+          </span>
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-zinc-900/90 border border-zinc-800 text-[11px] font-mono text-zinc-300">
+            <Layers className="w-3 h-3 text-sky-400" /> Recruiter Decision Dossier
+          </span>
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-zinc-900/90 border border-zinc-800 text-[11px] font-mono text-zinc-300">
+            <CheckCircle2 className="w-3 h-3 text-teal-400" /> Humanized Anti-Ban Throttling
+          </span>
+        </div>
+
+        {/* Progress Bar (Elementor Pro Maintenance Gauge) */}
+        <div className="w-full max-w-xl bg-zinc-900/60 border border-zinc-800/80 rounded-xl p-4 mb-6 text-left backdrop-blur-md">
+          <div className="flex items-center justify-between text-xs mb-2">
+            <span className="text-zinc-400 font-mono flex items-center gap-1.5 font-medium">
+              <Activity className="w-3.5 h-3.5 text-emerald-400" />
+              Engine Calibration &amp; Pipeline Sync
+            </span>
+            <span className="font-mono font-bold text-emerald-400">88% Completed</span>
+          </div>
+          <div className="w-full h-2 bg-zinc-950 rounded-full overflow-hidden border border-zinc-800">
+            <div className="h-full bg-gradient-to-r from-emerald-500 via-teal-400 to-sky-400 rounded-full w-[88%] relative">
+              <div className="absolute inset-0 bg-white/20 animate-pulse" />
+            </div>
+          </div>
+        </div>
+
         {/* Live Countdown Timer Section */}
-        <div className="w-full max-w-xl bg-zinc-900/70 border border-zinc-800/80 rounded-2xl p-6 sm:p-7 mb-10 shadow-2xl backdrop-blur-md">
+        <div className="w-full max-w-xl bg-zinc-900/70 border border-zinc-800/80 rounded-2xl p-6 sm:p-7 mb-8 shadow-2xl backdrop-blur-md">
           <div className="flex items-center justify-between gap-2 mb-4 pb-3 border-b border-zinc-800/60">
             <div className="flex items-center gap-2 text-xs font-bold text-zinc-300 uppercase tracking-wider">
               <Clock className="w-3.5 h-3.5 text-emerald-400" />
@@ -351,10 +388,10 @@ export default function UnderConstruction404({ is404 = true }: { is404?: boolean
 
       </main>
 
-      {/* Footer */}
+      {/* Footer (STRICT ZERO EMOJI) */}
       <footer className="relative z-10 border-t border-zinc-800/60 bg-[#090b0e]/90 px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-zinc-500">
         <div>
-          <span>© 2026 HH Job Copilot. Built with ❤️ for software developers.</span>
+          <span>© 2026 HH Job Copilot. Autonomous AI platform for software engineers.</span>
         </div>
         <div className="flex items-center gap-4">
           <a
