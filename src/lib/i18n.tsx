@@ -31,6 +31,7 @@ export const TRANSLATIONS: Record<Language, Record<string, string>> = {
     "nav.applied": "Applied",
     "nav.companyIntel": "Company Intel",
     "nav.analytics": "Analytics",
+    "nav.gitVisualizer": "Git Visualizer",
     "nav.settings": "Settings",
 
     // Common Actions
@@ -103,6 +104,7 @@ export const TRANSLATIONS: Record<Language, Record<string, string>> = {
     "nav.applied": "Отклики",
     "nav.companyIntel": "Анализ компаний",
     "nav.analytics": "Аналитика",
+    "nav.gitVisualizer": "Визуализатор Git",
     "nav.settings": "Настройки",
 
     // Common Actions
