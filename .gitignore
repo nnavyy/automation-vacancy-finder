@@ -1,0 +1,91 @@
+# Dependencies
+node_modules
+node_modules/
+**/node_modules/**
+.pnp
+.pnp.js
+
+# Next.js build outputs & cache
+.next
+.next/
+**/.next/**
+out/
+build/
+dist/
+.turbo/
+.turbo
+
+# Local environment & secret files
+.env
+.env.local
+.env.*.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Vercel
+.vercel
+
+# Editor & AI Extensions
+.qodo/
+.idea/
+.vscode/
+*.tsbuildinfo
+next-env.d.ts
+
+# Cache & Legacy
+.cache/
+__pycache__/
+*.pyc
+.upm/
+.replit*
+replit.md
+
+# Operating System files
+.DS_Store
+Thumbs.db
+desktop.ini
+*.pem
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Project specific media / local scratch folders
+revisi/
+/revisi
+vc low code/
+/vc low code
+*.mp4
+
+# Test directories, configs & scratch files
+tests/
+/tests
+vitest.config.mts
+*test*.*
+test*.*
+scratch/
+scripts/
+/test_*.ts
+/test_*.js
+/test-*.ts
+/test-*.js
+/login-hh.ts
+/audit_tests.ts
+/scratch*.*
+/check-*.*
+/create-test*.*
+/find-tel.*
+/send-test.*
+
+# Local browser profile directory
+.hh_browser_profile/
+
+# Standalone tools
+tools/
+/tools
+
