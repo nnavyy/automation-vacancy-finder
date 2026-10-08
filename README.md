@@ -15,7 +15,6 @@ A self-hosted, multi-user AI job search copilot engineered for the HeadHunter (H
   - [Recruiter Intelligence & Company OSINT](#recruiter-intelligence--company-osint)
   - [Interactive Telegram Bot](#interactive-telegram-bot)
   - [Analytics & Application Funnel](#analytics--application-funnel)
-  - [Interactive Git Visualizer & Diagnostic Report](#interactive-git-visualizer--diagnostic-report)
   - [Localization (English & Russian)](#localization-english--russian)
   - [Security & AES-256-GCM Encryption](#security--aes-256-gcm-encryption)
 - [Architecture](#architecture)
@@ -94,14 +93,6 @@ Traditional job hunting on HeadHunter (HH.ru) involves repetitive manual searche
 - **Conversion Tracking:** Monitor your entire pipeline: Collected -> Evaluated -> Saved -> Applied -> Interview Invitations.
 - **Timeframe Filtering:** Analyze trends over 14-day, 30-day, and all-time windows.
 - **Score Distribution:** Visualize match score distributions across different keyword clusters and target roles.
-
-### Interactive Git Visualizer & Diagnostic Report
-
-- **5-Zone Lifecycle Model:** Visual representation of Stash, Workspace, Staging Area, Local Repository, and Remote Repository.
-- **Directional Command Transitions:** Explores how commands (git add, git commit, git push, git restore, git reset, git stash, etc.) move state between Git storage areas.
-- **Interactive Sandbox Simulation:** Step-through sandbox allowing developers to simulate file edits, staging, commits, and stashes with animated state transitions.
-- **Live Repository Diagnostics:** Real-time integration querying local Git health, active branch, upstream tracking parity, pending modifications, and recent commit history.
-- **Contextual CLI Recommendations:** Automated diagnostic recommendations with copyable terminal snippets based on current working tree state.
 
 ### Localization (English & Russian)
 

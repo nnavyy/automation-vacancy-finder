@@ -15,7 +15,6 @@ import {
   Settings,
   Cpu,
   Users,
-  GitFork,
   LucideIcon,
   ChevronDown,
   LogOut,
@@ -39,7 +38,6 @@ const NAV_ITEMS: NavItem[] = [
   { icon: CheckCircle, labelKey: "nav.applied", defaultLabel: "Applied", href: "/dashboard/applied" },
   { icon: Users, labelKey: "nav.companyIntel", defaultLabel: "Company Intel", href: "/dashboard/company-intel" },
   { icon: BarChart2, labelKey: "nav.analytics", defaultLabel: "Analytics", href: "/dashboard/analytics" },
-  { icon: GitFork, labelKey: "nav.gitVisualizer", defaultLabel: "Git Visualizer", href: "/dashboard/git-visualizer" },
   { icon: Settings, labelKey: "nav.settings", defaultLabel: "Settings", href: "/dashboard/settings" },
 ];
 
