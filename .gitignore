@@ -89,3 +89,8 @@ scripts/
 tools/
 /tools
 
+# Local promotional drafts and Russian assets (DO NOT PUSH)
+HABR_ARTICLE_RU.md
+README_RU.md
+screenshots/*_ru.png
+
