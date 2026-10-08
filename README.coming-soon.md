@@ -11,6 +11,10 @@
 
 ---
 
+**English** • [Русский](README.ru.md)
+
+---
+
 </div>
 
 > **Public Release Announcement:**
