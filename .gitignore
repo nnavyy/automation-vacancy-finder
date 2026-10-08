@@ -89,3 +89,7 @@ scripts/
 tools/
 /tools
 
+# Local promotional drafts
+HABR_ARTICLE_RU.md
+
+
