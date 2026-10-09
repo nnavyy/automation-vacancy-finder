@@ -440,7 +440,6 @@ export default function VacanciesSplitView({
   const isAnalyzed = Boolean(
     selectedVacancy?.analysis && (selectedVacancy.analysis.matchScore > 0 || selectedVacancy.analysis.matchReasons?.length)
   );
-  const selectedScore = selectedVacancy?.analysis?.matchScore || selectedVacancy?.analysis?.ruleScore || 0;
 
   return (
     <div className="space-y-4">
@@ -556,9 +555,6 @@ export default function VacanciesSplitView({
                 .slice(0, 2)
                 .toUpperCase();
 
-              const rec = v.analysis?.recommendation?.toLowerCase();
-              const redFlagsCount = v.analysis?.redFlags?.length ?? 0;
-
               return (
                 <div
                   key={v.id}
@@ -593,7 +589,7 @@ export default function VacanciesSplitView({
                               <Bookmark className="w-3 h-3 fill-violet-400" />
                             </span>
                           )}
-                          {cardScore > 0 ? (
+                          {cardScore > 0 && (
                             <span
                               className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${
                                 cardScore >= 70
@@ -604,13 +600,6 @@ export default function VacanciesSplitView({
                               }`}
                             >
                               {cardScore}% {language === "ru" ? "СОВПАДЕНИЕ" : "MATCH"}
-                            </span>
-                          ) : (
-                            <span
-                              className="text-[10px] font-medium px-2 py-0.5 rounded-full border bg-zinc-800 text-zinc-400 border-zinc-700"
-                              title={language === "ru" ? "Ожидает глубокой оценки ИИ" : "Pending AI evaluation"}
-                            >
-                              {language === "ru" ? "ОЖИДАЕТ ОЦЕНКИ" : "PENDING"}
                             </span>
                           )}
                         </div>
@@ -642,52 +631,27 @@ export default function VacanciesSplitView({
                         )}
                       </div>
 
-                      {/* Tags & Quick Actions row */}
-                      <div className="flex items-center gap-1.5 mt-2 flex-wrap">
-                        {rec && matchScore > 0 && (
-                          <span
-                            className={`text-[10px] font-semibold uppercase px-1.5 py-0.5 rounded ${
-                              rec === "apply"
-                                ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-                                : rec === "maybe"
-                                ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
-                                : "bg-zinc-800 text-zinc-400"
-                            }`}
-                          >
-                            {rec === "apply"
-                              ? (language === "ru" ? "отклик" : "apply")
-                              : rec === "maybe"
-                              ? (language === "ru" ? "возможно" : "maybe")
-                              : rec}
-                          </span>
-                        )}
-
-                        {redFlagsCount > 0 && (
-                          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20 flex items-center gap-1">
-                            <AlertTriangle className="w-3 h-3" />
-                            {redFlagsCount} {language === "ru" ? "РИСК" : "FLAG"}{language === "ru" ? "" : redFlagsCount > 1 ? "S" : ""}
-                          </span>
-                        )}
-
-                        {/* Check Company Button right on the card */}
-                        {v.company && (
+                      {/* Clean bottom row: subtle Company Intel link & quick actions */}
+                      <div className="flex items-center justify-between gap-2 mt-2 pt-1.5 border-t border-zinc-800/40">
+                        {v.company ? (
                           <Link
                             href={`/dashboard/company-intel?company=${encodeURIComponent(v.company)}`}
                             onClick={(e) => e.stopPropagation()}
-                            className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-zinc-800 hover:bg-emerald-950/60 text-emerald-400 hover:text-emerald-300 border border-zinc-700/80 hover:border-emerald-500/40 text-[11px] font-semibold transition-all active:scale-95 shadow-sm group/btn"
+                            className="text-[11px] text-zinc-400 hover:text-emerald-400 inline-flex items-center gap-1 transition-colors"
                             title={
                               language === "ru"
-                                ? `Проверить компанию ${v.company} в Company Intel`
-                                : `Check ${v.company} in Company Intel`
+                                ? `Company Intel: ${v.company}`
+                                : `Search ${v.company} in Company Intel`
                             }
                           >
-                            <Building2 className="w-3 h-3 text-emerald-400 group-hover/btn:scale-110 transition-transform" />
-                            <span>{language === "ru" ? "Проверить компанию" : "Check Company"}</span>
+                            <Building2 className="w-3 h-3 text-emerald-500/70" />
+                            <span>Company Intel</span>
                           </Link>
+                        ) : (
+                          <div />
                         )}
 
-                        {/* Card quick save & hide buttons */}
-                        <div className="ml-auto flex items-center gap-1">
+                        <div className="flex items-center gap-1">
                           <button
                             type="button"
                             onClick={(e) => {
@@ -771,26 +735,9 @@ export default function VacanciesSplitView({
                     </div>
                     <div>
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-xs font-bold text-zinc-300 uppercase tracking-wider">
+                        <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider">
                           {selectedVacancy.company || "Unknown"}
                         </span>
-                        {selectedScore > 0 ? (
-                          <span
-                            className={`text-xs font-bold px-2.5 py-0.5 rounded-full border ${
-                              selectedScore >= 70
-                                ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
-                                : selectedScore >= 45
-                                ? "bg-amber-500/10 text-amber-400 border-amber-500/30"
-                                : "bg-rose-500/10 text-rose-400 border-rose-500/30"
-                            }`}
-                          >
-                            {selectedScore}% {language === "ru" ? "СОВПАДЕНИЕ" : "MATCH"}
-                          </span>
-                        ) : (
-                          <span className="text-[11px] font-medium px-2 py-0.5 rounded-full border bg-zinc-800 text-zinc-400 border-zinc-700">
-                            {language === "ru" ? "ОЖИДАЕТ ОЦЕНКИ" : "PENDING SCORE"}
-                          </span>
-                        )}
                       </div>
                       <h2 className="text-lg font-bold text-zinc-100 mt-1 leading-snug">
                         {selectedVacancy.title}
