@@ -25,6 +25,7 @@ import {
   Layers,
   CheckCircle2,
 } from "lucide-react";
+import { BrandLogo } from "@/components/BrandLogo";
 
 // Target Launch Date: October 24, 2026 00:00:00 UTC
 const LAUNCH_DATE_MS = new Date("2026-10-24T00:00:00Z").getTime();
@@ -141,9 +142,7 @@ export default function UnderConstruction404({ is404 = true }: { is404?: boolean
       {/* Top Navbar */}
       <header className="relative z-10 border-b border-zinc-800/60 bg-[#090b0e]/80 backdrop-blur-md px-6 py-4 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-3 group">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-700 flex items-center justify-center font-bold text-sm tracking-wider text-zinc-950 shadow-lg shadow-emerald-500/20 group-hover:scale-105 transition-transform">
-            HH
-          </div>
+          <BrandLogo size={36} className="group-hover:scale-105 transition-transform shrink-0" />
           <div>
             <div className="flex items-center gap-2">
               <span className="font-bold text-sm text-zinc-100 tracking-tight">HH Job Copilot</span>
