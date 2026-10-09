@@ -31,7 +31,7 @@ import { BRAND_NAME } from "@/lib/brand";
 
 export function getGroqModel(): string {
   const m = process.env.AI_MODEL_GROQ ?? process.env.GROQ_MODEL;
-  if (!m || m.includes("gpt-oss")) return "llama-3.3-70b-versatile";
+  if (!m || m.includes("gpt-oss") || m.includes("qwen")) return "llama-3.3-70b-versatile";
   return m.replace(/^"|"$/g, "");
 }
 

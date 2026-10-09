@@ -166,182 +166,215 @@ export async function runCollectionPipeline(
       where: { userId, status: "notified", updatedAt: { gte: todayStart } },
     });
 
-    // ── Step 3: Per-vacancy pipeline ──────────────────────────
-    for (let i = 0; i < vacancies.length; i++) {
-      // Guard against serverless function timeout
-      if (Date.now() > deadline) {
-        console.warn(`[Pipeline] Execution time budget (${maxDurationMs}ms) reached. Yielding gracefully at vacancy ${i}/${vacancies.length}.`);
-        break;
-      }
+    // ── Step 3: Per-vacancy concurrent pipeline ─────────────────
+    const CONCURRENCY = 5;
+    let lastDbStatusUpdate = Date.now();
 
-      const vacancy = vacancies[i];
-      summary.processed++;
-
-      // Update status every 5 vacancies to avoid spamming DB
-      if (i % 5 === 0) {
-        await prisma.searchPreference.update({
-          where: { id: prefRaw.id },
-          data: { collectionStatus: { running: true, analyzed: i, total: vacancies.length, startedAt } },
-        });
+    const reportProgress = async (force = false) => {
+      const now = Date.now();
+      if (force || now - lastDbStatusUpdate > 2500) {
+        lastDbStatusUpdate = now;
+        try {
+          await prisma.searchPreference.update({
+            where: { id: prefRaw.id },
+            data: {
+              collectionStatus: {
+                running: true,
+                analyzed: summary.analyzed,
+                total: vacancies.length,
+                startedAt,
+              },
+            },
+          });
+        } catch {
+          // Ignore transient status reporting errors
+        }
       }
+    };
+
+    const processSingleVacancy = async (vacancy: NormalizedVacancy) => {
+      if (Date.now() > deadline) return;
 
       try {
         let dbVacancyId: string;
 
-      const existing = await prisma.vacancy.findFirst({
-        where: { hhId: vacancy.hhId, userId },
-      });
-
-      if (existing) {
-        // Skip already processed vacancies to preserve statuses (saved/applied/etc.) and avoid API spam
-        if (existing.status !== "new") {
-          summary.processed--;
-          continue;
-        }
-
-        if (existing.descriptionHash === vacancy.descriptionHash) {
-          summary.processed--;
-          continue;
-        }
-        const updated = await prisma.vacancy.update({
-          where: { id: existing.id },
-          data: {
-            title:           vacancy.title,
-            company:         vacancy.company          ?? null,
-            area:            vacancy.area             ?? null,
-            salary:          (vacancy.salary as object) ?? null,
-            url:             vacancy.url              ?? null,
-            applyUrl:        vacancy.applyUrl         ?? null,
-            apiUrl:          vacancy.apiUrl           ?? null,
-            experience:      vacancy.experience       ?? null,
-            employment:      vacancy.employment       ?? null,
-            schedule:        vacancy.schedule         ?? null,
-            workFormat:      (vacancy.workFormat as object[]) ?? null,
-            snippet:         (vacancy.snippet as object)      ?? null,
-            description:     vacancy.description      ?? null,
-            descriptionHash: vacancy.descriptionHash  ?? null,
-            rawData:         (vacancy.rawData as object)      ?? null,
-            sourceKeyword:   vacancy.sourceKeyword    ?? null,
-            status:          "new",
-          },
+        const existing = await prisma.vacancy.findFirst({
+          where: { hhId: vacancy.hhId, userId },
         });
-        dbVacancyId = updated.id;
-      } else {
-        const created = await prisma.vacancy.create({
-          data: {
-            userId,
-            hhId:            vacancy.hhId,
-            title:           vacancy.title,
-            company:         vacancy.company          ?? null,
-            area:            vacancy.area             ?? null,
-            salary:          (vacancy.salary as object) ?? null,
-            url:             vacancy.url              ?? null,
-            applyUrl:        vacancy.applyUrl         ?? null,
-            apiUrl:          vacancy.apiUrl           ?? null,
-            experience:      vacancy.experience       ?? null,
-            employment:      vacancy.employment       ?? null,
-            schedule:        vacancy.schedule         ?? null,
-            workFormat:      (vacancy.workFormat as object[]) ?? null,
-            snippet:         (vacancy.snippet as object)      ?? null,
-            description:     vacancy.description      ?? null,
-            descriptionHash: vacancy.descriptionHash  ?? null,
-            rawData:         (vacancy.rawData as object)      ?? null,
-            sourceKeyword:   vacancy.sourceKeyword    ?? null,
-            status:          "new",
-          },
-        });
-        dbVacancyId = created.id;
-        summary.saved++;
-      }
 
-      // ── Basic rule filter ──────────────────────────────────
-      const filterResult = passesBasicFilter(vacancy, pref);
-      if (!filterResult.passes) {
-        await prisma.vacancy.update({
-          where: { id: dbVacancyId },
-          data: {
-            status: "ignored",
-            filterReason: filterResult.reason ?? null,
-          },
-        });
-        summary.ignored++;
-        continue;
-      }
+        if (existing) {
+          if (existing.status !== "new") return;
+          if (existing.descriptionHash === vacancy.descriptionHash) return;
 
-      // ── Enrich with full description ───────────────────────
-      const fullDesc = await fetchVacancyJsonLd(vacancy.url!);
-      if (fullDesc && fullDesc.length > (vacancy.description?.length || 0)) {
-        vacancy.description = fullDesc;
-        vacancy.descriptionHash = crypto.createHash("md5").update(fullDesc).digest("hex");
-        await prisma.vacancy.update({
-          where: { id: dbVacancyId },
-          data: { description: vacancy.description, descriptionHash: vacancy.descriptionHash },
-        });
-      }
-
-      // ── Rule score pre-check ───────────────────────────────
-      const ruleScore = calculateRuleScore(vacancy, pref);
-      if (ruleScore.score < 30) {
-        await prisma.vacancy.update({ where: { id: dbVacancyId }, data: { status: "low_priority" } });
-        continue;
-      }
-
-      // ── AI analysis ────────────────────────────────────────
-      const { positive, negative } = await getSimilarFeedbackExamples(vacancy, pref.userId);
-      const { analysis, provider, model, aiStatus } = await analyzeVacancy(vacancy, [...positive, ...negative], pref);
-
-      const analysisData = {
-        matchScore:          analysis.match_score,
-        ruleScore:           ruleScore.score,
-        recommendation:      analysis.recommendation,
-        bestLanguage:        analysis.best_language,
-        summary:             analysis.summary,
-        matchReasons:        analysis.match_reasons,
-        missingRequirements: analysis.missing_requirements,
-        redFlags:            analysis.red_flags as object[],
-        coverLetter:         analysis.cover_letter,
-        questions:           analysis.questions_to_recruiter,
-        confidence:          analysis.confidence,
-        aiStatus,
-        providerUsed:        provider,
-        modelUsed:           model,
-      };
-
-      await prisma.vacancyAnalysis.upsert({
-        where:  { vacancyId: dbVacancyId },
-        create: { vacancyId: dbVacancyId, ...analysisData },
-        update: analysisData,
-      });
-
-      await prisma.vacancy.update({ where: { id: dbVacancyId }, data: { status: "analyzed" } });
-      summary.analyzed++;
-
-      // ── Telegram notification ──────────────────────────────
-      const shouldNotify =
-        analysis.match_score >= pref.minimumScoreToNotify &&
-        todayNotifiedCount < pref.maxNotificationsPerDay;
-
-      if (shouldNotify && chatId) {
-        const sent = await sendVacancyNotificationToUser(vacancy, analysis, dbVacancyId, chatId);
-
-        if (sent) {
-          await prisma.vacancy.update({ where: { id: dbVacancyId }, data: { status: "notified" } });
-          await prisma.applicationLog.create({
+          const updated = await prisma.vacancy.update({
+            where: { id: existing.id },
             data: {
-              vacancyId: dbVacancyId,
-              action: "notified",
-              notes: `Score: ${analysis.match_score}/100, Provider: ${provider} (${model})`,
+              title:           vacancy.title,
+              company:         vacancy.company          ?? null,
+              area:            vacancy.area             ?? null,
+              salary:          (vacancy.salary as object) ?? null,
+              url:             vacancy.url              ?? null,
+              applyUrl:        vacancy.applyUrl         ?? null,
+              apiUrl:          vacancy.apiUrl           ?? null,
+              experience:      vacancy.experience       ?? null,
+              employment:      vacancy.employment       ?? null,
+              schedule:        vacancy.schedule         ?? null,
+              workFormat:      (vacancy.workFormat as object[]) ?? null,
+              snippet:         (vacancy.snippet as object)      ?? null,
+              description:     vacancy.description      ?? null,
+              descriptionHash: vacancy.descriptionHash  ?? null,
+              rawData:         (vacancy.rawData as object)      ?? null,
+              sourceKeyword:   vacancy.sourceKeyword    ?? null,
+              status:          "new",
             },
           });
-          todayNotifiedCount++;
-          summary.notified++;
+          dbVacancyId = updated.id;
+        } else {
+          const created = await prisma.vacancy.create({
+            data: {
+              userId,
+              hhId:            vacancy.hhId,
+              title:           vacancy.title,
+              company:         vacancy.company          ?? null,
+              area:            vacancy.area             ?? null,
+              salary:          (vacancy.salary as object) ?? null,
+              url:             vacancy.url              ?? null,
+              applyUrl:        vacancy.applyUrl         ?? null,
+              apiUrl:          vacancy.apiUrl           ?? null,
+              experience:      vacancy.experience       ?? null,
+              employment:      vacancy.employment       ?? null,
+              schedule:        vacancy.schedule         ?? null,
+              workFormat:      (vacancy.workFormat as object[]) ?? null,
+              snippet:         (vacancy.snippet as object)      ?? null,
+              description:     vacancy.description      ?? null,
+              descriptionHash: vacancy.descriptionHash  ?? null,
+              rawData:         (vacancy.rawData as object)      ?? null,
+              sourceKeyword:   vacancy.sourceKeyword    ?? null,
+              status:          "new",
+            },
+          });
+          dbVacancyId = created.id;
+          summary.saved++;
         }
+
+        summary.processed++;
+
+        // ── Basic rule filter ──────────────────────────────────
+        const filterResult = passesBasicFilter(vacancy, pref);
+        if (!filterResult.passes) {
+          await prisma.vacancy.update({
+            where: { id: dbVacancyId },
+            data: {
+              status: "ignored",
+              filterReason: filterResult.reason ?? null,
+            },
+          });
+          summary.ignored++;
+          return;
+        }
+
+        // ── Rule score pre-check on basic snippet/title ────────
+        const preScore = calculateRuleScore(vacancy, pref);
+        if (preScore.score < 25) {
+          await prisma.vacancy.update({
+            where: { id: dbVacancyId },
+            data: { status: "low_priority" },
+          });
+          return;
+        }
+
+        // ── Enrich with full description if available ──────────
+        if (vacancy.url) {
+          const fullDesc = await fetchVacancyJsonLd(vacancy.url);
+          if (fullDesc && fullDesc.length > (vacancy.description?.length || 0)) {
+            vacancy.description = fullDesc;
+            vacancy.descriptionHash = crypto.createHash("md5").update(fullDesc).digest("hex");
+            await prisma.vacancy.update({
+              where: { id: dbVacancyId },
+              data: { description: vacancy.description, descriptionHash: vacancy.descriptionHash },
+            });
+          }
+        }
+
+        // ── Rule score check ───────────────────────────────────
+        const ruleScore = calculateRuleScore(vacancy, pref);
+        if (ruleScore.score < 30) {
+          await prisma.vacancy.update({ where: { id: dbVacancyId }, data: { status: "low_priority" } });
+          return;
+        }
+
+        // ── AI analysis ────────────────────────────────────────
+        const { positive, negative } = await getSimilarFeedbackExamples(vacancy, pref.userId);
+        const { analysis, provider, model, aiStatus } = await analyzeVacancy(vacancy, [...positive, ...negative], pref);
+
+        const analysisData = {
+          matchScore:          analysis.match_score,
+          ruleScore:           ruleScore.score,
+          recommendation:      analysis.recommendation,
+          bestLanguage:        analysis.best_language,
+          summary:             analysis.summary,
+          matchReasons:        analysis.match_reasons,
+          missingRequirements: analysis.missing_requirements,
+          redFlags:            analysis.red_flags as object[],
+          coverLetter:         analysis.cover_letter,
+          questions:           analysis.questions_to_recruiter,
+          confidence:          analysis.confidence,
+          aiStatus,
+          providerUsed:        provider,
+          modelUsed:           model,
+        };
+
+        await prisma.vacancyAnalysis.upsert({
+          where:  { vacancyId: dbVacancyId },
+          create: { vacancyId: dbVacancyId, ...analysisData },
+          update: analysisData,
+        });
+
+        await prisma.vacancy.update({ where: { id: dbVacancyId }, data: { status: "analyzed" } });
+        summary.analyzed++;
+        await reportProgress();
+
+        // ── Telegram notification ──────────────────────────────
+        const shouldNotify =
+          analysis.match_score >= pref.minimumScoreToNotify &&
+          todayNotifiedCount < pref.maxNotificationsPerDay;
+
+        if (shouldNotify && chatId) {
+          const sent = await sendVacancyNotificationToUser(vacancy, analysis, dbVacancyId, chatId);
+          if (sent) {
+            await prisma.vacancy.update({ where: { id: dbVacancyId }, data: { status: "notified" } });
+            await prisma.applicationLog.create({
+              data: {
+                vacancyId: dbVacancyId,
+                action: "notified",
+                notes: `Score: ${analysis.match_score}/100, Provider: ${provider} (${model})`,
+              },
+            });
+            todayNotifiedCount++;
+            summary.notified++;
+          }
+        }
+      } catch (err) {
+        console.error(`[Pipeline] Error processing "${vacancy.title}":`, err);
+        summary.errors++;
       }
-    } catch (err) {
-      console.error(`[Pipeline] Error processing "${vacancy.title}":`, err);
-      summary.errors++;
-    }
-  }
+    };
+
+    // Worker pool execution
+    let nextIndex = 0;
+    const workers = Array.from({ length: Math.min(CONCURRENCY, vacancies.length) }, async () => {
+      while (nextIndex < vacancies.length) {
+        if (Date.now() > deadline) {
+          console.warn(`[Pipeline] Time budget reached (${maxDurationMs}ms). Worker exiting.`);
+          break;
+        }
+        const itemIdx = nextIndex++;
+        await processSingleVacancy(vacancies[itemIdx]);
+      }
+    });
+
+    await Promise.all(workers);
+    await reportProgress(true);
 
     console.log("[Pipeline] Done —", summary);
     return { success: true, data: summary };

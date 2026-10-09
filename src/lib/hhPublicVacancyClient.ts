@@ -269,7 +269,7 @@ export async function fetchVacancyJsonLd(url: string): Promise<string | null> {
         "User-Agent": USER_AGENT,
         "Accept": "text/html",
       },
-      timeout: 10000,
+      timeout: 4000,
       validateStatus: () => true,
     });
 
@@ -349,41 +349,37 @@ export async function collectAllVacancies(
     `[HH RSS] Starting collection with ${queries.length} keywords...`
   );
 
-  for (const query of queries) {
-    console.log(`[HH RSS] Query: "${query}"`);
+  const CONCURRENT_QUERIES = 3;
+  let nextQueryIdx = 0;
 
-    for (let page = 0; page < MAX_PAGES_PER_QUERY; page++) {
-      const items = await fetchRSSPage(query, pref, page);
+  const runQueryWorker = async () => {
+    while (nextQueryIdx < queries.length) {
+      const query = queries[nextQueryIdx++];
+      console.log(`[HH RSS] Query: "${query}"`);
 
-      if (items.length === 0) {
-        // No more results for this query
-        break;
+      for (let page = 0; page < MAX_PAGES_PER_QUERY; page++) {
+        const items = await fetchRSSPage(query, pref, page);
+        if (items.length === 0) break;
+
+        for (const item of items) {
+          const hhId = extractVacancyId(item.link);
+          if (seenIds.has(hhId)) continue;
+          seenIds.add(hhId);
+          allVacancies.push(normalizeRSSItem(item, query));
+        }
+
+        // RSS pages return ~20 items; if fewer than 15, there is no subsequent page
+        if (items.length < 15) break;
+
+        await sleep(150);
       }
-
-      for (const item of items) {
-        const hhId = extractVacancyId(item.link);
-
-        // Skip duplicates across queries
-        if (seenIds.has(hhId)) continue;
-        seenIds.add(hhId);
-
-        const normalized = normalizeRSSItem(item, query);
-        allVacancies.push(normalized);
-      }
-
-      console.log(
-        `[HH RSS]   Page ${page}: ${items.length} items (${allVacancies.length} unique total)`
-      );
-
-      // Polite delay between pages
-      if (page < MAX_PAGES_PER_QUERY - 1 && items.length > 0) {
-        await sleep(400);
-      }
+      await sleep(200);
     }
+  };
 
-    // Polite delay between queries
-    await sleep(QUERY_DELAY_MS);
-  }
+  await Promise.all(
+    Array.from({ length: Math.min(CONCURRENT_QUERIES, queries.length) }, runQueryWorker)
+  );
 
   console.log(
     `[HH RSS] Collection complete — ${allVacancies.length} unique vacancies found.`
