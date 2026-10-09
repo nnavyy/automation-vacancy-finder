@@ -440,6 +440,7 @@ export default function VacanciesSplitView({
   const isAnalyzed = Boolean(
     selectedVacancy?.analysis && (selectedVacancy.analysis.matchScore > 0 || selectedVacancy.analysis.matchReasons?.length)
   );
+  const selectedScore = selectedVacancy?.analysis?.matchScore || selectedVacancy?.analysis?.ruleScore || 0;
 
   return (
     <div className="space-y-4">
@@ -546,6 +547,8 @@ export default function VacanciesSplitView({
             filteredVacancies.map((v) => {
               const isSelected = v.id === selectedVacancy?.id;
               const matchScore = v.analysis?.matchScore ?? 0;
+              const ruleScore = v.analysis?.ruleScore ?? 0;
+              const cardScore = matchScore > 0 ? matchScore : ruleScore;
               const initials = (v.company || "CO")
                 .split(" ")
                 .map((w) => w[0])
@@ -577,26 +580,9 @@ export default function VacanciesSplitView({
 
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-2 mb-1">
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider truncate">
-                            {v.company || "Unknown"}
-                          </span>
-                          {v.company && (
-                            <Link
-                              href={`/dashboard/company-intel?company=${encodeURIComponent(v.company)}`}
-                              onClick={(e) => e.stopPropagation()}
-                              className="text-[10px] text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 px-1.5 py-0.5 rounded transition-all inline-flex items-center gap-1 group/intel shrink-0"
-                              title={
-                                language === "ru"
-                                  ? `Открыть ${v.company} в Company Intel`
-                                  : `Search ${v.company} in Company Intel`
-                              }
-                            >
-                              <Building2 className="w-2.5 h-2.5 text-emerald-400 group-hover/intel:scale-110 transition-transform" />
-                              <span className="font-mono text-[9px] uppercase tracking-wider">Intel</span>
-                            </Link>
-                          )}
-                        </div>
+                        <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider truncate">
+                          {v.company || "Unknown"}
+                        </span>
 
                         <div className="flex items-center gap-1.5 shrink-0">
                           {v.status === "saved" && (
@@ -607,17 +593,24 @@ export default function VacanciesSplitView({
                               <Bookmark className="w-3 h-3 fill-violet-400" />
                             </span>
                           )}
-                          {matchScore > 0 && (
+                          {cardScore > 0 ? (
                             <span
                               className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${
-                                matchScore >= 70
+                                cardScore >= 70
                                   ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/25"
-                                  : matchScore >= 45
+                                  : cardScore >= 45
                                   ? "bg-amber-500/10 text-amber-400 border-amber-500/25"
                                   : "bg-rose-500/10 text-rose-400 border-rose-500/25"
                               }`}
                             >
-                              {matchScore}% {language === "ru" ? "СОВПАДЕНИЕ" : "MATCH"}
+                              {cardScore}% {language === "ru" ? "СОВПАДЕНИЕ" : "MATCH"}
+                            </span>
+                          ) : (
+                            <span
+                              className="text-[10px] font-medium px-2 py-0.5 rounded-full border bg-zinc-800 text-zinc-400 border-zinc-700"
+                              title={language === "ru" ? "Ожидает глубокой оценки ИИ" : "Pending AI evaluation"}
+                            >
+                              {language === "ru" ? "ОЖИДАЕТ ОЦЕНКИ" : "PENDING"}
                             </span>
                           )}
                         </div>
@@ -781,19 +774,22 @@ export default function VacanciesSplitView({
                         <span className="text-xs font-bold text-zinc-300 uppercase tracking-wider">
                           {selectedVacancy.company || "Unknown"}
                         </span>
-                        {selectedVacancy.company && (
-                          <Link
-                            href={`/dashboard/company-intel?company=${encodeURIComponent(selectedVacancy.company)}`}
-                            className="text-xs font-semibold text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 px-2.5 py-1 rounded-lg inline-flex items-center gap-1.5 transition-all active:scale-95 group/cintel shadow-sm"
-                            title={
-                              language === "ru"
-                                ? `Проверить компанию ${selectedVacancy.company} в Company Intel`
-                                : `Check ${selectedVacancy.company} in Company Intel`
-                            }
+                        {selectedScore > 0 ? (
+                          <span
+                            className={`text-xs font-bold px-2.5 py-0.5 rounded-full border ${
+                              selectedScore >= 70
+                                ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/30"
+                                : selectedScore >= 45
+                                ? "bg-amber-500/10 text-amber-400 border-amber-500/30"
+                                : "bg-rose-500/10 text-rose-400 border-rose-500/30"
+                            }`}
                           >
-                            <Building2 className="w-3.5 h-3.5 text-emerald-400 group-hover/cintel:scale-110 transition-transform" />
-                            <span>{language === "ru" ? "Искать в Company Intel" : "Search Company Intel"}</span>
-                          </Link>
+                            {selectedScore}% {language === "ru" ? "СОВПАДЕНИЕ" : "MATCH"}
+                          </span>
+                        ) : (
+                          <span className="text-[11px] font-medium px-2 py-0.5 rounded-full border bg-zinc-800 text-zinc-400 border-zinc-700">
+                            {language === "ru" ? "ОЖИДАЕТ ОЦЕНКИ" : "PENDING SCORE"}
+                          </span>
                         )}
                       </div>
                       <h2 className="text-lg font-bold text-zinc-100 mt-1 leading-snug">
