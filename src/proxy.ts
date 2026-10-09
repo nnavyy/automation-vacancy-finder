@@ -1,18 +1,12 @@
 // src/proxy.ts — Route Access & Maintenance Controller (Next.js 16+)
 import { auth } from "@/lib/auth";
 import { NextResponse } from "next/server";
-
-// ============================================================
-// MAINTENANCE LOCKDOWN TOGGLE (TAHAP TESTING):
-// Set ke `true`  -> Redirect semua rute web ke '/' (Under Construction)
-// Set ke `false` -> Aktifkan kembali login normal & proteksi /dashboard
-// ============================================================
-export const IS_MAINTENANCE_LOCKDOWN = true;
+import { IS_MAINTENANCE_LOCKDOWN, isEmailWhitelisted } from "@/lib/maintenance";
 
 const proxyHandler = auth((req) => {
   const { pathname, search } = req.nextUrl;
 
-  // Izinkan asset internal Next.js, static files, favicon
+  // Allow internal Next.js assets, static files, favicon, screenshots
   if (
     pathname.startsWith("/_next") ||
     pathname.startsWith("/screenshots") ||
@@ -22,8 +16,39 @@ const proxyHandler = auth((req) => {
     return NextResponse.next();
   }
 
-  // Jika sedang maintenance mode: arahkan semua rute selain '/' ke '/'
+  const userEmail = req.auth?.user?.email?.toLowerCase();
+  const isLoggedIn = !!req.auth?.user;
+  const isWhitelisted = isEmailWhitelisted(userEmail);
+
+  // ============================================================
+  // MAINTENANCE LOCKDOWN WITH WHITELIST BYPASS
+  // ============================================================
   if (IS_MAINTENANCE_LOCKDOWN) {
+    // 1. Whitelisted user already authenticated -> FULL BYPASS
+    if (isLoggedIn && isWhitelisted) {
+      const isAuthPage =
+        pathname === "/login" ||
+        pathname === "/register" ||
+        pathname === "/forgot-password";
+      if (isAuthPage) {
+        return NextResponse.redirect(new URL("/dashboard", req.nextUrl.origin));
+      }
+      return NextResponse.next();
+    }
+
+    // 2. Allow auth routes so authorized testers can log in/register
+    const isAuthRoute =
+      pathname === "/login" ||
+      pathname === "/register" ||
+      pathname === "/forgot-password" ||
+      pathname.startsWith("/api/auth") ||
+      pathname === "/api/register";
+
+    if (isAuthRoute) {
+      return NextResponse.next();
+    }
+
+    // 3. Unauthorized or anonymous visitors trying to access other pages -> Redirect to '/' (Under Construction)
     if (pathname !== "/") {
       return NextResponse.redirect(new URL("/", req.nextUrl.origin));
     }
@@ -31,9 +56,8 @@ const proxyHandler = auth((req) => {
   }
 
   // ============================================================
-  // LOGIKA NORMAL AUTH & DASHBOARD DI BAWAH INI TETAP 100% UTUH:
+  // NORMAL AUTH & DASHBOARD ROUTING (When Maintenance is Disabled)
   // ============================================================
-  const isLoggedIn = !!req.auth?.user;
   const isProtectedPath = pathname.startsWith("/dashboard");
 
   if (isProtectedPath && !isLoggedIn) {
@@ -45,7 +69,7 @@ const proxyHandler = auth((req) => {
     return NextResponse.redirect(signInUrl);
   }
 
-  // Redirect user yang sudah login dari halaman auth ke /dashboard
+  // Redirect authenticated users away from auth pages to /dashboard
   const isAuthPage =
     pathname === "/login" ||
     pathname === "/register" ||

@@ -5,13 +5,19 @@
 import MobileSidebarWrapper from "@/components/MobileSidebarWrapper";
 import { LanguageProvider } from "@/lib/i18n";
 import { requireUser } from "@/lib/auth-helpers";
+import { IS_MAINTENANCE_LOCKDOWN, isEmailWhitelisted } from "@/lib/maintenance";
+import { redirect } from "next/navigation";
 
 export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  await requireUser();
+  const user = await requireUser();
+
+  if (IS_MAINTENANCE_LOCKDOWN && !isEmailWhitelisted(user.email)) {
+    redirect("/");
+  }
 
   return (
     <LanguageProvider>

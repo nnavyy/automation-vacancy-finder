@@ -1,30 +1,15 @@
 "use client";
 
-// ============================================================
-// MAINTENANCE TOGGLE (TAHAP TESTING):
-// Set ke `true`  -> Tampilkan halaman Under Construction (Register disabled)
-// Set ke `false` -> Tampilkan Form Register normal untuk testing
-// ============================================================
-const IS_MAINTENANCE_LOCK = true;
-
-import UnderConstruction404 from "@/components/UnderConstruction404";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
 import Link from "next/link";
-import { Loader2, Mail, Lock, User, ArrowRight } from "lucide-react";
+import { Loader2, Mail, Lock, User, ArrowRight, ShieldCheck } from "lucide-react";
 import { BRAND_NAME } from "@/lib/brand";
 import { BrandLogo } from "@/components/BrandLogo";
+import { IS_MAINTENANCE_LOCKDOWN, isEmailWhitelisted } from "@/lib/maintenance";
 
 export default function RegisterPage() {
-  // Jika maintenance mode aktif, kunci dan tampilkan Under Construction
-  if (IS_MAINTENANCE_LOCK) {
-    return <UnderConstruction404 is404={true} />;
-  }
-
-  // ============================================================
-  // KODE LENGKAP REGISTER ASLI DI BAWAH INI TETAP 100% UTUH:
-  // ============================================================
   const router = useRouter();
   const [name,     setName]     = useState("");
   const [email,    setEmail]    = useState("");
@@ -36,6 +21,12 @@ export default function RegisterPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    // Maintenance protection: only whitelisted accounts can register
+    if (IS_MAINTENANCE_LOCKDOWN && !isEmailWhitelisted(email)) {
+      setError("Registration is currently invite-only for whitelisted accounts (Private Beta).");
+      return;
+    }
 
     if (password !== confirm) {
       setError("Passwords do not match.");
@@ -92,9 +83,16 @@ export default function RegisterPage() {
           <h1 className="text-xl font-bold text-zinc-100 tracking-tight">
             {BRAND_NAME}
           </h1>
-          <p className="text-xs text-zinc-400 mt-1">
-            Create your account to start automated vacancy finding
-          </p>
+          {IS_MAINTENANCE_LOCKDOWN ? (
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[11px] font-medium mt-2">
+              <ShieldCheck size={13} className="text-emerald-400" />
+              <span>Invite-Only Whitelist Beta</span>
+            </div>
+          ) : (
+            <p className="text-xs text-zinc-400 mt-1">
+              Create your account to start automated vacancy finding
+            </p>
+          )}
         </div>
 
         {/* Card */}

@@ -1,25 +1,11 @@
 "use client";
 
-// ============================================================
-// MAINTENANCE TOGGLE (TAHAP TESTING):
-// Set ke `true`  -> Tampilkan halaman Under Construction
-// Set ke `false` -> Tampilkan Form Forgot Password normal untuk testing
-// ============================================================
-const IS_MAINTENANCE_LOCK = true;
-
-import UnderConstruction404 from "@/components/UnderConstruction404";
 import { useState } from "react";
 import Link from "next/link";
 import { Mail, ArrowRight, Loader2, CheckCircle, ArrowLeft } from "lucide-react";
+import { IS_MAINTENANCE_LOCKDOWN, isEmailWhitelisted } from "@/lib/maintenance";
 
 export default function ForgotPasswordPage() {
-  if (IS_MAINTENANCE_LOCK) {
-    return <UnderConstruction404 is404={true} />;
-  }
-
-  // ============================================================
-  // KODE LENGKAP FORGOT PASSWORD ASLI DI BAWAH INI TETAP 100% UTUH:
-  // ============================================================
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<{ text: string; type: "error" | "success" } | null>(null);
@@ -28,6 +14,12 @@ export default function ForgotPasswordPage() {
     e.preventDefault();
     setLoading(true);
     setMsg(null);
+
+    if (IS_MAINTENANCE_LOCKDOWN && !isEmailWhitelisted(email)) {
+      setLoading(false);
+      setMsg({ text: "The system is currently in Private Testing. Password reset is restricted to whitelisted accounts.", type: "error" });
+      return;
+    }
 
     try {
       const res = await fetch("/api/auth/forgot-password", {

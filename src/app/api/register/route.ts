@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import prisma from "@/lib/db";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
+import { IS_MAINTENANCE_LOCKDOWN, isEmailWhitelisted } from "@/lib/maintenance";
 
 export async function POST(req: NextRequest) {
   try {
@@ -20,6 +21,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { success: false, error: "Name, email, and password are required." },
         { status: 400 }
+      );
+    }
+
+    if (IS_MAINTENANCE_LOCKDOWN && !isEmailWhitelisted(email)) {
+      return NextResponse.json(
+        { success: false, error: "Registration is currently restricted to whitelisted accounts (Private Beta)." },
+        { status: 403 }
       );
     }
 

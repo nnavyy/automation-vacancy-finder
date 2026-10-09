@@ -1,30 +1,15 @@
 "use client";
 
-// ============================================================
-// MAINTENANCE TOGGLE (TAHAP TESTING):
-// Set ke `true`  -> Tampilkan halaman Under Construction (Login disabled)
-// Set ke `false` -> Tampilkan Form Login normal untuk testing
-// ============================================================
-const IS_MAINTENANCE_LOCK = true;
-
-import UnderConstruction404 from "@/components/UnderConstruction404";
 import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Loader2, Mail, Lock, ArrowRight } from "lucide-react";
+import { Loader2, Mail, Lock, ArrowRight, ShieldCheck } from "lucide-react";
 import { BRAND_NAME } from "@/lib/brand";
 import { BrandLogo } from "@/components/BrandLogo";
+import { IS_MAINTENANCE_LOCKDOWN, isEmailWhitelisted } from "@/lib/maintenance";
 
 export default function LoginPage() {
-  // Jika maintenance mode aktif, kunci dan tampilkan Under Construction
-  if (IS_MAINTENANCE_LOCK) {
-    return <UnderConstruction404 is404={true} />;
-  }
-
-  // ============================================================
-  // KODE LENGKAP LOGIN ASLI DI BAWAH INI TETAP 100% UTUH:
-  // ============================================================
   const router = useRouter();
   const [email,    setEmail]    = useState("");
   const [password, setPassword] = useState("");
@@ -35,6 +20,13 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     setError(null);
+
+    // Maintenance protection: only whitelisted accounts can sign in
+    if (IS_MAINTENANCE_LOCKDOWN && !isEmailWhitelisted(email)) {
+      setLoading(false);
+      setError("The system is currently in Private Testing. Access is restricted to whitelisted accounts.");
+      return;
+    }
 
     const res = await signIn("credentials", {
       email,
@@ -65,9 +57,17 @@ export default function LoginPage() {
           <h1 className="text-xl font-bold text-zinc-100 tracking-tight">
             {BRAND_NAME}
           </h1>
-          <p className="text-xs text-zinc-400 mt-1">
-            Sign in to access your vacancy pipeline
-          </p>
+
+          {IS_MAINTENANCE_LOCKDOWN ? (
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[11px] font-medium mt-2">
+              <ShieldCheck size={13} className="text-emerald-400" />
+              <span>Private Testing Access</span>
+            </div>
+          ) : (
+            <p className="text-xs text-zinc-400 mt-1">
+              Sign in to access your vacancy pipeline
+            </p>
+          )}
         </div>
 
         {/* Card */}
@@ -75,7 +75,7 @@ export default function LoginPage() {
           <form onSubmit={handleSubmit} className="space-y-4">
 
             {error && (
-              <div className="bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs px-3.5 py-2.5 rounded-lg font-medium">
+              <div className="bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs px-3.5 py-2.5 rounded-lg font-medium leading-relaxed">
                 {error}
               </div>
             )}
