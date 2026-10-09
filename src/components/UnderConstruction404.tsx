@@ -31,7 +31,6 @@ const LAUNCH_DATE_MS = new Date("2026-10-24T00:00:00Z").getTime();
 
 const CONTENT = {
   en: {
-    brandTag: "Under Construction",
     brandDesc: "Autonomous AI Job Search for HeadHunter",
     githubRepo: "GitHub Repository",
     status404: "HTTP 404 · Route Under Construction",
@@ -55,7 +54,6 @@ const CONTENT = {
     footerLaunchpad: "GitHub Launchpad",
   },
   ru: {
-    brandTag: "В разработке",
     brandDesc: "Автономный ИИ-поиск работы на HeadHunter",
     githubRepo: "Репозиторий GitHub",
     status404: "HTTP 404 · Страница в разработке",
@@ -149,9 +147,6 @@ export default function UnderConstruction404({ is404 = true }: { is404?: boolean
           <div>
             <div className="flex items-center gap-2">
               <span className="font-bold text-sm text-zinc-100 tracking-tight">HH Job Copilot</span>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/30 font-semibold uppercase">
-                {t.brandTag}
-              </span>
             </div>
             <p className="text-[11px] text-zinc-500 font-mono">{t.brandDesc}</p>
           </div>
