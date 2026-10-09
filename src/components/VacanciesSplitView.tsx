@@ -8,6 +8,7 @@
 // ============================================================
 
 import { useState, useMemo } from "react";
+import Link from "next/link";
 import {
   Search,
   ExternalLink,
@@ -27,6 +28,7 @@ import {
   Languages,
   RotateCcw,
   Calendar,
+  Building2,
 } from "lucide-react";
 import RecruiterDossierModal, { RecruiterDossierData } from "@/components/RecruiterDossierModal";
 import { useLanguage } from "@/lib/i18n";
@@ -64,6 +66,7 @@ interface VacanciesSplitViewProps {
   initialVacancies: VacancyItem[];
   totalCount: number;
   hasProfile: boolean;
+  minScoreThreshold?: number;
 }
 
 function formatVacancyDate(dateStr?: string, lang: string = "en"): string {
@@ -97,6 +100,7 @@ function formatSalary(salary: unknown, lang: string = "en"): string {
 export default function VacanciesSplitView({
   initialVacancies,
   totalCount,
+  minScoreThreshold = 70,
 }: VacanciesSplitViewProps) {
   const { t, language } = useLanguage();
   const [vacancies, setVacancies] = useState<VacancyItem[]>(initialVacancies);
@@ -129,39 +133,46 @@ export default function VacanciesSplitView({
 
   // Filtered vacancies list
   const filteredVacancies = useMemo(() => {
-    return vacancies.filter((v) => {
-      // If not in the "skip" tab, hide skipped/ignored/low_priority items
-      if (filterTab !== "skip" && (v.status === "skipped" || v.status === "ignored" || v.status === "low_priority")) {
-        return false;
-      }
+    return vacancies
+      .filter((v) => {
+        // If not in the "skip" tab, hide skipped/ignored/low_priority items
+        if (filterTab !== "skip" && (v.status === "skipped" || v.status === "ignored" || v.status === "low_priority")) {
+          return false;
+        }
 
-      // Tab filter
-      if (filterTab === "high") {
-        if ((v.analysis?.matchScore ?? 0) < 70) return false;
-      } else if (filterTab === "maybe") {
-        if (v.analysis?.recommendation?.toLowerCase() !== "maybe") return false;
-      } else if (filterTab === "analyzed") {
-        if (!v.analysis || v.analysis.matchScore === 0) return false;
-      } else if (filterTab === "applied") {
-        if (!v.status.includes("applied")) return false;
-      } else if (filterTab === "saved") {
-        if (v.status !== "saved") return false;
-      } else if (filterTab === "skip") {
-        if (v.status !== "skipped" && v.status !== "ignored" && v.status !== "low_priority") return false;
-      }
+        // Tab filter
+        if (filterTab === "high") {
+          if ((v.analysis?.matchScore ?? 0) < minScoreThreshold) return false;
+        } else if (filterTab === "maybe") {
+          if (v.analysis?.recommendation?.toLowerCase() !== "maybe") return false;
+        } else if (filterTab === "analyzed") {
+          if (!v.analysis || v.analysis.matchScore === 0) return false;
+        } else if (filterTab === "applied") {
+          if (!v.status.includes("applied")) return false;
+        } else if (filterTab === "saved") {
+          if (v.status !== "saved") return false;
+        } else if (filterTab === "skip") {
+          if (v.status !== "skipped" && v.status !== "ignored" && v.status !== "low_priority") return false;
+        }
 
-      // Search query
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        const matchesTitle = v.title.toLowerCase().includes(q);
-        const matchesCompany = v.company?.toLowerCase().includes(q);
-        const matchesArea = v.area?.toLowerCase().includes(q);
-        return matchesTitle || matchesCompany || matchesArea;
-      }
+        // Search query
+        if (searchQuery.trim()) {
+          const q = searchQuery.toLowerCase();
+          const matchesTitle = v.title.toLowerCase().includes(q);
+          const matchesCompany = v.company?.toLowerCase().includes(q);
+          const matchesArea = v.area?.toLowerCase().includes(q);
+          return matchesTitle || matchesCompany || matchesArea;
+        }
 
-      return true;
-    });
-  }, [vacancies, filterTab, searchQuery]);
+        return true;
+      })
+      .sort((a, b) => {
+        const scoreA = a.analysis?.matchScore ?? -1;
+        const scoreB = b.analysis?.matchScore ?? -1;
+        if (scoreB !== scoreA) return scoreB - scoreA;
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      });
+  }, [vacancies, filterTab, searchQuery, minScoreThreshold]);
 
   // Active selected vacancy
   const selectedVacancy = useMemo(() => {
@@ -395,11 +406,15 @@ export default function VacanciesSplitView({
         {/* Filter Pills */}
         <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-zinc-800/60">
           {[
-            { id: "all", label: t("vacancies.tabAll"), count: vacancies.filter((v) => v.status !== "skipped" && v.status !== "ignored").length },
+            {
+              id: "all",
+              label: t("vacancies.tabAll"),
+              count: vacancies.filter((v) => v.status !== "skipped" && v.status !== "ignored" && v.status !== "low_priority").length,
+            },
             {
               id: "high",
-              label: t("vacancies.tabHigh"),
-              count: vacancies.filter((v) => (v.analysis?.matchScore ?? 0) >= 70 && v.status !== "skipped").length,
+              label: `${t("vacancies.tabHigh")} (≥${minScoreThreshold}%)`,
+              count: vacancies.filter((v) => (v.analysis?.matchScore ?? 0) >= minScoreThreshold && v.status !== "skipped" && v.status !== "ignored" && v.status !== "low_priority").length,
             },
             {
               id: "maybe",
@@ -602,9 +617,20 @@ export default function VacanciesSplitView({
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-zinc-300 uppercase tracking-wider">
-                          {selectedVacancy.company}
-                        </span>
+                        {selectedVacancy.company ? (
+                          <Link
+                            href={`/dashboard/company-intel?company=${encodeURIComponent(selectedVacancy.company)}`}
+                            className="text-xs font-bold text-zinc-300 hover:text-emerald-400 inline-flex items-center gap-1.5 uppercase tracking-wider transition-colors group"
+                            title={language === "ru" ? "Открыть Company Intel" : "Inspect company in Company Intel"}
+                          >
+                            <span>{selectedVacancy.company}</span>
+                            <Building2 className="w-3.5 h-3.5 text-zinc-500 group-hover:text-emerald-400 transition-colors" />
+                          </Link>
+                        ) : (
+                          <span className="text-xs font-bold text-zinc-300 uppercase tracking-wider">
+                            Unknown
+                          </span>
+                        )}
                         <span className="text-[10px] px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-zinc-700">
                           {t("vacancies.hhSource")}
                         </span>
@@ -693,6 +719,17 @@ export default function VacanciesSplitView({
                     <Send className="w-3.5 h-3.5" />
                     {t("vacancies.applyHh")}
                   </a>
+
+                  {selectedVacancy.company && (
+                    <Link
+                      href={`/dashboard/company-intel?company=${encodeURIComponent(selectedVacancy.company)}`}
+                      className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-xs font-medium text-emerald-400 hover:text-emerald-300 transition-all shadow-sm"
+                      title={language === "ru" ? "Проверить компанию в Company Intel" : "Check company in Company Intel"}
+                    >
+                      <Building2 className="w-3.5 h-3.5" />
+                      <span>{language === "ru" ? "Company Intel" : "Company Intel"}</span>
+                    </Link>
+                  )}
 
                   <button
                     onClick={() => openRecruiterModal(selectedVacancy)}

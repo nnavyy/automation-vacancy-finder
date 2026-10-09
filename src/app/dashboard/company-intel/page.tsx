@@ -108,13 +108,53 @@ function CompanyIntelContent() {
   // Contact Category Filter
   const [contactFilter, setContactFilter] = useState<"all" | "tech" | "hr">("all");
 
+  const performSearch = useCallback(async (targetName: string) => {
+    if (!targetName.trim()) return;
+
+    setSearching(true);
+    setError("");
+
+    try {
+      const res = await fetch("/api/company-intel/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ companyName: targetName.trim() }),
+      });
+      const json = await res.json();
+      if (json.success && json.data) {
+        setIntels((prev) => {
+          const filtered = prev.filter((i) => i.id !== json.data.id);
+          return [json.data, ...filtered];
+        });
+        setSelectedId(json.data.id);
+      } else {
+        setError(json.error ?? "Failed to search company intelligence");
+      }
+    } catch {
+      setError("Network error while communicating with intelligence engine.");
+    } finally {
+      setSearching(false);
+    }
+  }, []);
+
   const fetchIntels = useCallback(async () => {
     try {
       const res = await fetch("/api/company-intel");
       const json = await res.json();
       if (json.success && Array.isArray(json.data)) {
         setIntels(json.data);
-        if (json.data.length > 0 && !selectedId) {
+        const urlCompany = searchParams.get("company");
+        if (urlCompany) {
+          const matched = json.data.find((c: any) =>
+            c.companyName.toLowerCase().includes(urlCompany.toLowerCase())
+          );
+          if (matched) {
+            setSelectedId(matched.id);
+          } else {
+            // Not in existing records: automatically crawl this company
+            performSearch(urlCompany);
+          }
+        } else if (json.data.length > 0 && !selectedId) {
           const novakid = json.data.find((c: any) => c.companyName.includes("Novakid"));
           setSelectedId(novakid ? novakid.id : json.data[0].id);
         }
@@ -122,7 +162,7 @@ function CompanyIntelContent() {
     } finally {
       setLoading(false);
     }
-  }, [selectedId]);
+  }, [selectedId, searchParams, performSearch]);
 
   useEffect(() => {
     fetchIntels();
@@ -175,32 +215,9 @@ function CompanyIntelContent() {
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!companyName.trim()) return;
-
-    setSearching(true);
-    setError("");
-
-    try {
-      const res = await fetch("/api/company-intel/search", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ companyName: companyName.trim() }),
-      });
-      const json = await res.json();
-      if (json.success && json.data) {
-        setIntels((prev) => {
-          const filtered = prev.filter((i) => i.id !== json.data.id);
-          return [json.data, ...filtered];
-        });
-        setSelectedId(json.data.id);
-        setCompanyName("");
-      } else {
-        setError(json.error ?? "Failed to search company intelligence");
-      }
-    } catch {
-      setError("Network error while communicating with intelligence engine.");
-    } finally {
-      setSearching(false);
-    }
+    const name = companyName.trim();
+    setCompanyName("");
+    await performSearch(name);
   };
 
   const handleRecrawl = async (intelId: string, name: string, domain?: string) => {

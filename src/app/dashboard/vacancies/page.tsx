@@ -35,12 +35,16 @@ export default async function VacanciesPage({
   let vacancies: any[] = [];
   let total = 0;
   let hasProfile = false;
+  let minScoreThreshold = 70;
 
   try {
-    const profileCount = await withRetry(() =>
-      prisma.searchPreference.count({ where: { userId: user.id } })
+    const profile = await withRetry(() =>
+      prisma.searchPreference.findFirst({ where: { userId: user.id, isActive: true } })
     );
-    hasProfile = profileCount > 0;
+    hasProfile = Boolean(profile);
+    if (profile?.minimumScoreToNotify) {
+      minScoreThreshold = profile.minimumScoreToNotify;
+    }
 
     [vacancies, total] = await withRetry(() =>
       Promise.all([
@@ -146,6 +150,7 @@ export default async function VacanciesPage({
         initialVacancies={formattedVacancies}
         totalCount={total}
         hasProfile={hasProfile}
+        minScoreThreshold={minScoreThreshold}
       />
     </div>
   );
