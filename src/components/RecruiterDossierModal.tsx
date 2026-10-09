@@ -10,7 +10,6 @@ import { useState } from "react";
 import Link from "next/link";
 import {
   X,
-  ShieldCheck,
   Mail,
   Linkedin,
   Send,
