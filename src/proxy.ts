@@ -1,44 +1,31 @@
-// src/proxy.ts — Protect /dashboard routes (Next.js 16+)
-import { auth } from "@/lib/auth";
+// src/proxy.ts — Complete Lockdown for Maintenance Mode (Next.js 16+)
 import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
 
-const proxyHandler = auth((req) => {
-  const isLoggedIn = !!req.auth?.user;
-  const { pathname, search } = req.nextUrl;
+export function proxy(req: NextRequest) {
+  const { pathname } = req.nextUrl;
 
-  const isProtectedPath = pathname.startsWith("/dashboard");
-
-  if (isProtectedPath && !isLoggedIn) {
-    const signInUrl = new URL("/login", req.nextUrl.origin);
-    const callback = pathname + search;
-    if (callback && callback !== "/") {
-      signInUrl.searchParams.set("callbackUrl", callback);
-    }
-    return NextResponse.redirect(signInUrl);
+  // Allow static assets, images, icons
+  if (
+    pathname.startsWith("/_next") ||
+    pathname.startsWith("/screenshots") ||
+    pathname.startsWith("/favicon") ||
+    pathname.includes(".")
+  ) {
+    return NextResponse.next();
   }
 
-  // Redirect authenticated users away from public auth pages
-  const isAuthPage =
-    pathname === "/login" ||
-    pathname === "/register" ||
-    pathname === "/forgot-password";
-  if (isAuthPage && isLoggedIn) {
-    return NextResponse.redirect(new URL("/dashboard", req.nextUrl.origin));
+  // Lock down all routes (/login, /register, /dashboard, etc.) -> Redirect to '/'
+  if (pathname !== "/") {
+    return NextResponse.redirect(new URL("/", req.nextUrl.origin));
   }
 
   return NextResponse.next();
-});
+}
 
-export default proxyHandler;
-export const proxy = proxyHandler;
-export const middleware = proxyHandler;
+export default proxy;
+export const middleware = proxy;
 
 export const config = {
-  matcher: [
-    "/dashboard/:path*",
-    "/login",
-    "/register",
-    "/forgot-password",
-  ],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
 };
-

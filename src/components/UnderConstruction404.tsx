@@ -102,14 +102,6 @@ export default function UnderConstruction404({ is404 = true }: { is404?: boolean
               <Star className="w-3 h-3 fill-amber-400 text-amber-400" /> Star
             </span>
           </a>
-          <Link
-            href="/login"
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/25 text-xs font-semibold text-emerald-400 transition-all"
-            title="Private Developer Access"
-          >
-            <Lock className="w-3 h-3" />
-            <span className="hidden sm:inline">Admin Login</span>
-          </Link>
         </div>
       </header>
 
@@ -403,10 +395,6 @@ export default function UnderConstruction404({ is404 = true }: { is404?: boolean
             <span>GitHub Launchpad</span>
             <ArrowRight className="w-3 h-3" />
           </a>
-          <span className="text-zinc-700">·</span>
-          <Link href="/login" className="hover:text-zinc-400 transition-colors font-mono text-[11px]">
-            Private Auth
-          </Link>
         </div>
       </footer>
     </div>
