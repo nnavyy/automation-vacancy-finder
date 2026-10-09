@@ -4,7 +4,7 @@ import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Loader2, Mail, Lock, ArrowRight, ShieldCheck } from "lucide-react";
+import { Loader2, Mail, Lock, ArrowRight } from "lucide-react";
 import { BRAND_NAME } from "@/lib/brand";
 import { BrandLogo } from "@/components/BrandLogo";
 import { IS_MAINTENANCE_LOCKDOWN, isEmailWhitelisted } from "@/lib/maintenance";
@@ -21,10 +21,10 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
 
-    // Maintenance protection: only whitelisted accounts can sign in
+    // If not a whitelisted account during maintenance, silently redirect to Under Construction
     if (IS_MAINTENANCE_LOCKDOWN && !isEmailWhitelisted(email)) {
       setLoading(false);
-      setError("The system is currently in Private Testing. Access is restricted to whitelisted accounts.");
+      router.push("/");
       return;
     }
 
@@ -57,17 +57,9 @@ export default function LoginPage() {
           <h1 className="text-xl font-bold text-zinc-100 tracking-tight">
             {BRAND_NAME}
           </h1>
-
-          {IS_MAINTENANCE_LOCKDOWN ? (
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[11px] font-medium mt-2">
-              <ShieldCheck size={13} className="text-emerald-400" />
-              <span>Private Testing Access</span>
-            </div>
-          ) : (
-            <p className="text-xs text-zinc-400 mt-1">
-              Sign in to access your vacancy pipeline
-            </p>
-          )}
+          <p className="text-xs text-zinc-400 mt-1">
+            Sign in to access your vacancy pipeline
+          </p>
         </div>
 
         {/* Card */}

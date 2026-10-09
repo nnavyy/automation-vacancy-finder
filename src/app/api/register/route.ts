@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
 
     if (IS_MAINTENANCE_LOCKDOWN && !isEmailWhitelisted(email)) {
       return NextResponse.json(
-        { success: false, error: "Registration is currently restricted to whitelisted accounts (Private Beta)." },
+        { success: false, error: "Registration is currently unavailable." },
         { status: 403 }
       );
     }

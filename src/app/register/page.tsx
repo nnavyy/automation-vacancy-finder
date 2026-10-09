@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
 import Link from "next/link";
-import { Loader2, Mail, Lock, User, ArrowRight, ShieldCheck } from "lucide-react";
+import { Loader2, Mail, Lock, User, ArrowRight } from "lucide-react";
 import { BRAND_NAME } from "@/lib/brand";
 import { BrandLogo } from "@/components/BrandLogo";
 import { IS_MAINTENANCE_LOCKDOWN, isEmailWhitelisted } from "@/lib/maintenance";
@@ -22,9 +22,10 @@ export default function RegisterPage() {
     e.preventDefault();
     setError(null);
 
-    // Maintenance protection: only whitelisted accounts can register
+    // If not a whitelisted account during maintenance, silently redirect to Under Construction
     if (IS_MAINTENANCE_LOCKDOWN && !isEmailWhitelisted(email)) {
-      setError("Registration is currently invite-only for whitelisted accounts (Private Beta).");
+      setLoading(false);
+      router.push("/");
       return;
     }
 
@@ -83,16 +84,9 @@ export default function RegisterPage() {
           <h1 className="text-xl font-bold text-zinc-100 tracking-tight">
             {BRAND_NAME}
           </h1>
-          {IS_MAINTENANCE_LOCKDOWN ? (
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-[11px] font-medium mt-2">
-              <ShieldCheck size={13} className="text-emerald-400" />
-              <span>Invite-Only Whitelist Beta</span>
-            </div>
-          ) : (
-            <p className="text-xs text-zinc-400 mt-1">
-              Create your account to start automated vacancy finding
-            </p>
-          )}
+          <p className="text-xs text-zinc-400 mt-1">
+            Create your account to start automated vacancy finding
+          </p>
         </div>
 
         {/* Card */}

@@ -17,7 +17,7 @@ export default function ForgotPasswordPage() {
 
     if (IS_MAINTENANCE_LOCKDOWN && !isEmailWhitelisted(email)) {
       setLoading(false);
-      setMsg({ text: "The system is currently in Private Testing. Password reset is restricted to whitelisted accounts.", type: "error" });
+      window.location.href = "/";
       return;
     }
 
