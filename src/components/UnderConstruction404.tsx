@@ -19,27 +19,100 @@ import {
   Clock,
   ShieldAlert,
   ArrowRight,
-  Lock,
   ExternalLink,
   Star,
   Activity,
   Cpu,
   Layers,
-  Sparkles,
   CheckCircle2,
 } from "lucide-react";
 
 // Target Launch Date: October 24, 2026 00:00:00 UTC
 const LAUNCH_DATE_MS = new Date("2026-10-24T00:00:00Z").getTime();
 
+const CONTENT = {
+  en: {
+    brandTag: "Under Construction",
+    brandDesc: "Autonomous AI Job Search for HeadHunter",
+    githubRepo: "GitHub Repository",
+    status404: "HTTP 404 · Route Under Construction",
+    statusBeta: "Private Beta · Maintenance Mode",
+    headlineStart: "We're Building Something",
+    headlineHighlight: "Extraordinary",
+    subtitle: "The public portal is temporarily closed while our neural scoring engine, HeadHunter session pipeline, and telemetry models undergo final closed-beta calibration.",
+    pillMatching: "Neural Vacancy Matching",
+    pillDossier: "Recruiter Decision Dossier",
+    pillAntiBan: "Humanized Anti-Ban Throttling",
+    progressTitle: "Engine Calibration & Pipeline Sync",
+    progressPercent: "88% Completed",
+    countdownTitle: "Official Release Countdown",
+    dateText: "October 24–26, 2026",
+    days: "Days",
+    hours: "Hours",
+    minutes: "Minutes",
+    seconds: "Seconds",
+    contactHeading: "Need Early Beta Access or Have Questions? Contact Creator Directly:",
+    telegramDirect: "Telegram Direct",
+    directEmail: "Direct Email",
+    footerText: "© 2026 HH Job Copilot. Autonomous AI platform for software engineers.",
+    footerLaunchpad: "GitHub Launchpad",
+  },
+  ru: {
+    brandTag: "В разработке",
+    brandDesc: "Автономный ИИ-поиск работы на HeadHunter",
+    githubRepo: "Репозиторий GitHub",
+    status404: "HTTP 404 · Страница в разработке",
+    statusBeta: "Закрытый бета-тест · Режим обслуживания",
+    headlineStart: "Мы создаем нечто",
+    headlineHighlight: "исключительное",
+    subtitle: "Публичный портал временно закрыт: наш нейросетевой скоринг, модуль сессий HeadHunter и телеметрия проходят финальную калибровку закрытого бета-тестирования.",
+    pillMatching: "Нейросетевой подбор вакансий",
+    pillDossier: "Досье на рекрутера",
+    pillAntiBan: "Защита от блокировок HH.ru",
+    progressTitle: "Калибровка движка и синхронизация",
+    progressPercent: "88% Завершено",
+    countdownTitle: "Обратный отсчет до официального релиза",
+    dateText: "24–26 октября 2026",
+    days: "Дней",
+    hours: "Часов",
+    minutes: "Минут",
+    seconds: "Секунд",
+    contactHeading: "Нужен ранний доступ к бета-версии или есть вопросы? Свяжитесь напрямую:",
+    telegramDirect: "Telegram напрямую",
+    directEmail: "Прямой Email",
+    footerText: "© 2026 HH Job Copilot. Автономная ИИ-платформа для разработчиков.",
+    footerLaunchpad: "GitHub Launchpad",
+  },
+};
+
 export default function UnderConstruction404({ is404 = true }: { is404?: boolean }) {
   const [copiedEmail, setCopiedEmail] = useState(false);
+  const [lang, setLang] = useState<"en" | "ru">("en");
   const [timeLeft, setTimeLeft] = useState({
     days: 0,
     hours: 0,
     minutes: 0,
     seconds: 0,
   });
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("app_language") as "en" | "ru" | null;
+      if (saved === "en" || saved === "ru") {
+        setLang(saved);
+      }
+    } catch {}
+  }, []);
+
+  const handleLangToggle = (selectedLang: "en" | "ru") => {
+    setLang(selectedLang);
+    try {
+      localStorage.setItem("app_language", selectedLang);
+      document.documentElement.lang = selectedLang;
+    } catch {}
+  };
+
+  const t = CONTENT[lang];
 
   useEffect(() => {
     function calculateCountdown() {
@@ -82,14 +155,42 @@ export default function UnderConstruction404({ is404 = true }: { is404?: boolean
             <div className="flex items-center gap-2">
               <span className="font-bold text-sm text-zinc-100 tracking-tight">HH Job Copilot</span>
               <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/30 font-semibold uppercase">
-                Under Construction
+                {t.brandTag}
               </span>
             </div>
-            <p className="text-[11px] text-zinc-500 font-mono">Autonomous AI Job Search for HeadHunter</p>
+            <p className="text-[11px] text-zinc-500 font-mono">{t.brandDesc}</p>
           </div>
         </Link>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
+          {/* Language Switcher EN / RU */}
+          <div className="flex items-center gap-1 bg-zinc-900/90 border border-zinc-800 rounded-lg p-0.5 text-xs font-mono">
+            <button
+              type="button"
+              onClick={() => handleLangToggle("en")}
+              className={`px-2 py-1 rounded-md transition-all ${
+                lang === "en"
+                  ? "bg-zinc-800 text-emerald-400 font-bold shadow-sm"
+                  : "text-zinc-500 hover:text-zinc-300"
+              }`}
+              title="English"
+            >
+              EN
+            </button>
+            <button
+              type="button"
+              onClick={() => handleLangToggle("ru")}
+              className={`px-2 py-1 rounded-md transition-all ${
+                lang === "ru"
+                  ? "bg-zinc-800 text-emerald-400 font-bold shadow-sm"
+                  : "text-zinc-500 hover:text-zinc-300"
+              }`}
+              title="Русский"
+            >
+              RU
+            </button>
+          </div>
+
           <a
             href="https://github.com/nnavyy/automation-vacancy-finder"
             target="_blank"
@@ -97,7 +198,7 @@ export default function UnderConstruction404({ is404 = true }: { is404?: boolean
             className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-zinc-900/90 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 text-xs font-medium text-zinc-300 hover:text-zinc-100 transition-all shadow-sm"
           >
             <Github className="w-3.5 h-3.5 text-zinc-400" />
-            <span className="hidden sm:inline">GitHub Repository</span>
+            <span className="hidden sm:inline">{t.githubRepo}</span>
             <span className="flex items-center gap-1 text-amber-400 text-[10px] font-bold">
               <Star className="w-3 h-3 fill-amber-400 text-amber-400" /> Star
             </span>
@@ -236,28 +337,28 @@ export default function UnderConstruction404({ is404 = true }: { is404?: boolean
         {/* Status Pill Badge */}
         <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-zinc-900/90 border border-amber-500/30 text-amber-400 text-xs font-semibold mb-3 shadow-sm">
           <ShieldAlert className="w-3.5 h-3.5 animate-pulse" />
-          <span>{is404 ? "HTTP 404 · Route Under Construction" : "Private Beta · Maintenance Mode"}</span>
+          <span>{is404 ? t.status404 : t.statusBeta}</span>
         </div>
 
         {/* Big Bold Headline (WordPress / Elementor Pro Style) */}
         <h1 className="text-3xl sm:text-5xl font-black tracking-tight text-zinc-100 max-w-2xl mb-3 leading-tight">
-          We&apos;re Building Something <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-teal-300 to-sky-400">Extraordinary</span>
+          {t.headlineStart} <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-teal-300 to-sky-400">{t.headlineHighlight}</span>
         </h1>
 
         <p className="text-sm sm:text-base text-zinc-400 max-w-xl mb-6 leading-relaxed">
-          The public portal is temporarily closed while our neural scoring engine, HeadHunter session pipeline, and telemetry models undergo final closed-beta calibration.
+          {t.subtitle}
         </p>
 
         {/* Feature Pills (Elementor Pro Style) */}
         <div className="flex flex-wrap items-center justify-center gap-2 mb-8 max-w-xl">
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-zinc-900/90 border border-zinc-800 text-[11px] font-mono text-zinc-300">
-            <Cpu className="w-3 h-3 text-emerald-400" /> Neural Vacancy Matching
+            <Cpu className="w-3 h-3 text-emerald-400" /> {t.pillMatching}
           </span>
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-zinc-900/90 border border-zinc-800 text-[11px] font-mono text-zinc-300">
-            <Layers className="w-3 h-3 text-sky-400" /> Recruiter Decision Dossier
+            <Layers className="w-3 h-3 text-sky-400" /> {t.pillDossier}
           </span>
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-zinc-900/90 border border-zinc-800 text-[11px] font-mono text-zinc-300">
-            <CheckCircle2 className="w-3 h-3 text-teal-400" /> Humanized Anti-Ban Throttling
+            <CheckCircle2 className="w-3 h-3 text-teal-400" /> {t.pillAntiBan}
           </span>
         </div>
 
@@ -266,9 +367,9 @@ export default function UnderConstruction404({ is404 = true }: { is404?: boolean
           <div className="flex items-center justify-between text-xs mb-2">
             <span className="text-zinc-400 font-mono flex items-center gap-1.5 font-medium">
               <Activity className="w-3.5 h-3.5 text-emerald-400" />
-              Engine Calibration &amp; Pipeline Sync
+              {t.progressTitle}
             </span>
-            <span className="font-mono font-bold text-emerald-400">88% Completed</span>
+            <span className="font-mono font-bold text-emerald-400">{t.progressPercent}</span>
           </div>
           <div className="w-full h-2 bg-zinc-950 rounded-full overflow-hidden border border-zinc-800">
             <div className="h-full bg-gradient-to-r from-emerald-500 via-teal-400 to-sky-400 rounded-full w-[88%] relative">
@@ -282,10 +383,7 @@ export default function UnderConstruction404({ is404 = true }: { is404?: boolean
           <div className="flex items-center justify-between gap-2 mb-4 pb-3 border-b border-zinc-800/60">
             <div className="flex items-center gap-2 text-xs font-bold text-zinc-300 uppercase tracking-wider">
               <Clock className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Official Release Countdown</span>
-            </div>
-            <div className="text-[11px] font-mono text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-0.5 rounded-full">
-              October 24–26, 2026
+              <span>{t.countdownTitle}</span>
             </div>
           </div>
 
@@ -296,7 +394,7 @@ export default function UnderConstruction404({ is404 = true }: { is404?: boolean
                 {String(timeLeft.days).padStart(2, "0")}
               </div>
               <div className="text-[9px] sm:text-[10px] font-bold text-zinc-500 uppercase tracking-wider mt-1">
-                Days
+                {t.days}
               </div>
             </div>
 
@@ -305,7 +403,7 @@ export default function UnderConstruction404({ is404 = true }: { is404?: boolean
                 {String(timeLeft.hours).padStart(2, "0")}
               </div>
               <div className="text-[9px] sm:text-[10px] font-bold text-zinc-500 uppercase tracking-wider mt-1">
-                Hours
+                {t.hours}
               </div>
             </div>
 
@@ -314,7 +412,7 @@ export default function UnderConstruction404({ is404 = true }: { is404?: boolean
                 {String(timeLeft.minutes).padStart(2, "0")}
               </div>
               <div className="text-[9px] sm:text-[10px] font-bold text-zinc-500 uppercase tracking-wider mt-1">
-                Minutes
+                {t.minutes}
               </div>
             </div>
 
@@ -323,16 +421,23 @@ export default function UnderConstruction404({ is404 = true }: { is404?: boolean
                 {String(timeLeft.seconds).padStart(2, "0")}
               </div>
               <div className="text-[9px] sm:text-[10px] font-bold text-zinc-500 uppercase tracking-wider mt-1">
-                Seconds
+                {t.seconds}
               </div>
             </div>
+          </div>
+
+          {/* Release Date Below Countdown (Plain text, no green border) */}
+          <div className="mt-4 pt-3 border-t border-zinc-800/40 text-center">
+            <p className="text-xs font-mono text-zinc-400 tracking-wide">
+              {t.dateText}
+            </p>
           </div>
         </div>
 
         {/* Contact & Early Access Section (Telegram + Email) */}
         <div className="w-full max-w-xl space-y-4">
           <p className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
-            Need Early Beta Access or Have Questions? Contact Creator Directly:
+            {t.contactHeading}
           </p>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -348,7 +453,7 @@ export default function UnderConstruction404({ is404 = true }: { is404?: boolean
                   <Send className="w-4 h-4" />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-[10px] text-zinc-400 font-medium">Telegram Direct</p>
+                  <p className="text-[10px] text-zinc-400 font-medium">{t.telegramDirect}</p>
                   <p className="text-xs font-bold text-sky-300 truncate">@wonkiiy</p>
                 </div>
               </div>
@@ -362,7 +467,7 @@ export default function UnderConstruction404({ is404 = true }: { is404?: boolean
                   <Mail className="w-4 h-4" />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-[10px] text-zinc-400 font-medium">Direct Email</p>
+                  <p className="text-[10px] text-zinc-400 font-medium">{t.directEmail}</p>
                   <p className="text-xs font-mono text-zinc-200 truncate">nandazhafran@gmail.com</p>
                 </div>
               </div>
@@ -383,7 +488,7 @@ export default function UnderConstruction404({ is404 = true }: { is404?: boolean
       {/* Footer (STRICT ZERO EMOJI) */}
       <footer className="relative z-10 border-t border-zinc-800/60 bg-[#090b0e]/90 px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-zinc-500">
         <div>
-          <span>© 2026 HH Job Copilot. Autonomous AI platform for software engineers.</span>
+          <span>{t.footerText}</span>
         </div>
         <div className="flex items-center gap-4">
           <a
@@ -392,7 +497,7 @@ export default function UnderConstruction404({ is404 = true }: { is404?: boolean
             rel="noopener noreferrer"
             className="hover:text-zinc-300 transition-colors flex items-center gap-1"
           >
-            <span>GitHub Launchpad</span>
+            <span>{t.footerLaunchpad}</span>
             <ArrowRight className="w-3 h-3" />
           </a>
         </div>

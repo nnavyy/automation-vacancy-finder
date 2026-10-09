@@ -11,17 +11,13 @@ import {
   FileText,
   Bot,
   CheckCircle2,
-  TrendingUp,
   BarChart3,
   Target,
-  Layers,
-  Building2,
   AlertTriangle,
-  BookmarkCheck,
   Send,
   Sparkles,
-  RotateCcw,
 } from "lucide-react";
+import { useLanguage } from "@/lib/i18n";
 
 export interface AnalyticsVacancyItem {
   id: string;
@@ -47,6 +43,7 @@ export default function AnalyticsDashboard({
   initialVacancies,
   totalCount,
 }: AnalyticsDashboardProps) {
+  const { language, t } = useLanguage();
   const [timeRange, setTimeRange] = useState<"30d" | "14d" | "all">("30d");
 
   // Dynamic filtering based on active time range
@@ -139,10 +136,10 @@ export default function AnalyticsDashboard({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-xl font-bold text-zinc-100 tracking-tight mb-1">
-            Analytics & Pipeline Intelligence
+            {t("analytics.title")}
           </h1>
           <p className="text-zinc-400 text-sm max-w-2xl leading-relaxed">
-            Algorithmic performance across {activeTotal.toLocaleString("en-US")} tracked vacancies from HeadHunter. Insights derived from autonomous skill indexing, match vector calculations, and recruiter response tracking.
+            {t("analytics.subtitle").replace("{total}", activeTotal.toLocaleString(language === "ru" ? "ru-RU" : "en-US"))}
           </p>
         </div>
 
@@ -157,7 +154,7 @@ export default function AnalyticsDashboard({
                   : "text-zinc-400 hover:text-zinc-200"
               }`}
             >
-              Last 30 Days
+              {t("analytics.range30d")}
             </button>
             <button
               onClick={() => setTimeRange("14d")}
@@ -167,7 +164,7 @@ export default function AnalyticsDashboard({
                   : "text-zinc-400 hover:text-zinc-200"
               }`}
             >
-              Last 14 Days
+              {t("analytics.range14d")}
             </button>
             <button
               onClick={() => setTimeRange("all")}
@@ -177,7 +174,7 @@ export default function AnalyticsDashboard({
                   : "text-zinc-400 hover:text-zinc-200"
               }`}
             >
-              All Time
+              {t("analytics.rangeAll")}
             </button>
           </div>
         </div>
@@ -189,24 +186,24 @@ export default function AnalyticsDashboard({
         <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-2xl p-5 backdrop-blur-sm space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
-              Total Vacancies
+              {t("analytics.totalVacancies")}
             </span>
             <FileText className="w-4 h-4 text-zinc-500" />
           </div>
           <div className="flex items-baseline gap-2">
             <span className="text-3xl font-black text-zinc-100 tabular-nums">
-              {activeTotal.toLocaleString("en-US")}
+              {activeTotal.toLocaleString(language === "ru" ? "ru-RU" : "en-US")}
             </span>
             <span className="text-[11px] font-semibold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.2 rounded">
-              Active
+              {t("analytics.active")}
             </span>
           </div>
           <p className="text-xs text-zinc-500">
             {timeRange === "14d"
-              ? "Past 14 days telemetry"
+              ? t("analytics.past14d")
               : timeRange === "30d"
-              ? "Past 30 days telemetry"
-              : "Entire portfolio crawl"}
+              ? t("analytics.past30d")
+              : t("analytics.entirePortfolio")}
           </p>
         </div>
 
@@ -214,7 +211,7 @@ export default function AnalyticsDashboard({
         <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-2xl p-5 backdrop-blur-sm space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
-              AI Evaluated
+              {t("analytics.aiEvaluated")}
             </span>
             <Bot className="w-4 h-4 text-violet-400" />
           </div>
@@ -227,7 +224,7 @@ export default function AnalyticsDashboard({
             </span>
           </div>
           <p className="text-xs text-zinc-500">
-            {activeTotal - analyzed} pending in background queue
+            {activeTotal - analyzed} {t("analytics.pendingQueue")}
           </p>
         </div>
 
@@ -235,7 +232,7 @@ export default function AnalyticsDashboard({
         <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-2xl p-5 backdrop-blur-sm space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
-              Dispatched Apps
+              {t("analytics.dispatchedApps")}
             </span>
             <Send className="w-4 h-4 text-emerald-400" />
           </div>
@@ -244,11 +241,11 @@ export default function AnalyticsDashboard({
               {applied}
             </span>
             <span className="text-xs text-zinc-400 font-mono">
-              {appliedRate}% rate
+              {appliedRate}% {t("analytics.dispatchedRate")}
             </span>
           </div>
           <p className="text-xs text-zinc-500">
-            Submitted via HH & manual direct
+            {t("analytics.dispatchedDesc")}
           </p>
         </div>
 
@@ -256,7 +253,7 @@ export default function AnalyticsDashboard({
         <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-2xl p-5 backdrop-blur-sm space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
-              Qualified Fit Rate
+              {t("analytics.qualifiedFit")}
             </span>
             <CheckCircle2 className="w-4 h-4 text-sky-400" />
           </div>
@@ -269,7 +266,7 @@ export default function AnalyticsDashboard({
             </span>
           </div>
           <p className="text-xs text-zinc-500">
-            Vacancies graded APPLY or MAYBE
+            {t("analytics.qualifiedDesc")}
           </p>
         </div>
       </div>
@@ -280,14 +277,14 @@ export default function AnalyticsDashboard({
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-bold text-zinc-100 flex items-center gap-2">
               <Target className="w-4 h-4 text-emerald-400" />
-              Pipeline Conversion Funnel
+              {t("analytics.funnelTitle")}
             </h3>
             <span className="text-xs text-zinc-400 font-mono">
-              {activeTotal > 0 ? ((responded / activeTotal) * 100).toFixed(1) : "0.0"}% end-to-end yield
+              {activeTotal > 0 ? ((responded / activeTotal) * 100).toFixed(1) : "0.0"}% {t("analytics.funnelYield")}
             </span>
           </div>
           <p className="text-xs text-zinc-400 mt-1">
-            Stage-by-stage progression from raw HeadHunter crawler ingestion to recruiter dialogues.
+            {t("analytics.funnelDesc")}
           </p>
         </div>
 
@@ -295,24 +292,24 @@ export default function AnalyticsDashboard({
           {/* Stage 1 */}
           <div className="p-4 rounded-xl bg-zinc-950/50 border border-zinc-800 space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-zinc-300">1. Sourced Pool</span>
+              <span className="text-xs font-semibold text-zinc-300">{t("analytics.stage1Title")}</span>
               <span className="text-xs font-mono text-zinc-500">100%</span>
             </div>
             <div className="space-y-1">
               <span className="text-2xl font-black text-zinc-100 tabular-nums">
-                {activeTotal.toLocaleString("en-US")}
+                {activeTotal.toLocaleString(language === "ru" ? "ru-RU" : "en-US")}
               </span>
               <div className="w-full bg-zinc-800 rounded-full h-1.5 overflow-hidden">
                 <div className="bg-zinc-400 h-full rounded-full w-full" />
               </div>
             </div>
-            <p className="text-[11px] text-zinc-500">Raw positions tracked</p>
+            <p className="text-[11px] text-zinc-500">{t("analytics.stage1Desc")}</p>
           </div>
 
           {/* Stage 2 */}
           <div className="p-4 rounded-xl bg-zinc-950/50 border border-zinc-800 space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-violet-300">2. AI Filtered</span>
+              <span className="text-xs font-semibold text-violet-300">{t("analytics.stage2Title")}</span>
               <span className="text-xs font-mono text-violet-400">{analyzedPct}%</span>
             </div>
             <div className="space-y-1">
@@ -326,13 +323,13 @@ export default function AnalyticsDashboard({
                 />
               </div>
             </div>
-            <p className="text-[11px] text-zinc-500">Scored against user profile</p>
+            <p className="text-[11px] text-zinc-500">{t("analytics.stage2Desc")}</p>
           </div>
 
           {/* Stage 3 */}
           <div className="p-4 rounded-xl bg-zinc-950/50 border border-zinc-800 space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-emerald-300">3. Applications</span>
+              <span className="text-xs font-semibold text-emerald-300">{t("analytics.stage3Title")}</span>
               <span className="text-xs font-mono text-emerald-400">
                 {analyzed > 0 ? ((applied / analyzed) * 100).toFixed(1) : "0.0"}%
               </span>
@@ -350,13 +347,13 @@ export default function AnalyticsDashboard({
                 />
               </div>
             </div>
-            <p className="text-[11px] text-zinc-500">Transmitted to employer</p>
+            <p className="text-[11px] text-zinc-500">{t("analytics.stage3Desc")}</p>
           </div>
 
           {/* Stage 4 */}
           <div className="p-4 rounded-xl bg-zinc-950/50 border border-zinc-800 space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-sky-300">4. Recruiter Response</span>
+              <span className="text-xs font-semibold text-sky-300">{t("analytics.stage4Title")}</span>
               <span className="text-xs font-mono text-sky-400">
                 {applied > 0 ? ((responded / applied) * 100).toFixed(1) : "0.0"}%
               </span>
@@ -374,7 +371,7 @@ export default function AnalyticsDashboard({
                 />
               </div>
             </div>
-            <p className="text-[11px] text-zinc-500">Invitations & interviews</p>
+            <p className="text-[11px] text-zinc-500">{t("analytics.stage4Desc")}</p>
           </div>
         </div>
       </div>
@@ -387,14 +384,14 @@ export default function AnalyticsDashboard({
             <div>
               <h3 className="text-sm font-bold text-zinc-100 flex items-center gap-2">
                 <BarChart3 className="w-4 h-4 text-violet-400" />
-                Compatibility Score Distribution
+                {t("analytics.distTitle")}
               </h3>
               <p className="text-xs text-zinc-400 mt-0.5">
-                Distribution across evaluated vacancies (Mean: {avgScore} / 100)
+                {t("analytics.distDesc").replace("{avg}", String(avgScore))}
               </p>
             </div>
             <span className="text-xs font-mono font-bold text-zinc-200">
-              {analyzed} total evaluated
+              {analyzed} {t("analytics.totalEvaluated")}
             </span>
           </div>
 
@@ -404,7 +401,7 @@ export default function AnalyticsDashboard({
             <div className="space-y-1">
               <div className="flex items-center justify-between text-xs">
                 <span className="font-semibold text-emerald-400">
-                  High Synergy (&ge; 75%)
+                  {t("analytics.highSynergy")}
                 </span>
                 <span className="font-mono text-zinc-300">
                   {highSynergy} ({Math.round((highSynergy / totalAnalyzedNonNull) * 100)}%)
@@ -422,7 +419,7 @@ export default function AnalyticsDashboard({
             <div className="space-y-1">
               <div className="flex items-center justify-between text-xs">
                 <span className="font-semibold text-amber-400">
-                  Moderate Match (50% - 74%)
+                  {t("analytics.moderateMatch")}
                 </span>
                 <span className="font-mono text-zinc-300">
                   {moderateMatch} ({Math.round((moderateMatch / totalAnalyzedNonNull) * 100)}%)
@@ -440,7 +437,7 @@ export default function AnalyticsDashboard({
             <div className="space-y-1">
               <div className="flex items-center justify-between text-xs">
                 <span className="font-semibold text-zinc-400">
-                  Borderline (25% - 49%)
+                  {t("analytics.borderline")}
                 </span>
                 <span className="font-mono text-zinc-300">
                   {borderline} ({Math.round((borderline / totalAnalyzedNonNull) * 100)}%)
@@ -458,7 +455,7 @@ export default function AnalyticsDashboard({
             <div className="space-y-1">
               <div className="flex items-center justify-between text-xs">
                 <span className="font-semibold text-rose-400">
-                  Incompatible / Skip (&lt; 25%)
+                  {t("analytics.incompatible")}
                 </span>
                 <span className="font-mono text-zinc-300">
                   {discarded} ({Math.round((discarded / totalAnalyzedNonNull) * 100)}%)
@@ -476,15 +473,15 @@ export default function AnalyticsDashboard({
           {/* Actionable Insights Split */}
           <div className="pt-3 border-t border-zinc-800 grid grid-cols-3 gap-2 text-center text-xs">
             <div className="p-2.5 rounded-lg bg-emerald-500/5 border border-emerald-500/15">
-              <span className="text-[10px] text-zinc-500 block uppercase font-semibold">Immediate Apply</span>
+              <span className="text-[10px] text-zinc-500 block uppercase font-semibold">{t("analytics.immediateApply")}</span>
               <span className="text-base font-bold text-emerald-400">{recApply}</span>
             </div>
             <div className="p-2.5 rounded-lg bg-amber-500/5 border border-amber-500/15">
-              <span className="text-[10px] text-zinc-500 block uppercase font-semibold">Tailor Resume</span>
+              <span className="text-[10px] text-zinc-500 block uppercase font-semibold">{t("analytics.tailorResume")}</span>
               <span className="text-base font-bold text-amber-400">{recMaybe}</span>
             </div>
             <div className="p-2.5 rounded-lg bg-zinc-900 border border-zinc-800">
-              <span className="text-[10px] text-zinc-500 block uppercase font-semibold">Auto-Culled</span>
+              <span className="text-[10px] text-zinc-500 block uppercase font-semibold">{t("analytics.autoCulled")}</span>
               <span className="text-base font-bold text-zinc-400">{recSkip}</span>
             </div>
           </div>
@@ -495,17 +492,17 @@ export default function AnalyticsDashboard({
           <div>
             <h3 className="text-sm font-bold text-zinc-100 flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 text-amber-400" />
-              Highest Frequency Skill Gaps
+              {t("analytics.skillGapsTitle")}
             </h3>
             <p className="text-xs text-zinc-400 mt-0.5">
-              Missing capabilities causing score penalties across active vacancies
+              {t("analytics.skillGapsDesc")}
             </p>
           </div>
 
           <div className="space-y-2.5">
             {topGaps.length === 0 ? (
               <p className="text-xs text-zinc-500 py-4 text-center">
-                No recurring skill gaps detected in evaluated positions.
+                {t("analytics.noGaps")}
               </p>
             ) : (
               topGaps.map(([gap, count], idx) => {
@@ -517,10 +514,10 @@ export default function AnalyticsDashboard({
                   >
                     <div className="min-w-0">
                       <span className="font-semibold text-zinc-200 block truncate">{gap}</span>
-                      <span className="text-[10px] text-zinc-500">Found in {count} positions</span>
+                      <span className="text-[10px] text-zinc-500">{t("analytics.foundInPositions").replace("{count}", String(count))}</span>
                     </div>
                     <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20 shrink-0">
-                      {penalty} fit impact
+                      {penalty} {t("analytics.fitImpact")}
                     </span>
                   </div>
                 );
@@ -531,7 +528,7 @@ export default function AnalyticsDashboard({
           <div className="p-3 bg-violet-500/5 border border-violet-500/20 rounded-xl text-xs text-zinc-400 flex items-start gap-2">
             <Sparkles className="w-3.5 h-3.5 text-violet-400 shrink-0 mt-0.5" />
             <span>
-              Algorithmic Recommendation: Incorporating Next.js 14 and Docker patterns into your active resume text will directly elevate estimated match confidence across 60%+ of open positions.
+              {t("analytics.recommendation")}
             </span>
           </div>
         </div>
