@@ -76,18 +76,32 @@ function serializePref(pref: any) {
       ? pref.aiProviderOrder
       : (typeof pref.aiProviderOrder === "object" && pref.aiProviderOrder !== null && Array.isArray((pref.aiProviderOrder as any).order)
           ? (pref.aiProviderOrder as any).order
-          : ["deepseek", "groq", "gemini", "openrouter"]),
+          : ["groq", "gemini", "openrouter"]),
     aiCustomConfig:        typeof pref.aiProviderOrder === "object" && pref.aiProviderOrder !== null && !Array.isArray(pref.aiProviderOrder)
       ? pref.aiProviderOrder
       : {
-          order: Array.isArray(pref.aiProviderOrder) ? pref.aiProviderOrder : ["deepseek", "groq", "gemini", "openrouter"],
+          order: Array.isArray(pref.aiProviderOrder) ? pref.aiProviderOrder : ["groq", "gemini", "openrouter"],
           taskRouting: {
-            deepAnalysis: Array.isArray(pref.aiProviderOrder) ? pref.aiProviderOrder[0] || "deepseek" : "deepseek",
-            coverLetter: Array.isArray(pref.aiProviderOrder) ? pref.aiProviderOrder[0] || "deepseek" : "deepseek",
+            deepAnalysis: Array.isArray(pref.aiProviderOrder) ? pref.aiProviderOrder[0] || "groq" : "groq",
+            coverLetter: Array.isArray(pref.aiProviderOrder) ? pref.aiProviderOrder[0] || "groq" : "groq",
           },
           customProviders: {},
         },
   };
+}
+
+function getServerConfiguredProviders(): string[] {
+  const list: string[] = [];
+  const isValid = (key?: string) => Boolean(key && !key.startsWith("sk-...") && key.trim().length > 10);
+
+  if (isValid(process.env.GROQ_API_KEY)) list.push("groq");
+  if (isValid(process.env.GEMINI_API_KEY)) list.push("gemini");
+  if (isValid(process.env.OPENROUTER_API_KEY)) list.push("openrouter");
+  if (isValid(process.env.OPENAI_API_KEY)) list.push("openai");
+  if (isValid(process.env.DEEPSEEK_API_KEY)) list.push("deepseek");
+  if (isValid(process.env.ANTHROPIC_API_KEY)) list.push("anthropic");
+
+  return list;
 }
 
 // ── GET ───────────────────────────────────────────────────────
@@ -144,6 +158,7 @@ export async function GET() {
     return NextResponse.json({
       success: true,
       data: serializePref(pref),
+      serverConfiguredProviders: getServerConfiguredProviders(),
       stats: {
         totalVacancies,
         appliedCount,

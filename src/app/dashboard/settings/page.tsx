@@ -10,7 +10,7 @@
 // - Strict Design Rule: NO circular red/green dot badges anywhere
 // ============================================================
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
   Save,
   RefreshCw,
@@ -140,7 +140,7 @@ const AI_PROVIDERS_CONFIG: Array<{
   },
   {
     id: "groq",
-    label: "Groq LPU",
+    label: "Groq",
     tag: "Sub-Second Inference",
     defaultModel: "llama-3.3-70b-versatile",
     presets: ["llama-3.3-70b-versatile", "qwen-2.5-32b"],
@@ -183,12 +183,12 @@ const DEFAULT_FORM: FormState = {
   redFlagKeywords: ["паспорт", "залог", "unpaid"],
   salaryMinimum: "",
   salaryCurrency: "RUR",
-  aiProviderOrder: ["deepseek", "groq", "gemini", "openrouter"],
+  aiProviderOrder: ["groq", "gemini", "openrouter"],
   aiCustomConfig: {
-    order: ["deepseek", "groq", "gemini", "openrouter"],
+    order: ["groq", "gemini", "openrouter"],
     taskRouting: {
-      deepAnalysis: "deepseek",
-      coverLetter: "deepseek",
+      deepAnalysis: "groq",
+      coverLetter: "groq",
     },
     customProviders: {},
   },
@@ -311,7 +311,8 @@ export default function SettingsPage() {
   });
 
   // AI Configurator & BYOK state
-  const [selectedAiTab, setSelectedAiTab] = useState<AIProvider>("deepseek");
+  const [serverConfiguredProviders, setServerConfiguredProviders] = useState<string[]>(["groq", "gemini", "openrouter"]);
+  const [selectedAiTab, setSelectedAiTab] = useState<AIProvider>("groq");
   const [showAiKeys, setShowAiKeys] = useState<Record<string, boolean>>({});
   const [testingAi, setTestingAi] = useState(false);
   const [testAiResult, setTestAiResult] = useState<{
@@ -321,6 +322,38 @@ export default function SettingsPage() {
     latencyMs?: number;
     modelUsed?: string;
   } | null>(null);
+
+  // Check if a provider has active credentials (via server env or user BYOK)
+  const isProviderConfigured = useCallback(
+    (providerId: AIProvider): boolean => {
+      if (serverConfiguredProviders.includes(providerId)) return true;
+      const customProv = form.aiCustomConfig?.customProviders?.[providerId];
+      if (customProv?.apiKey && customProv.apiKey.trim().length > 3 && !customProv.apiKey.startsWith("sk-...")) {
+        return true;
+      }
+      if (providerId === "custom" && customProv?.baseUrl && customProv.baseUrl.trim().length > 3) {
+        return true;
+      }
+      return false;
+    },
+    [serverConfiguredProviders, form.aiCustomConfig?.customProviders]
+  );
+
+  // Registered providers list with active credentials only
+  const registeredProviders = useMemo(() => {
+    const list = AI_PROVIDERS_CONFIG.filter((prov) => isProviderConfigured(prov.id));
+    return list.length > 0 ? list : AI_PROVIDERS_CONFIG.filter((p) => ["groq", "gemini", "openrouter"].includes(p.id));
+  }, [isProviderConfigured]);
+
+  // Model name active for a given provider
+  const getActiveModelForProvider = useCallback(
+    (providerId: AIProvider): string => {
+      const provMeta = AI_PROVIDERS_CONFIG.find((p) => p.id === providerId);
+      const customModel = form.aiCustomConfig?.customProviders?.[providerId]?.model?.trim();
+      return customModel || provMeta?.defaultModel || "default";
+    },
+    [form.aiCustomConfig?.customProviders]
+  );
 
   // AI Helper: Update provider config (API key, model, baseUrl)
   const updateProviderConfig = (provider: AIProvider, patch: Partial<CustomAiProviderConfig>) => {
@@ -446,10 +479,38 @@ export default function SettingsPage() {
             if (json.stats) {
               setStats(json.stats);
             }
+            if (Array.isArray(json.serverConfiguredProviders)) {
+              setServerConfiguredProviders(json.serverConfiguredProviders);
+            }
             const d = json.data;
-            const parsedOrder = Array.isArray(d.aiProviderOrder) && d.aiProviderOrder.length > 0
+            const serverList = Array.isArray(json.serverConfiguredProviders) && json.serverConfiguredProviders.length > 0
+              ? (json.serverConfiguredProviders as string[])
+              : ["groq", "gemini", "openrouter"];
+
+            const isConfiguredAtLoad = (p: string) => {
+              if (serverList.includes(p)) return true;
+              const cp = d.aiCustomConfig?.customProviders?.[p];
+              if (cp?.apiKey && cp.apiKey.trim().length > 3 && !cp.apiKey.startsWith("sk-...")) return true;
+              if (p === "custom" && cp?.baseUrl && cp.baseUrl.trim().length > 3) return true;
+              return false;
+            };
+
+            const rawOrder = Array.isArray(d.aiProviderOrder) && d.aiProviderOrder.length > 0
               ? d.aiProviderOrder
               : DEFAULT_FORM.aiProviderOrder;
+
+            const filteredOrder = rawOrder.filter(isConfiguredAtLoad);
+            const parsedOrder = filteredOrder.length > 0 ? filteredOrder : serverList;
+
+            const rawDeep = d.aiCustomConfig?.taskRouting?.deepAnalysis;
+            const effectiveDeepOnLoad = (rawDeep && isConfiguredAtLoad(rawDeep))
+              ? (rawDeep as AIProvider)
+              : (parsedOrder[0] as AIProvider || "groq");
+
+            const rawCover = d.aiCustomConfig?.taskRouting?.coverLetter;
+            const effectiveCoverOnLoad = (rawCover && isConfiguredAtLoad(rawCover))
+              ? (rawCover as AIProvider)
+              : (parsedOrder[0] as AIProvider || "groq");
 
             setForm({
               id: d.id,
@@ -468,13 +529,13 @@ export default function SettingsPage() {
               salaryMinimum: d.salaryMinimum != null ? String(d.salaryMinimum) : "",
               salaryCurrency: d.salaryCurrency ?? DEFAULT_FORM.salaryCurrency,
               aiProviderOrder: parsedOrder,
-              aiCustomConfig: d.aiCustomConfig || {
+              aiCustomConfig: {
                 order: parsedOrder as AIProvider[],
                 taskRouting: {
-                  deepAnalysis: (parsedOrder[0] as AIProvider) || "deepseek",
-                  coverLetter: (parsedOrder[0] as AIProvider) || "deepseek",
+                  deepAnalysis: effectiveDeepOnLoad,
+                  coverLetter: effectiveCoverOnLoad,
                 },
-                customProviders: {},
+                customProviders: d.aiCustomConfig?.customProviders || {},
               },
               coverLetterLanguage: d.coverLetterLanguage ?? DEFAULT_FORM.coverLetterLanguage,
               resumeText: d.resumeText ?? "",
@@ -1891,21 +1952,31 @@ export default function SettingsPage() {
                     : "Engine used to score job-resume compatibility, identify red flags, and analyze vacancy requirements."}
                 </p>
                 <div>
-                  <label className="text-[11px] font-mono text-zinc-400 mb-1 block">
-                    {language === "ru" ? "Назначенный провайдер" : "Assigned Provider"}
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-[11px] font-mono text-zinc-400 block">
+                      {language === "ru" ? "Назначенный провайдер" : "Assigned Provider"}
+                    </label>
+                    <span className="text-[10px] font-mono text-zinc-500">
+                      {registeredProviders.length} {language === "ru" ? "доступно" : "configured"}
+                    </span>
+                  </div>
                   <select
-                    value={form.aiCustomConfig?.taskRouting?.deepAnalysis || form.aiProviderOrder[0] || "deepseek"}
+                    value={
+                      registeredProviders.some((p) => p.id === (form.aiCustomConfig?.taskRouting?.deepAnalysis || form.aiProviderOrder[0]))
+                        ? (form.aiCustomConfig?.taskRouting?.deepAnalysis || form.aiProviderOrder[0])
+                        : (registeredProviders[0]?.id || "groq")
+                    }
                     onChange={(e) => updateTaskRouting("deepAnalysis", e.target.value as AIProvider)}
                     className="w-full bg-zinc-900 border border-zinc-700/80 rounded-lg px-3 py-2 text-xs text-zinc-100 focus:outline-none focus:border-blue-500"
                   >
-                    <option value="deepseek">DeepSeek (V3 / R1 Reasoning)</option>
-                    <option value="gemini">Google Gemini (Gemini 2.5 Flash / Pro)</option>
-                    <option value="openai">OpenAI (GPT-4o / o3-mini)</option>
-                    <option value="anthropic">Anthropic Claude (Sonnet 3.7 / Haiku)</option>
-                    <option value="groq">Groq (Llama-3.3-70b / Fast LPU)</option>
-                    <option value="openrouter">OpenRouter (Universal Gateway)</option>
-                    <option value="custom">Custom / Local LLM (Ollama, vLLM)</option>
+                    {registeredProviders.map((prov) => {
+                      const activeModel = getActiveModelForProvider(prov.id);
+                      return (
+                        <option key={prov.id} value={prov.id}>
+                          {prov.label} ({activeModel})
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
               </div>
@@ -1924,21 +1995,31 @@ export default function SettingsPage() {
                     : "Engine used to draft tailored, human-sounding cover letters adapted to your portfolio and resume."}
                 </p>
                 <div>
-                  <label className="text-[11px] font-mono text-zinc-400 mb-1 block">
-                    {language === "ru" ? "Назначенный провайдер" : "Assigned Provider"}
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-[11px] font-mono text-zinc-400 block">
+                      {language === "ru" ? "Назначенный провайдер" : "Assigned Provider"}
+                    </label>
+                    <span className="text-[10px] font-mono text-zinc-500">
+                      {registeredProviders.length} {language === "ru" ? "доступно" : "configured"}
+                    </span>
+                  </div>
                   <select
-                    value={form.aiCustomConfig?.taskRouting?.coverLetter || form.aiProviderOrder[0] || "deepseek"}
+                    value={
+                      registeredProviders.some((p) => p.id === (form.aiCustomConfig?.taskRouting?.coverLetter || form.aiProviderOrder[0]))
+                        ? (form.aiCustomConfig?.taskRouting?.coverLetter || form.aiProviderOrder[0])
+                        : (registeredProviders[0]?.id || "groq")
+                    }
                     onChange={(e) => updateTaskRouting("coverLetter", e.target.value as AIProvider)}
                     className="w-full bg-zinc-900 border border-zinc-700/80 rounded-lg px-3 py-2 text-xs text-zinc-100 focus:outline-none focus:border-emerald-500"
                   >
-                    <option value="deepseek">DeepSeek (V3 / R1 Reasoning)</option>
-                    <option value="openai">OpenAI (GPT-4o / o3-mini)</option>
-                    <option value="anthropic">Anthropic Claude (Sonnet 3.7 / Haiku)</option>
-                    <option value="gemini">Google Gemini (Gemini 2.5 Flash / Pro)</option>
-                    <option value="groq">Groq (Llama-3.3-70b / Fast LPU)</option>
-                    <option value="openrouter">OpenRouter (Universal Gateway)</option>
-                    <option value="custom">Custom / Local LLM (Ollama, vLLM)</option>
+                    {registeredProviders.map((prov) => {
+                      const activeModel = getActiveModelForProvider(prov.id);
+                      return (
+                        <option key={prov.id} value={prov.id}>
+                          {prov.label} ({activeModel})
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
               </div>
@@ -1962,8 +2043,7 @@ export default function SettingsPage() {
               <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
                 {AI_PROVIDERS_CONFIG.map((prov) => {
                   const isCurrent = selectedAiTab === prov.id;
-                  const hasCustomKey = Boolean(form.aiCustomConfig?.customProviders?.[prov.id]?.apiKey);
-                  const hasCustomModel = Boolean(form.aiCustomConfig?.customProviders?.[prov.id]?.model);
+                  const isConfigured = isProviderConfigured(prov.id);
 
                   return (
                     <button
@@ -1980,8 +2060,8 @@ export default function SettingsPage() {
                       }`}
                     >
                       <span>{prov.label}</span>
-                      {(hasCustomKey || hasCustomModel) && (
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" title="Custom config active" />
+                      {isConfigured && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" title={language === "ru" ? "Ключ настроен" : "Key configured"} />
                       )}
                     </button>
                   );
@@ -2017,7 +2097,9 @@ export default function SettingsPage() {
                         <span className="text-[10px] text-zinc-500">
                           {currentProvConfig.apiKey
                             ? (language === "ru" ? "Активен пользовательский ключ" : "Custom key active")
-                            : (language === "ru" ? "Используются системные переменные" : "Using system environment if empty")}
+                            : serverConfiguredProviders.includes(selectedAiTab)
+                              ? (language === "ru" ? "Используется системный ключ (.env)" : "System key active (.env)")
+                              : (language === "ru" ? "Ключ не настроен" : "No key configured")}
                         </span>
                       </div>
                       <div className="relative">
@@ -2155,11 +2237,10 @@ export default function SettingsPage() {
                 <button
                   type="button"
                   onClick={() => {
-                    const allProviders: AIProvider[] = ["deepseek", "groq", "gemini", "openrouter", "openai", "anthropic", "custom"];
                     const currentSet = new Set(form.aiProviderOrder);
-                    const next = allProviders.find((p) => !currentSet.has(p));
+                    const next = registeredProviders.find((p) => !currentSet.has(p.id));
                     if (next) {
-                      const updated = [...form.aiProviderOrder, next];
+                      const updated = [...form.aiProviderOrder, next.id];
                       setForm((prev) => ({
                         ...prev,
                         aiProviderOrder: updated,
@@ -2174,7 +2255,7 @@ export default function SettingsPage() {
                       }));
                     }
                   }}
-                  disabled={form.aiProviderOrder.length >= 7}
+                  disabled={registeredProviders.every((p) => form.aiProviderOrder.includes(p.id))}
                   className="text-[11px] px-2.5 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                 >
                   {language === "ru" ? "+ Добавить в цепочку" : "+ Add Provider to Chain"}
