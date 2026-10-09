@@ -4,6 +4,13 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "HH Job Copilot — Under Construction & Maintenance",
   description: "Autonomous AI Job Search Copilot for HeadHunter (HH.ru). Official release scheduled for October 24–26, 2026.",
+  icons: {
+    icon: [
+      { url: "/favicon.svg", type: "image/svg+xml" },
+      { url: "/favicon.ico", sizes: "any" },
+    ],
+    apple: "/icon-192.png",
+  },
 };
 
 export default function RootLayout({
