@@ -577,26 +577,9 @@ export default function VacanciesSplitView({
 
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-2 mb-1">
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider truncate">
-                            {v.company}
-                          </span>
-                          {v.company && (
-                            <Link
-                              href={`/dashboard/company-intel?company=${encodeURIComponent(v.company)}`}
-                              onClick={(e) => e.stopPropagation()}
-                              className="text-[10px] text-zinc-400 hover:text-emerald-300 bg-zinc-800/80 hover:bg-emerald-950/50 border border-zinc-700/60 hover:border-emerald-500/40 px-1.5 py-0.5 rounded transition-all inline-flex items-center gap-1 group/intel shrink-0"
-                              title={
-                                language === "ru"
-                                  ? `Открыть ${v.company} в Company Intel`
-                                  : `Inspect ${v.company} in Company Intel`
-                              }
-                            >
-                              <Building2 className="w-3 h-3 text-emerald-400 group-hover/intel:scale-110 transition-transform" />
-                              <span className="font-mono text-[9px] uppercase tracking-wider text-emerald-400">Intel</span>
-                            </Link>
-                          )}
-                        </div>
+                        <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider truncate">
+                          {v.company}
+                        </span>
 
                         <div className="flex items-center gap-1.5 shrink-0">
                           {v.status === "saved" && (
@@ -674,6 +657,23 @@ export default function VacanciesSplitView({
                             <AlertTriangle className="w-3 h-3" />
                             {redFlagsCount} {language === "ru" ? "РИСК" : "FLAG"}{language === "ru" ? "" : redFlagsCount > 1 ? "S" : ""}
                           </span>
+                        )}
+
+                        {/* Check Company Button right on the card */}
+                        {v.company && (
+                          <Link
+                            href={`/dashboard/company-intel?company=${encodeURIComponent(v.company)}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-zinc-800 hover:bg-emerald-950/60 text-emerald-400 hover:text-emerald-300 border border-zinc-700/80 hover:border-emerald-500/40 text-[11px] font-semibold transition-all active:scale-95 shadow-sm group/btn"
+                            title={
+                              language === "ru"
+                                ? `Проверить компанию ${v.company} в Company Intel`
+                                : `Check ${v.company} in Company Intel`
+                            }
+                          >
+                            <Building2 className="w-3 h-3 text-emerald-400 group-hover/btn:scale-110 transition-transform" />
+                            <span>{language === "ru" ? "Проверить компанию" : "Check Company"}</span>
+                          </Link>
                         )}
 
                         {/* Card quick save & hide buttons */}
@@ -767,20 +767,17 @@ export default function VacanciesSplitView({
                         {selectedVacancy.company && (
                           <Link
                             href={`/dashboard/company-intel?company=${encodeURIComponent(selectedVacancy.company)}`}
-                            className="text-[11px] font-semibold text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/25 px-2 py-0.5 rounded-md inline-flex items-center gap-1.5 transition-all active:scale-95 group/cintel"
+                            className="text-xs font-semibold text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 px-2.5 py-1 rounded-lg inline-flex items-center gap-1.5 transition-all active:scale-95 group/cintel shadow-sm"
                             title={
                               language === "ru"
-                                ? `Открыть профиль компании ${selectedVacancy.company} в Company Intel`
-                                : `Inspect ${selectedVacancy.company} in Company Intel`
+                                ? `Проверить компанию ${selectedVacancy.company} в Company Intel`
+                                : `Check ${selectedVacancy.company} in Company Intel`
                             }
                           >
                             <Building2 className="w-3.5 h-3.5 text-emerald-400 group-hover/cintel:scale-110 transition-transform" />
-                            <span>Company Intel</span>
+                            <span>{language === "ru" ? "Проверить компанию" : "Check Company"}</span>
                           </Link>
                         )}
-                        <span className="text-[10px] px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-zinc-700">
-                          {t("vacancies.hhSource")}
-                        </span>
                       </div>
                       <h2 className="text-lg font-bold text-zinc-100 mt-1 leading-snug">
                         {selectedVacancy.title}
@@ -857,16 +854,6 @@ export default function VacanciesSplitView({
                       </span>
                     </>
                   )}
-                  <span>·</span>
-                  <a
-                    href={selectedVacancy.url || `https://hh.ru/vacancy/${selectedVacancy.hhId}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-1 text-sky-400 hover:text-sky-300"
-                  >
-                    <span>{t("vacancies.hhPost")}</span>
-                    <ExternalLink className="w-3 h-3" />
-                  </a>
                 </div>
 
                 {/* Primary Action Buttons Bar */}
@@ -898,15 +885,15 @@ export default function VacanciesSplitView({
                   {selectedVacancy.company && (
                     <Link
                       href={`/dashboard/company-intel?company=${encodeURIComponent(selectedVacancy.company)}`}
-                      className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-emerald-950/40 hover:bg-emerald-900/50 border border-emerald-500/30 hover:border-emerald-500/60 text-xs font-semibold text-emerald-300 hover:text-emerald-200 transition-all shadow-sm active:scale-95"
+                      className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-zinc-800 hover:bg-emerald-950/60 border border-zinc-700 hover:border-emerald-500/50 text-xs font-semibold text-emerald-400 hover:text-emerald-300 transition-all shadow-sm active:scale-95"
                       title={
                         language === "ru"
                           ? `Проверить компанию ${selectedVacancy.company} в Company Intel`
-                          : `Inspect ${selectedVacancy.company} in Company Intel`
+                          : `Check ${selectedVacancy.company} in Company Intel`
                       }
                     >
                       <Building2 className="w-3.5 h-3.5 text-emerald-400" />
-                      <span>Company Intel</span>
+                      <span>{language === "ru" ? "Проверить компанию" : "Check Company"}</span>
                     </Link>
                   )}
 

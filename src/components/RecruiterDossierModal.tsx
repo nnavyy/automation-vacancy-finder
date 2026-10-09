@@ -7,6 +7,7 @@
 // ============================================================
 
 import { useState } from "react";
+import Link from "next/link";
 import {
   X,
   ShieldCheck,
@@ -21,6 +22,7 @@ import {
   Loader2,
   FileText,
   Clock,
+  Building2,
 } from "lucide-react";
 import { useLanguage } from "@/lib/i18n";
 
@@ -150,21 +152,31 @@ export default function RecruiterDossierModal({
               {initials}
             </div>
             <div className="min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="text-lg font-bold text-zinc-100 truncate">
-                  {data.name}
-                </h3>
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">
-                  <ShieldCheck className="w-3 h-3" />
-                  {language === "ru" ? "Проверенный наниматель" : "Verified Decision Maker"}
-                </span>
-              </div>
+              <h3 className="text-lg font-bold text-zinc-100 truncate">
+                {data.name}
+              </h3>
               <p className="text-xs text-violet-400 font-medium mt-0.5">
                 {data.role}
               </p>
-              <p className="text-xs text-zinc-400">
-                {data.companyName} {data.department ? `· ${data.department}` : ""}
-              </p>
+              <div className="flex items-center gap-2 flex-wrap mt-0.5">
+                <p className="text-xs text-zinc-400">
+                  {data.companyName} {data.department ? `· ${data.department}` : ""}
+                </p>
+                {data.companyName && (
+                  <Link
+                    href={`/dashboard/company-intel?company=${encodeURIComponent(data.companyName)}`}
+                    className="text-[11px] font-semibold text-emerald-400 hover:text-emerald-300 inline-flex items-center gap-1 transition-colors ml-1"
+                    title={
+                      language === "ru"
+                        ? `Проверить компанию ${data.companyName} в Company Intel`
+                        : `Check ${data.companyName} in Company Intel`
+                    }
+                  >
+                    <Building2 className="w-3 h-3 text-emerald-400" />
+                    <span>{language === "ru" ? "Проверить компанию" : "Check Company"}</span>
+                  </Link>
+                )}
+              </div>
             </div>
           </div>
 
