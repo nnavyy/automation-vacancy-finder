@@ -310,6 +310,27 @@ export async function runCollectionPipeline(
           return;
         }
 
+        // Save rule-based score immediately so vacancy is NEVER unanalyzed in database
+        await prisma.vacancyAnalysis.upsert({
+          where: { vacancyId: dbVacancyId },
+          create: {
+            vacancyId: dbVacancyId,
+            matchScore: ruleScore.score,
+            ruleScore: ruleScore.score,
+            recommendation: ruleScore.score >= 70 ? "apply" : ruleScore.score >= 45 ? "maybe" : "skip",
+            aiStatus: "rule_based_only",
+            bestLanguage: pref.coverLetterLanguage || "ru",
+            summary: `Rule-based match score: ${ruleScore.score}/100.`,
+            matchReasons: ruleScore.reasons,
+          },
+          update: {
+            ruleScore: ruleScore.score,
+          },
+        });
+        await prisma.vacancy.update({ where: { id: dbVacancyId }, data: { status: "analyzed" } });
+        summary.analyzed++;
+        await reportProgress();
+
         // ── AI analysis ────────────────────────────────────────
         const { positive, negative } = await getSimilarFeedbackExamples(vacancy, pref.userId);
         const { analysis, provider, model, aiStatus } = await analyzeVacancy(vacancy, [...positive, ...negative], pref);

@@ -6,6 +6,8 @@
 import prisma, { withRetry } from "@/lib/db";
 import { requireUser } from "@/lib/auth-helpers";
 import VacanciesSplitView, { VacancyItem } from "@/components/VacanciesSplitView";
+import { calculateRuleScore } from "@/lib/scoring";
+import { toSearchPrefData } from "@/lib/collectionPipeline";
 
 export default async function VacanciesPage({
   searchParams,
@@ -36,12 +38,20 @@ export default async function VacanciesPage({
   let total = 0;
   let hasProfile = false;
   let minScoreThreshold = 70;
+  let prefData: any = undefined;
 
   try {
-    const profile = await withRetry(() =>
-      prisma.searchPreference.findFirst({ where: { userId: user.id, isActive: true } })
-    );
+    const profile =
+      (await withRetry(() =>
+        prisma.searchPreference.findFirst({ where: { userId: user.id, isActive: true } })
+      )) ||
+      (await withRetry(() =>
+        prisma.searchPreference.findFirst({ where: { userId: user.id } })
+      ));
     hasProfile = Boolean(profile);
+    if (profile) {
+      prefData = toSearchPrefData(profile);
+    }
     if (profile?.minimumScoreToNotify) {
       minScoreThreshold = profile.minimumScoreToNotify;
     }
@@ -94,29 +104,68 @@ export default async function VacanciesPage({
     throw err;
   }
 
-  // Format vacancies for split view
-  const formattedVacancies: VacancyItem[] = vacancies.map((v) => ({
-    id: v.id,
-    hhId: v.hhId,
-    title: v.title,
-    company: v.company,
-    area: v.area ?? undefined,
-    salary: v.salary,
-    url: v.url ?? undefined,
-    status: v.status,
-    description: v.description ?? undefined,
-    createdAt: v.createdAt.toISOString(),
-    rawData: v.rawData,
-    analysis: v.analysis
+  // Format vacancies for split view with on-the-fly rule score fallback
+  const formattedVacancies: VacancyItem[] = vacancies.map((v) => {
+    const rawObj = typeof v.rawData === "object" && v.rawData !== null ? (v.rawData as any) : {};
+    const normalizedVacancy = {
+      hhId: v.hhId,
+      title: v.title,
+      company: v.company,
+      area: v.area ?? undefined,
+      description: v.description ?? rawObj.description,
+      salary: v.salary as any,
+      snippet: rawObj.snippet,
+      experience: rawObj.experience?.id ?? rawObj.experience?.name ?? rawObj.experience,
+      employment: rawObj.employment?.id ?? rawObj.employment?.name,
+      schedule: rawObj.schedule?.id ?? rawObj.schedule?.name,
+      workFormat: rawObj.work_format ?? rawObj.workFormat,
+    };
+
+    const needsFallback = !v.analysis || (v.analysis.matchScore === 0 && !v.analysis.ruleScore);
+    const fallbackRule = needsFallback ? calculateRuleScore(normalizedVacancy, prefData) : null;
+
+    // Asynchronously persist fallback score so DB records are updated permanently
+    if (!v.analysis && fallbackRule) {
+      withRetry(() =>
+        prisma.vacancyAnalysis.upsert({
+          where: { vacancyId: v.id },
+          create: {
+            vacancyId: v.id,
+            matchScore: fallbackRule.score,
+            ruleScore: fallbackRule.score,
+            recommendation: fallbackRule.score >= 70 ? "apply" : fallbackRule.score >= 45 ? "maybe" : "skip",
+            aiStatus: "rule_based_only",
+            bestLanguage: prefData?.coverLetterLanguage || "ru",
+            summary: `Rule-based evaluation: ${fallbackRule.score}/100.`,
+            matchReasons: fallbackRule.reasons,
+          },
+          update: {
+            ruleScore: fallbackRule.score,
+          },
+        })
+      ).catch(() => {});
+      withRetry(() =>
+        prisma.vacancy.update({
+          where: { id: v.id },
+          data: { status: "analyzed" },
+        })
+      ).catch(() => {});
+    }
+
+    const calculatedScore = v.analysis?.matchScore || fallbackRule?.score || 0;
+    const effectiveRuleScore = v.analysis?.ruleScore ?? fallbackRule?.score ?? calculatedScore;
+    const finalScore = calculatedScore > 0 ? calculatedScore : effectiveRuleScore;
+
+    const analysisObj = v.analysis
       ? {
-          matchScore: v.analysis.matchScore,
-          ruleScore: v.analysis.ruleScore ?? undefined,
-          recommendation: v.analysis.recommendation,
-          aiStatus: v.analysis.aiStatus,
-          summary: v.analysis.summary ?? undefined,
-          matchReasons: Array.isArray(v.analysis.matchReasons)
+          matchScore: finalScore,
+          ruleScore: effectiveRuleScore,
+          recommendation: v.analysis.recommendation || (finalScore >= 70 ? "apply" : finalScore >= 45 ? "maybe" : "skip"),
+          aiStatus: v.analysis.aiStatus || "rule_based_only",
+          summary: v.analysis.summary || (fallbackRule ? `Rule-based evaluation: ${finalScore}/100 based on title, skills, and experience criteria.` : undefined),
+          matchReasons: Array.isArray(v.analysis.matchReasons) && v.analysis.matchReasons.length
             ? (v.analysis.matchReasons as string[])
-            : undefined,
+            : fallbackRule?.reasons ?? [],
           missingRequirements: Array.isArray(v.analysis.missingRequirements)
             ? (v.analysis.missingRequirements as string[])
             : undefined,
@@ -130,8 +179,34 @@ export default async function VacanciesPage({
           modelUsed: v.analysis.modelUsed ?? undefined,
           bestLanguage: v.analysis.bestLanguage ?? undefined,
         }
-      : undefined,
-  }));
+      : fallbackRule
+      ? {
+          matchScore: finalScore,
+          ruleScore: finalScore,
+          recommendation: finalScore >= 70 ? "apply" : finalScore >= 45 ? "maybe" : "skip",
+          aiStatus: "rule_based_only",
+          summary: `Rule-based evaluation: ${finalScore}/100 based on title, skills, and experience criteria.`,
+          matchReasons: fallbackRule.reasons,
+          missingRequirements: [],
+          redFlags: [],
+        }
+      : undefined;
+
+    return {
+      id: v.id,
+      hhId: v.hhId,
+      title: v.title,
+      company: v.company,
+      area: v.area ?? undefined,
+      salary: v.salary,
+      url: v.url ?? undefined,
+      status: v.status,
+      description: v.description ?? undefined,
+      createdAt: v.createdAt.toISOString(),
+      rawData: v.rawData,
+      analysis: analysisObj,
+    };
+  });
 
   return (
     <div className="max-w-7xl space-y-5 pb-12">

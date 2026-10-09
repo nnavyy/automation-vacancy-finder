@@ -142,12 +142,14 @@ export default function VacanciesSplitView({
         }
 
         // Tab filter
+        const vScore = Math.max(v.analysis?.matchScore ?? 0, v.analysis?.ruleScore ?? 0);
         if (filterTab === "high") {
-          if ((v.analysis?.matchScore ?? 0) < minScoreThreshold) return false;
+          if (vScore < minScoreThreshold) return false;
         } else if (filterTab === "maybe") {
-          if (v.analysis?.recommendation?.toLowerCase() !== "maybe") return false;
+          const rec = v.analysis?.recommendation?.toLowerCase();
+          if (rec !== "maybe" && !(vScore >= 45 && vScore < minScoreThreshold)) return false;
         } else if (filterTab === "analyzed") {
-          if (!v.analysis || v.analysis.matchScore === 0) return false;
+          if (!v.analysis || (vScore === 0 && !v.analysis.matchReasons?.length)) return false;
         } else if (filterTab === "applied") {
           if (!v.status.includes("applied")) return false;
         } else if (filterTab === "saved") {
@@ -168,8 +170,8 @@ export default function VacanciesSplitView({
         return true;
       })
       .sort((a, b) => {
-        const scoreA = a.analysis?.matchScore ?? -1;
-        const scoreB = b.analysis?.matchScore ?? -1;
+        const scoreA = Math.max(a.analysis?.matchScore ?? -1, a.analysis?.ruleScore ?? -1);
+        const scoreB = Math.max(b.analysis?.matchScore ?? -1, b.analysis?.ruleScore ?? -1);
         if (scoreB !== scoreA) return scoreB - scoreA;
         return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       });
@@ -438,7 +440,10 @@ export default function VacanciesSplitView({
   };
 
   const isAnalyzed = Boolean(
-    selectedVacancy?.analysis && (selectedVacancy.analysis.matchScore > 0 || selectedVacancy.analysis.matchReasons?.length)
+    selectedVacancy?.analysis &&
+      (selectedVacancy.analysis.matchScore > 0 ||
+        (selectedVacancy.analysis.ruleScore ?? 0) > 0 ||
+        selectedVacancy.analysis.matchReasons?.length)
   );
 
   return (
@@ -478,17 +483,27 @@ export default function VacanciesSplitView({
             {
               id: "high",
               label: `${t("vacancies.tabHigh")} (≥${minScoreThreshold}%)`,
-              count: vacancies.filter((v) => (v.analysis?.matchScore ?? 0) >= minScoreThreshold && v.status !== "skipped" && v.status !== "ignored" && v.status !== "low_priority").length,
+              count: vacancies.filter((v) => {
+                const s = Math.max(v.analysis?.matchScore ?? 0, v.analysis?.ruleScore ?? 0);
+                return s >= minScoreThreshold && v.status !== "skipped" && v.status !== "ignored" && v.status !== "low_priority";
+              }).length,
             },
             {
               id: "maybe",
               label: t("vacancies.tabMaybe"),
-              count: vacancies.filter((v) => v.analysis?.recommendation?.toLowerCase() === "maybe" && v.status !== "skipped").length,
+              count: vacancies.filter((v) => {
+                const s = Math.max(v.analysis?.matchScore ?? 0, v.analysis?.ruleScore ?? 0);
+                const rec = v.analysis?.recommendation?.toLowerCase();
+                return (rec === "maybe" || (s >= 45 && s < minScoreThreshold)) && v.status !== "skipped";
+              }).length,
             },
             {
               id: "analyzed",
               label: t("vacancies.tabAnalyzed"),
-              count: vacancies.filter((v) => v.analysis && v.analysis.matchScore > 0 && v.status !== "skipped").length,
+              count: vacancies.filter((v) => {
+                const s = Math.max(v.analysis?.matchScore ?? 0, v.analysis?.ruleScore ?? 0);
+                return Boolean(v.analysis && (s > 0 || v.analysis.matchReasons?.length)) && v.status !== "skipped";
+              }).length,
             },
             {
               id: "applied",
@@ -589,7 +604,7 @@ export default function VacanciesSplitView({
                               <Bookmark className="w-3 h-3 fill-violet-400" />
                             </span>
                           )}
-                          {cardScore > 0 && (
+                          {v.analysis !== undefined && cardScore >= 0 && (
                             <span
                               className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${
                                 cardScore >= 70
