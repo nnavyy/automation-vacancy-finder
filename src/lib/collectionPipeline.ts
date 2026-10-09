@@ -134,7 +134,7 @@ export async function runCollectionPipeline(
   // Mark status as running
   await prisma.searchPreference.update({
     where: { id: prefRaw.id },
-    data: { collectionStatus: { running: true, analyzed: 0, total: 0, startedAt } },
+    data: { collectionStatus: { running: true, processed: 0, analyzed: 0, saved: 0, total: 0, startedAt } },
   });
 
   let vacancies: NormalizedVacancy[] = [];
@@ -156,7 +156,7 @@ export async function runCollectionPipeline(
     // Update total count
     await prisma.searchPreference.update({
       where: { id: prefRaw.id },
-      data: { collectionStatus: { running: true, analyzed: 0, total: vacancies.length, startedAt } },
+      data: { collectionStatus: { running: true, processed: 0, analyzed: 0, saved: 0, total: vacancies.length, startedAt } },
     });
 
     const todayStart = new Date();
@@ -172,7 +172,7 @@ export async function runCollectionPipeline(
 
     const reportProgress = async (force = false) => {
       const now = Date.now();
-      if (force || now - lastDbStatusUpdate > 2500) {
+      if (force || now - lastDbStatusUpdate > 1000) {
         lastDbStatusUpdate = now;
         try {
           await prisma.searchPreference.update({
@@ -180,7 +180,9 @@ export async function runCollectionPipeline(
             data: {
               collectionStatus: {
                 running: true,
+                processed: summary.processed,
                 analyzed: summary.analyzed,
+                saved: summary.saved,
                 total: vacancies.length,
                 startedAt,
               },
@@ -203,6 +205,8 @@ export async function runCollectionPipeline(
         });
 
         if (existing) {
+          summary.processed++;
+          await reportProgress();
           if (existing.status !== "new") return;
           if (existing.descriptionHash === vacancy.descriptionHash) return;
 
@@ -255,9 +259,9 @@ export async function runCollectionPipeline(
           });
           dbVacancyId = created.id;
           summary.saved++;
+          summary.processed++;
+          await reportProgress();
         }
-
-        summary.processed++;
 
         // ── Basic rule filter ──────────────────────────────────
         const filterResult = passesBasicFilter(vacancy, pref);
@@ -270,6 +274,7 @@ export async function runCollectionPipeline(
             },
           });
           summary.ignored++;
+          await reportProgress();
           return;
         }
 
@@ -280,6 +285,7 @@ export async function runCollectionPipeline(
             where: { id: dbVacancyId },
             data: { status: "low_priority" },
           });
+          await reportProgress();
           return;
         }
 
@@ -300,6 +306,7 @@ export async function runCollectionPipeline(
         const ruleScore = calculateRuleScore(vacancy, pref);
         if (ruleScore.score < 30) {
           await prisma.vacancy.update({ where: { id: dbVacancyId }, data: { status: "low_priority" } });
+          await reportProgress();
           return;
         }
 
@@ -357,6 +364,8 @@ export async function runCollectionPipeline(
       } catch (err) {
         console.error(`[Pipeline] Error processing "${vacancy.title}":`, err);
         summary.errors++;
+        summary.processed++;
+        await reportProgress();
       }
     };
 
@@ -385,7 +394,9 @@ export async function runCollectionPipeline(
         data: {
           collectionStatus: {
             running: false,
+            processed: summary.processed,
             analyzed: summary.analyzed,
+            saved: summary.saved,
             total: vacancies.length,
             startedAt,
             finishedAt: new Date().toISOString(),

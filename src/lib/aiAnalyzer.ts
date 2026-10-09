@@ -267,10 +267,30 @@ export function parseAIResponse(raw: string): AIAnalysisResult {
   try {
     parsed = JSON.parse(jsonStr) as Partial<AIAnalysisResult>;
   } catch (err) {
-    throw new Error(
-      `parseAIResponse: JSON.parse failed — ${String(err)}\n` +
-        `Raw snippet: ${raw.slice(0, 400)}`
-    );
+    // Fallback: extract fields from markdown key-value text if model didn't output strict JSON
+    const scoreMatch = raw.match(/(?:match[_\s-]?score|score)[:\*\s]+([0-9]{1,3})/i);
+    const recMatch = raw.match(/(?:recommendation)[:\*\s]+(apply|maybe|skip)/i);
+    const langMatch = raw.match(/(?:best[_\s-]?language|language)[:\*\s]+(english|russian)/i);
+    const summaryMatch = raw.match(/(?:summary)[:\*\s]+([^\n\r*]+)/i);
+
+    if (scoreMatch) {
+      parsed = {
+        match_score: parseInt(scoreMatch[1], 10),
+        recommendation: (recMatch?.[1]?.toLowerCase() as any) || "maybe",
+        best_language: (langMatch?.[1]?.toLowerCase() as any) || "english",
+        summary: summaryMatch?.[1]?.trim() || "",
+        match_reasons: [],
+        missing_requirements: [],
+        red_flags: [],
+        questions_to_recruiter: [],
+        confidence: 65,
+      };
+    } else {
+      throw new Error(
+        `parseAIResponse: JSON.parse failed — ${String(err)}\n` +
+          `Raw snippet: ${raw.slice(0, 400)}`
+      );
+    }
   }
 
   // Parse numeric match_score robustly (handling string numbers like "85" or "85%")

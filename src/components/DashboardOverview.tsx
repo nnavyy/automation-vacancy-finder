@@ -3,8 +3,10 @@
 // ============================================================
 // HH Job Copilot — Interactive Dashboard Overview Component
 // Dynamic client localization (EN/RU) via useLanguage
+// Real-time reactive telemetry updates during collection runs
 // ============================================================
 
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import {
   TrendingUp,
@@ -18,7 +20,7 @@ import {
   ArrowRight,
 } from "lucide-react";
 import SyncCadenceTimer from "@/components/SyncCadenceTimer";
-import RunCollectionButton from "@/components/RunCollectionButton";
+import RunCollectionButton, { LiveDashboardStats } from "@/components/RunCollectionButton";
 import OverviewTopMatches, { TopMatchVacancy } from "@/components/OverviewTopMatches";
 import { useLanguage } from "@/lib/i18n";
 
@@ -40,16 +42,16 @@ interface DashboardOverviewProps {
 }
 
 export default function DashboardOverview({
-  total,
-  applied,
-  skipped,
-  saved,
-  aiPending,
-  avgScore,
-  highCount,
-  maybeCount,
-  lowCount,
-  analyzedCount,
+  total: initialTotal,
+  applied: initialApplied,
+  skipped: initialSkipped,
+  saved: initialSaved,
+  aiPending: initialAiPending,
+  avgScore: initialAvgScore,
+  highCount: initialHighCount,
+  maybeCount: initialMaybeCount,
+  lowCount: initialLowCount,
+  analyzedCount: initialAnalyzedCount,
   lastSyncIso,
   topMatches,
   targetRoles,
@@ -57,7 +59,50 @@ export default function DashboardOverview({
 }: DashboardOverviewProps) {
   const { t, language } = useLanguage();
 
-  const conversionRate = total > 0 ? ((applied / total) * 100).toFixed(1) : "0.0";
+  const [metrics, setMetrics] = useState<LiveDashboardStats>({
+    total: initialTotal,
+    applied: initialApplied,
+    skipped: initialSkipped,
+    saved: initialSaved,
+    aiPending: initialAiPending,
+    avgScore: initialAvgScore,
+    highCount: initialHighCount,
+    maybeCount: initialMaybeCount,
+    lowCount: initialLowCount,
+    analyzedCount: initialAnalyzedCount,
+  });
+
+  const [isCollecting, setIsCollecting] = useState(false);
+
+  // Sync state if server props change (e.g. after collection completes and router.refresh triggers)
+  useEffect(() => {
+    setMetrics({
+      total: initialTotal,
+      applied: initialApplied,
+      skipped: initialSkipped,
+      saved: initialSaved,
+      aiPending: initialAiPending,
+      avgScore: initialAvgScore,
+      highCount: initialHighCount,
+      maybeCount: initialMaybeCount,
+      lowCount: initialLowCount,
+      analyzedCount: initialAnalyzedCount,
+    });
+  }, [
+    initialTotal,
+    initialApplied,
+    initialSkipped,
+    initialSaved,
+    initialAiPending,
+    initialAvgScore,
+    initialHighCount,
+    initialMaybeCount,
+    initialLowCount,
+    initialAnalyzedCount,
+  ]);
+
+  const conversionRate =
+    metrics.total > 0 ? ((metrics.applied / metrics.total) * 100).toFixed(1) : "0.0";
 
   return (
     <div className="max-w-6xl space-y-7 pb-12">
@@ -72,27 +117,46 @@ export default function DashboardOverview({
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <RunCollectionButton />
+          <RunCollectionButton
+            onLiveUpdate={(stats) => setMetrics((prev) => ({ ...prev, ...stats }))}
+            onRunningChange={(running) => setIsCollecting(running)}
+          />
         </div>
       </div>
 
       {/* ── Top Stat Cards Row with Rate Indicators ── */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
         {/* Total Vacancies */}
-        <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-xl p-4 backdrop-blur-sm shadow-sm space-y-2">
+        <div
+          className={`bg-zinc-900/60 border rounded-xl p-4 backdrop-blur-sm shadow-sm space-y-2 transition-all ${
+            isCollecting
+              ? "border-emerald-500/50 shadow-emerald-500/10 shadow-lg ring-1 ring-emerald-500/20"
+              : "border-zinc-800/80"
+          }`}
+        >
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
               {t("overview.totalVacancies")}
             </span>
-            <FileText className="w-3.5 h-3.5 text-zinc-500" />
+            <FileText
+              className={`w-3.5 h-3.5 transition-colors ${
+                isCollecting ? "text-emerald-400 animate-pulse" : "text-zinc-500"
+              }`}
+            />
           </div>
           <div className="flex items-baseline gap-2">
-            <span className="text-2xl sm:text-3xl font-bold text-zinc-100 tabular-nums">
-              {total.toLocaleString(language === "ru" ? "ru-RU" : "en-US")}
+            <span className="text-2xl sm:text-3xl font-bold text-zinc-100 tabular-nums transition-all">
+              {metrics.total.toLocaleString(language === "ru" ? "ru-RU" : "en-US")}
             </span>
-            <span className="text-[11px] font-semibold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.2 rounded">
-              +12%
-            </span>
+            {isCollecting ? (
+              <span className="text-[10px] font-mono font-semibold text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-1.5 py-0.5 rounded animate-pulse">
+                LIVE
+              </span>
+            ) : (
+              <span className="text-[11px] font-semibold text-emerald-400 bg-emerald-500/10 px-1.5 py-0.2 rounded">
+                +12%
+              </span>
+            )}
           </div>
           <p className="text-[11px] text-zinc-500">{t("overview.parsedFromHh")}</p>
         </div>
@@ -107,7 +171,7 @@ export default function DashboardOverview({
           </div>
           <div className="flex items-baseline gap-2">
             <span className="text-2xl sm:text-3xl font-bold text-emerald-400 tabular-nums">
-              {applied}
+              {metrics.applied}
             </span>
             <span className="text-[11px] text-zinc-400">{t("overview.responses")}</span>
           </div>
@@ -126,7 +190,7 @@ export default function DashboardOverview({
           </div>
           <div className="flex items-baseline gap-2">
             <span className="text-2xl sm:text-3xl font-bold text-rose-400 tabular-nums">
-              {skipped}
+              {metrics.skipped}
             </span>
             <span className="text-[11px] text-zinc-400">{t("overview.autoCulled")}</span>
           </div>
@@ -143,7 +207,7 @@ export default function DashboardOverview({
           </div>
           <div className="flex items-baseline gap-2">
             <span className="text-2xl sm:text-3xl font-bold text-sky-400 tabular-nums">
-              {saved}
+              {metrics.saved}
             </span>
             <span className="text-[11px] text-zinc-400">{t("overview.staged")}</span>
           </div>
@@ -160,7 +224,7 @@ export default function DashboardOverview({
           </div>
           <div className="flex items-baseline gap-2">
             <span className="text-2xl sm:text-3xl font-bold text-amber-400 tabular-nums">
-              {aiPending}
+              {metrics.aiPending}
             </span>
             <span className="text-[11px] text-zinc-400">{t("overview.inQueue")}</span>
           </div>
@@ -179,36 +243,38 @@ export default function DashboardOverview({
                 {t("overview.avgScore")}
               </span>
               <span className="text-xs text-zinc-500 font-mono">
-                {t("overview.basedOnAnalyzed").replace("{count}", String(analyzedCount))}
+                {t("overview.basedOnAnalyzed").replace("{count}", String(metrics.analyzedCount))}
               </span>
             </div>
 
             <div className="flex items-baseline gap-3 mb-3">
               <span className="text-4xl font-black text-zinc-100 tracking-tight">
-                {avgScore}
+                {metrics.avgScore}
               </span>
               <span className="text-sm text-zinc-500">/ 100</span>
               <span
                 className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                  avgScore >= 65
+                  metrics.avgScore >= 65
                     ? "bg-emerald-500/10 text-emerald-400"
                     : "bg-amber-500/10 text-amber-400"
                 }`}
               >
-                {avgScore >= 65 ? (language === "ru" ? "Высокая совместимость" : "Calibrated to Target") : (language === "ru" ? "Требуется калибровка" : "Below Target Calibration")}
+                {metrics.avgScore >= 65
+                  ? (language === "ru" ? "Высокая совместимость" : "Calibrated to Target")
+                  : (language === "ru" ? "Требуется калибровка" : "Below Target Calibration")}
               </span>
             </div>
 
             {/* Score Breakdown Pills */}
             <div className="flex items-center gap-2 text-xs flex-wrap">
               <span className="px-2.5 py-1 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-medium">
-                {t("overview.high")}: <strong className="text-white ml-1">{highCount}</strong>
+                {t("overview.high")}: <strong className="text-white ml-1">{metrics.highCount}</strong>
               </span>
               <span className="px-2.5 py-1 rounded-md bg-amber-500/10 border border-amber-500/20 text-amber-400 font-medium">
-                {t("overview.maybe")}: <strong className="text-white ml-1">{maybeCount}</strong>
+                {t("overview.maybe")}: <strong className="text-white ml-1">{metrics.maybeCount}</strong>
               </span>
               <span className="px-2.5 py-1 rounded-md bg-zinc-800/80 border border-zinc-700/60 text-zinc-400 font-medium">
-                {t("overview.low")}: <strong className="text-white ml-1">{lowCount}</strong>
+                {t("overview.low")}: <strong className="text-white ml-1">{metrics.lowCount}</strong>
               </span>
             </div>
           </div>
@@ -290,7 +356,7 @@ export default function DashboardOverview({
             href="/dashboard/vacancies"
             className="text-xs text-violet-400 hover:text-violet-300 font-medium flex items-center gap-1 transition-colors"
           >
-            <span>{t("overview.viewAll").replace("{count}", String(total))}</span>
+            <span>{t("overview.viewAll").replace("{count}", String(metrics.total))}</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </Link>
         </div>

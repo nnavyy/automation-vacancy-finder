@@ -3,20 +3,48 @@
 // ============================================================
 // Run Collection Button
 // Polls the database for real-time progress across page reloads
+// and dispatches liveStats updates to parent components.
 // ============================================================
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Play, Loader2, CheckCircle, XCircle, RefreshCw } from "lucide-react";
 
-export default function RunCollectionButton() {
+export interface LiveDashboardStats {
+  total: number;
+  applied: number;
+  skipped: number;
+  saved: number;
+  aiPending: number;
+  avgScore: number;
+  highCount: number;
+  maybeCount: number;
+  lowCount: number;
+  analyzedCount: number;
+}
+
+interface RunCollectionButtonProps {
+  onLiveUpdate?: (stats: LiveDashboardStats) => void;
+  onRunningChange?: (running: boolean) => void;
+}
+
+export default function RunCollectionButton({
+  onLiveUpdate,
+  onRunningChange,
+}: RunCollectionButtonProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [progress, setProgress] = useState<{ analyzed: number; total: number } | null>(null);
+  const [progress, setProgress] = useState<{ current: number; total: number } | null>(null);
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [stale, setStale] = useState(false);
   const loadingRef = useRef(loading);
   loadingRef.current = loading;
+
+  const onLiveUpdateRef = useRef(onLiveUpdate);
+  onLiveUpdateRef.current = onLiveUpdate;
+
+  const onRunningChangeRef = useRef(onRunningChange);
+  onRunningChangeRef.current = onRunningChange;
 
   // Poll status on mount and while loading
   useEffect(() => {
@@ -29,34 +57,49 @@ export default function RunCollectionButton() {
           const json = await res.json();
           const status = json.data;
 
+          if (json.liveStats && onLiveUpdateRef.current) {
+            onLiveUpdateRef.current(json.liveStats);
+          }
+
           if (status?.running) {
-            // Check if it's been running for > 10 minutes (likely Vercel timeout)
             const startedAt = status.startedAt ? new Date(status.startedAt) : null;
             const minutesRunning = startedAt
               ? (Date.now() - startedAt.getTime()) / 1000 / 60
               : 0;
 
-            if (minutesRunning > 10) {
-              // Stale — auto-reset via API
+            if (minutesRunning > 5) {
+              // Stale — show reset button
               setStale(true);
               setLoading(false);
               setProgress(null);
+              onRunningChangeRef.current?.(false);
             } else {
               setLoading(true);
               setStale(false);
-              setProgress({ analyzed: status.analyzed ?? 0, total: status.total ?? 0 });
+              onRunningChangeRef.current?.(true);
+
+              const currentCount = typeof status.processed === "number"
+                ? status.processed
+                : (status.analyzed ?? 0);
+
+              setProgress({
+                current: currentCount,
+                total: status.total ?? 0,
+              });
             }
           } else {
             setStale(false);
-            // It finished
+            onRunningChangeRef.current?.(false);
+
             if (loadingRef.current) {
               setLoading(false);
               setProgress(null);
+              const processedCount = status?.processed ?? status?.analyzed ?? 0;
               setResult({
                 ok: true,
-                message: `Collection complete — ${status?.analyzed ?? 0} analyzed.`,
+                message: `Collection complete — ${processedCount} vacancies processed.`,
               });
-              // Automatically refresh the dashboard data so top matches and stats immediately appear
+              // Automatically refresh server data
               router.refresh();
               setTimeout(() => setResult(null), 8000);
             }
@@ -68,16 +111,17 @@ export default function RunCollectionButton() {
     };
 
     checkStatus(); // initial check
-    interval = setInterval(checkStatus, 2000); // poll every 2s
+    interval = setInterval(checkStatus, 1500); // poll every 1.5s for live reactivity
 
     return () => clearInterval(interval);
-  }, []);
+  }, [router]);
 
   const handleRun = async () => {
     setLoading(true);
     setStale(false);
-    setProgress({ analyzed: 0, total: 0 });
+    setProgress({ current: 0, total: 0 });
     setResult(null);
+    onRunningChangeRef.current?.(true);
 
     // Fire and forget
     fetch("/api/dashboard/collect").catch(() => {
@@ -86,6 +130,7 @@ export default function RunCollectionButton() {
         message: "Network error starting collection.",
       });
       setLoading(false);
+      onRunningChangeRef.current?.(false);
     });
   };
 
@@ -94,6 +139,7 @@ export default function RunCollectionButton() {
     setStale(false);
     setLoading(false);
     setProgress(null);
+    onRunningChangeRef.current?.(false);
     router.refresh();
   };
 
@@ -125,10 +171,10 @@ export default function RunCollectionButton() {
         </button>
       </div>
 
-      {loading && progress && (
+      {loading && (
         <div className="text-xs text-zinc-400 flex items-center gap-1.5 animate-pulse">
           <Loader2 size={11} className="animate-spin text-emerald-400" />
-          Analyzing {progress.analyzed} of {progress.total || "?"} vacancies...
+          Analyzing {progress?.current ?? 0} of {progress?.total || "?"} vacancies...
         </div>
       )}
 

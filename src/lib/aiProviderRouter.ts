@@ -31,8 +31,8 @@ import { BRAND_NAME } from "@/lib/brand";
 
 export function getGroqModel(): string {
   const m = process.env.AI_MODEL_GROQ ?? process.env.GROQ_MODEL;
-  if (!m || m.includes("gpt-oss") || m.includes("qwen")) return "llama-3.3-70b-versatile";
-  return m.replace(/^"|"$/g, "");
+  if (m) return m.replace(/^"|"$/g, "");
+  return "openai/gpt-oss-120b";
 }
 
 export function getGeminiModel(): string {
@@ -89,28 +89,46 @@ export async function callGroq(
   const apiKey = customKey || process.env.GROQ_API_KEY;
   if (!apiKey) throw new Error("Groq API key is not configured.");
 
-  const client = new Groq({ apiKey });
+  const client = new Groq({ apiKey, timeout: 25000 });
   const messages: ChatMessage[] = [];
   if (options.systemPrompt) {
     messages.push({ role: "system", content: options.systemPrompt });
   }
   messages.push({ role: "user", content: options.prompt });
 
-  const model = customModel || getGroqModel();
-  const completion = await client.chat.completions.create({
-    model,
-    messages: messages as Parameters<typeof client.chat.completions.create>[0]["messages"],
-    max_tokens: Math.max(300, options.maxTokens ?? 2048),
-    temperature: 0.3,
-    stream: false,
-  });
+  const primaryModel = customModel || getGroqModel();
+  const candidates = [primaryModel, "openai/gpt-oss-120b", "openai/gpt-oss-20b", "llama-3.3-70b-versatile", "llama-3.1-8b-instant"];
+  const modelsToTry = Array.from(new Set(candidates));
 
-  const message = completion.choices[0]?.message;
-  let content = message?.content?.trim() ?? "";
-  if (!content && (message as any)?.reasoning) {
-    content = (message as any).reasoning.trim();
+  let lastErr: any = null;
+  for (const model of modelsToTry) {
+    try {
+      const completion = await client.chat.completions.create({
+        model,
+        messages: messages as Parameters<typeof client.chat.completions.create>[0]["messages"],
+        max_tokens: Math.max(300, options.maxTokens ?? 2048),
+        temperature: 0.3,
+        stream: false,
+      });
+
+      const message = completion.choices[0]?.message;
+      let content = message?.content?.trim() ?? "";
+      if (!content && (message as any)?.reasoning) {
+        content = (message as any).reasoning.trim();
+      }
+      if (content) return content;
+    } catch (err: any) {
+      lastErr = err;
+      const msg = String(err?.message || "");
+      if (msg.includes("does not exist") || msg.includes("model_not_found") || err?.status === 404) {
+        console.warn(`[Groq] Model "${model}" not available, trying next fallback...`);
+        continue;
+      }
+      throw err;
+    }
   }
-  return content;
+
+  throw lastErr || new Error("Groq failed with all models.");
 }
 
 export async function callGemini(
@@ -461,7 +479,13 @@ export async function callAI(options: CallAIOptions): Promise<AICallResult> {
 
     try {
       console.log(`[AI Router] Attempting provider "${provider}" (model: ${model}) for [${options.requestType}]…`);
-      const rawContent = await handler.fn();
+      const timeoutMs = 25000;
+      const rawContent = await Promise.race([
+        handler.fn(),
+        new Promise<string>((_, reject) =>
+          setTimeout(() => reject(new Error(`Timeout (${timeoutMs}ms) exceeded for provider "${provider}"`)), timeoutMs)
+        ),
+      ]);
       const content = rawContent?.trim() ?? "";
 
       if (!content) {
