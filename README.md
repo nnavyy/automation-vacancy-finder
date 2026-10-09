@@ -31,7 +31,7 @@
 Real-time pipeline metrics, automated background collection telemetry, and high-match vacancy cards with instant recruiter discovery.
 
 <div align="center">
-  <img src="screenshots/01_dashboard_overview.png" alt="Dashboard Overview" width="90%" />
+  <img src="screenshots/01_dashboard_overview.png" alt="Executive Dashboard & Telemetry" width="90%" />
 </div>
 
 ---
@@ -40,7 +40,7 @@ Real-time pipeline metrics, automated background collection telemetry, and high-
 Browse curated vacancies on the left panel while viewing deep compatibility scoring (0–100), technical skill matrix verification, and red-flag alerts on the right panel.
 
 <div align="center">
-  <img src="screenshots/02_vacancies_split_view.png" alt="Vacancies Split-View" width="90%" />
+  <img src="screenshots/02_vacancies_split_view.png" alt="Vacancies Split-View & AI Reasoning" width="90%" />
 </div>
 
 ---
@@ -49,7 +49,7 @@ Browse curated vacancies on the left panel while viewing deep compatibility scor
 Track application attrition across the conversion funnel, visualize compatibility distribution, and discover recurring skill gaps to optimize candidate profiles.
 
 <div align="center">
-  <img src="screenshots/05_analytics_funnel.png" alt="Analytics Funnel & Skill Gaps" width="90%" />
+  <img src="screenshots/05_analytics_funnel.png" alt="Pipeline Analytics & Skill Gap Insights" width="90%" />
 </div>
 
 ---
@@ -58,22 +58,32 @@ Track application attrition across the conversion funnel, visualize compatibilit
 Bypass the HR black hole. Automatically uncover hiring managers and tech leads via domain OSINT, with tailored cold-outreach drafting adapted to your portfolio.
 
 <div align="center">
-  <img src="screenshots/06_find_recruiter_dossier.png" alt="Recruiter Intelligence Dossier" width="90%" />
+  <img src="screenshots/06_find_recruiter_dossier.png" alt="Recruiter Intelligence & Company OSINT" width="90%" />
 </div>
 
 ---
 
 ### 5. Zero-Setup Local Execution & BYOK
 - **No mandatory heavy Docker** — run simply with `npm run dev` or a 1-click `setup.bat`.
-- **Bring Your Own Key (BYOK)** — support for DeepSeek (V3/R1), Claude 3.7, OpenAI, Gemini, and local offline models via Ollama.
+- **Bring Your Own Key (BYOK)** — support for DeepSeek (V3/R1), Gemini 2.0 Flash, Claude 3.7, OpenAI, or local offline models via Ollama.
 - **Privacy & Security** — Self-hosted on your machine; credentials encrypted at rest with AES-256-GCM.
+- **Zero-headache Database** — Free serverless PostgreSQL (NeonDB in 1-click) or local SQLite (`dev.db`).
+
+---
+
+### 6. Profile Settings, LLM Routing & HH Synchronization
+Configure search criteria, match score thresholds, multi-provider BYOK keys (DeepSeek, Groq, Gemini, Claude, OpenAI, Ollama), cascade failover priority, and secure authentication via HeadHunter OAuth or Session Token.
+
+<div align="center">
+  <img src="screenshots/04_settings_ai_profiles.png" alt="Profile Settings & AI Model Configuration" width="90%" />
+</div>
 
 ---
 
 ## Release Roadmap
 
 - [x] **Core Crawler & HH RSS Ingestion Pipeline**
-- [x] **Multi-Model LLM Reasoning Engine (DeepSeek / Gemini / Groq / Ollama)**
+- [x] **Multi-Model LLM Reasoning Engine (DeepSeek / Gemini / OpenAI / Ollama)**
 - [x] **Chrome Extension for 1-Click Session Cookie Sync**
 - [x] **Pipeline Conversion Funnel & Skill Gap Telemetry**
 - [x] **Telegram Real-time Alert Bot**
