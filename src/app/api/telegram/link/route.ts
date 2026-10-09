@@ -11,7 +11,12 @@ import { getApiUser } from "@/lib/auth-helpers";
 import crypto from "crypto";
 
 function generateToken(): string {
-  return crypto.randomBytes(16).toString("hex");
+  // Generate friendly 6-character uppercase token (e.g. 7AF044)
+  return crypto.randomBytes(3).toString("hex").toUpperCase();
+}
+
+function getBotUsername(): string {
+  return process.env.TELEGRAM_BOT_USERNAME || "Wongkiisbot";
 }
 
 // ── GET: Check current link status ────────────────────────────
@@ -27,9 +32,21 @@ export async function GET() {
       orderBy: { createdAt: "desc" },
     });
 
+    const botUsername = getBotUsername();
+
     if (!link) {
-      return NextResponse.json({ success: true, data: { linked: false, token: null } });
+      return NextResponse.json({
+        success: true,
+        data: {
+          linked: false,
+          token: null,
+          botUsername,
+          deepLink: null,
+        },
+      });
     }
+
+    const deepLink = link.token ? `https://t.me/${botUsername}?start=${link.token}` : null;
 
     return NextResponse.json({
       success: true,
@@ -39,6 +56,8 @@ export async function GET() {
         chatId:   link.telegramChatId,
         username: link.telegramUsername,
         linkedAt: link.linkedAt,
+        botUsername,
+        deepLink,
       },
     });
   } catch (error) {
@@ -66,11 +85,16 @@ export async function POST() {
       data: { userId: user.id, token, isActive: true },
     });
 
+    const botUsername = getBotUsername();
+    const deepLink = `https://t.me/${botUsername}?start=${link.token}`;
+
     return NextResponse.json({
       success: true,
       data: {
         token:        link.token,
-        instructions: `Send this to your Telegram bot: /link ${link.token}`,
+        botUsername,
+        deepLink,
+        instructions: `Send this to your Telegram bot: /start ${link.token}`,
       },
     });
   } catch (error) {
@@ -78,3 +102,4 @@ export async function POST() {
     return NextResponse.json({ success: false, error: "Failed to generate token" }, { status: 500 });
   }
 }
+

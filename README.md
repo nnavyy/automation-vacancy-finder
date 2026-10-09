@@ -24,6 +24,13 @@ A self-hosted, multi-user AI job search copilot engineered for the HeadHunter (H
   - [Docker & Docker Compose Deployment](#docker--docker-compose-deployment)
 - [Configuration Reference](#configuration-reference)
 - [Profile System & JSON Workflow](#profile-system--json-workflow)
+- [Telegram Integration (Shared Multi-User Bot)](#telegram-integration-shared-multi-user-bot)
+  - [Shared Bot Architecture](#shared-bot-architecture)
+  - [User Linking Workflow](#user-linking-workflow)
+  - [High-Score Notification Routing](#high-score-notification-routing)
+  - [Interactive Telegram Actions](#interactive-telegram-actions)
+  - [Bot Commands](#bot-commands)
+  - [Webhook Setup for Deployers](#webhook-setup-for-deployers)
 - [Automation & Scheduled Background Jobs](#automation--scheduled-background-jobs)
 - [Testing](#testing)
 - [Contributing](#contributing)
@@ -83,10 +90,12 @@ Traditional job hunting on HeadHunter (HH.ru) involves repetitive manual searche
 - **Recruiter Dossier Modal:** View discovered recruiter contacts, email addresses, LinkedIn URLs, and confidence scores.
 - **Cold Outreach Drafting:** Automatically generate personalized recruiter emails referencing specific vacancy requirements and candidate portfolio links.
 
-### Interactive Telegram Bot
+### Interactive Telegram Bot (Shared Multi-User Architecture)
 
-- **Instant High-Score Alerts:** Receive real-time Telegram notifications when a scraped vacancy exceeds your configured minimum match threshold.
-- **Direct Deep-Links:** Alerts provide vacancy metadata, salary ranges, match scores, and direct links to open the job on HH.ru or in your local dashboard.
+- **Central Shared Bot:** All registered users share a single, centralized Telegram bot (`@Wongkiisbot` or your custom bot). Users do **not** need to register their own bot or provide a Telegram Bot Token.
+- **1-Click Profile Linking:** Connect your dashboard profile in seconds using a unique 6-character linking token (`/start <TOKEN>` or direct `t.me/Bot?start=<TOKEN>`).
+- **Real-Time High-Score Alerts:** Automatic instant push alerts whenever a collected vacancy meets or exceeds your minimum match threshold (e.g. 75+, 80+, 90+).
+- **Interactive Action Buttons:** Manage your pipeline directly from Telegram messages: **Mark Applied**, **Skip**, **Save**, **Regenerate Letter**, **Type Manual**, or **Open Vacancy** on HH.ru.
 
 ### Analytics & Application Funnel
 
@@ -305,6 +314,158 @@ You can export or import your complete profile settings using standard JSON:
 3. Toggle **Translate RU -> EN on import** to automatically translate Russian job titles and skill descriptions into English equivalents.
 
 ---
+
+## Telegram Integration (Shared Multi-User Bot)
+
+HH Job Copilot includes a multi-tenant Telegram notification and job management engine designed to be shared across all platform users without individual setup friction.
+
+### Shared Bot Architecture
+
+In a multi-user environment, users do **not** need to create their own Telegram bot or generate bot tokens via BotFather:
+
+1. **Central Deployer Bot:** The deployer/administrator sets up a single Telegram bot token (`TELEGRAM_BOT_TOKEN`) in the server `.env`.
+2. **Multi-Tenant User Mapping:** The `TelegramLink` database table safely maps each user's internal `userId` to their respective `telegramChatId` and Telegram username.
+3. **Isolated Notifications:** Each user receives notifications exclusively for their own candidate profile vacancies and active search preferences. Actions performed in Telegram (such as skipping or saving) are strictly isolated to that user's account.
+
+```
+                      +-----------------------------+
+                      |   Central Telegram Bot      |
+                      |  (e.g. @Wongkiisbot)        |
+                      +--------------+--------------+
+                                     |
+               Webhook Update: /start <TOKEN> or /link <TOKEN>
+                                     |
+                                     v
+                  +------------------------------------+
+                  | Next.js Telegram Webhook Endpoint  |
+                  | (/api/telegram/webhook)            |
+                  +------------------+-----------------+
+                                     |
+               Resolves token in TelegramLink table
+                                     |
+             +-----------------------+-----------------------+
+             |                                               |
+             v                                               v
++--------------------------+                   +--------------------------+
+|  User A (chatId: 12345)  |                   |  User B (chatId: 67890)  |
+|  Profile: Fullstack Dev  |                   |  Profile: Junior QA Eng  |
+|  Alerts: Score >= 75     |                   |  Alerts: Score >= 80     |
++--------------------------+                   +--------------------------+
+```
+
+---
+
+### User Linking Workflow
+
+Connecting a user's dashboard account to the central Telegram bot takes just a few seconds:
+
+1. **Generate Token in Dashboard:**
+   - Go to **Settings** (`/dashboard/settings`) -> scroll to **Telegram Bot Notifications** (`#section-telegram`).
+   - Click **Generate** to create a unique 6-character linking token (e.g., `7AF044`).
+2. **Connect via Telegram (2 Ways):**
+   - **Method A (1-Click Deep Link):** Click **Connect in Telegram** (`https://t.me/<BotUsername>?start=<TOKEN>`). Telegram opens the bot directly; press **Start**, and your profile links instantly.
+   - **Method B (Manual Command or Direct Token):** Open the bot in Telegram (`@Wongkiisbot`) and send either:
+     - `/start 7AF044`
+     - `/link 7AF044`
+     - or simply paste the token: `7AF044`
+3. **Confirmation:**
+   - The bot responds with `[Successfully Linked]` confirming your account is connected.
+   - Your dashboard updates to show **Linked as @username**.
+
+---
+
+### High-Score Notification Routing
+
+Notifications are dispatched automatically whenever vacancies are scored and meet user criteria:
+
+- **Collection Pipeline:** When automated collection runs, any vacancy whose AI match score meets or exceeds the profile's **Minimum Match Score to Notify** (default: 75+, customizable to 80+, 90+) is sent immediately to the user's linked Telegram chat.
+- **Manual Analysis:** When a user manually analyzes a vacancy in the dashboard and its score meets the threshold, it is automatically forwarded to their Telegram chat.
+- **Rate-Limiting Protection:** The system enforces a daily limit (`maxNotificationsPerDay`, default 20) per profile to prevent notification spam.
+
+---
+
+### Interactive Telegram Actions
+
+Every vacancy alert delivered to Telegram includes structured vacancy intelligence and interactive inline keyboard buttons:
+
+```
+[Job Match] HeadHunter
+
+Role: Fullstack Developer (React / Next.js / TypeScript)
+Company: Tech Innovations LLC
+Location: Remote (Удаленно)
+Salary: 180,000 – 250,000 RUR
+Experience: between1And3
+Format: Remote
+
+Score: 94/100  |  Confidence: 95%
+Recommendation: [APPLY] APPLY
+
+Why it matches:
+  - Strong match with candidate skills (React, Next.js, TypeScript)
+  - Fully remote work format matches preference
+  - Compensation meets salary threshold
+
+Missing requirements:
+  - Docker containerization experience preferred
+
+Red flags:
+  None detected
+
+Cover letter preview:
+Dear Hiring Manager, I am writing to express my strong interest in the Fullstack Developer role...
+
+[ Mark Applied ] [ Skip ]
+[ Save ]         [ Regenerate ]
+[ Type Manual ]
+[ Open Vacancy ] (URL button to HH.ru)
+```
+
+| Action Button | Behavior |
+|---|---|
+| **Mark Applied** | Marks the vacancy as applied in your dashboard and saves positive learning signals for AI scoring. |
+| **Skip** | Skips the vacancy, archives it from your active feed, and saves negative learning context. |
+| **Save** | Pins the vacancy to your **Saved** list in the dashboard for later application. |
+| **Regenerate** | Calls the configured AI provider to draft a new customized cover letter variant and returns it to Telegram. |
+| **Type Manual** | Prompts you to reply with your own custom cover letter draft, which is saved to the vacancy record. |
+| **Open Vacancy** | Direct link that opens the original job posting on HeadHunter (HH.ru). |
+
+---
+
+### Bot Commands
+
+Users can interact with the bot at any time using standard slash commands:
+
+| Command | Description |
+|---|---|
+| `/start` | Displays the welcome message and instructions on how to link your dashboard. |
+| `/start <TOKEN>` | Links your Telegram chat to your dashboard using the 6-character sync token. |
+| `/link <TOKEN>` | Alternative command to link your dashboard using the sync token. |
+| `/profiles` | Lists your candidate search profiles with inline buttons to switch your active profile on the fly. |
+| `/saved` | Lists your top 10 saved vacancies with direct links and match scores. |
+| `/applied` | Lists your 10 most recently applied vacancies. |
+
+---
+
+### Webhook Setup for Deployers
+
+For administrators deploying the application to production:
+
+1. **Configure Environment Variables:**
+   ```ini
+   TELEGRAM_BOT_TOKEN="your-bot-token-from-botfather"
+   TELEGRAM_BOT_USERNAME="Wongkiisbot" # (Optional: matches your bot username)
+   APP_BASE_URL="https://your-domain.com"
+   ```
+2. **Register the Webhook:**
+   Trigger the automated setup endpoint:
+   ```bash
+   curl -X POST https://your-domain.com/api/telegram/setup-webhook
+   ```
+   Or set the webhook directly via Telegram Bot API:
+   ```bash
+   curl -X POST "https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/setWebhook?url=https://your-domain.com/api/telegram/webhook"
+   ```
 
 ## Automation & Scheduled Background Jobs
 

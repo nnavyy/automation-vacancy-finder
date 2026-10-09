@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/db";
-import { sendVacancyNotification } from "@/lib/telegram";
+import { sendVacancyNotificationToUser } from "@/lib/telegram";
 import type { AIAnalysisResult, NormalizedVacancy, HHSalary } from "@/types";
 import { buildRuleBasedResult } from "@/lib/aiAnalyzer";
 import { getApiUser, getOwnedVacancy } from "@/lib/auth-helpers";
@@ -71,10 +71,26 @@ export async function POST(
       }
     }
 
-    const success = await sendVacancyNotification(
+    // Resolve user's linked Telegram chat in multi-user mode
+    const link = await prisma.telegramLink.findFirst({
+      where: { userId: user.id, isActive: true },
+    });
+    const chatId = link?.telegramChatId || process.env.TELEGRAM_CHAT_ID;
+    if (!chatId) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "No Telegram account connected. Please connect your Telegram in Settings first.",
+        },
+        { status: 400 }
+      );
+    }
+
+    const success = await sendVacancyNotificationToUser(
       toNormalizedVacancy(dbVacancy),
       aiAnalysis,
-      id
+      id,
+      chatId
     );
 
     if (success) {

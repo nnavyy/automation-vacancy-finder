@@ -121,6 +121,37 @@ function toNormalizedVacancy(v: {
 
 // ── Action Handlers ───────────────────────────────────────────
 
+async function handleLinkAccount(tokenCandidate: string, chatId: string, username: string): Promise<boolean> {
+  const token = tokenCandidate.trim().toUpperCase();
+  if (!token || token.length < 4) {
+    return false;
+  }
+  try {
+    const link = await prisma.telegramLink.findFirst({
+      where: { token, isActive: true },
+    });
+    if (!link) {
+      return false;
+    }
+    await prisma.telegramLink.update({
+      where: { id: link.id },
+      data: { telegramChatId: chatId, telegramUsername: username, linkedAt: new Date() },
+    });
+    await tgSend(
+      chatId,
+      `<b>[Successfully Linked]</b>\n\n` +
+      `Your Telegram account is now connected to the ${BRAND_NAME} dashboard.\n` +
+      `You will receive real-time vacancy alerts with instant Action buttons here!\n\n` +
+      `Try /profiles to inspect or switch your active search profile.`
+    );
+    return true;
+  } catch (err) {
+    console.error("[Webhook] handleLinkAccount DB error:", err);
+    await tgSend(chatId, "[Error] Failed to link account. Please try again.");
+    return true;
+  }
+}
+
 async function handleApprove(vacancyId: string, userId: string): Promise<string> {
   const v = await prisma.vacancy.findFirst({ where: { id: vacancyId, userId } });
   if (!v) return "[Error] Vacancy not found or access denied.";
@@ -263,16 +294,23 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // ── /start ─────────────────────────────────────────────
-      if (text === "/start") {
+
+      // ── /start [TOKEN] ─────────────────────────────────────
+      if (text.startsWith("/start")) {
+        const parts = text.split(/\s+/);
+        if (parts.length > 1 && parts[1]) {
+          const linked = await handleLinkAccount(parts[1], chatId, username);
+          if (linked) return NextResponse.json({ ok: true });
+        }
+
         console.log("[Webhook] Handling /start...");
         const result = await tgSend(chatId,
           `<b>Welcome to ${BRAND_NAME}!</b>\n\n` +
           `To connect this bot with your dashboard:\n` +
           `1. Go to Settings in your dashboard\n` +
           `2. Click "Generate Telegram Token"\n` +
-          `3. Send: /link &lt;YOUR_TOKEN&gt;\n\n` +
-          `Example: <code>/link A3F1B2</code>\n\n` +
+          `3. Send your token here or send: /link &lt;YOUR_TOKEN&gt;\n\n` +
+          `Example: <code>/link 7AF044</code> or simply <code>7AF044</code>\n\n` +
           `<b>Commands:</b>\n` +
           `/link &lt;TOKEN&gt; — Connect to dashboard\n` +
           `/profiles — Switch active profile\n` +
@@ -285,33 +323,20 @@ export async function POST(req: NextRequest) {
 
       // ── /link <TOKEN> ──────────────────────────────────────
       if (text.startsWith("/link ")) {
-        const token = text.slice(6).trim().toUpperCase();
-        if (!token || token.length < 4) {
-          await tgSend(chatId, "[Error] Invalid token. Please check and try again.");
-          return NextResponse.json({ ok: true });
-        }
-
-        try {
-          const link = await prisma.telegramLink.findFirst({ where: { token, isActive: true } });
-          if (!link) {
-            await tgSend(chatId, "[Error] Token not found or expired.\nGenerate a new one from the dashboard Settings.");
-            return NextResponse.json({ ok: true });
-          }
-          await prisma.telegramLink.update({
-            where: { id: link.id },
-            data: { telegramChatId: chatId, telegramUsername: username, linkedAt: new Date() },
-          });
-          await tgSend(chatId,
-            `<b>[Successfully Linked]</b>\n\n` +
-            `Your Telegram is now connected to the dashboard.\n` +
-            `You will receive vacancy notifications here.\n\n` +
-            `Try /profiles to switch your active profile.`
-          );
-        } catch (err) {
-          console.error("[Webhook] /link DB error:", err);
-          await tgSend(chatId, "[Error] Error linking account. Please try again.");
+        const token = text.slice(6).trim();
+        const linked = await handleLinkAccount(token, chatId, username);
+        if (!linked) {
+          await tgSend(chatId, "[Error] Token not found or expired.\nGenerate a new token from your dashboard Settings.");
         }
         return NextResponse.json({ ok: true });
+      }
+
+      // ── Direct Token Submission (e.g. user just pastes token code) ──
+      if (/^[a-zA-Z0-9]{4,32}$/.test(text)) {
+        const linked = await handleLinkAccount(text, chatId, username);
+        if (linked) {
+          return NextResponse.json({ ok: true });
+        }
       }
 
       // ── /profiles ──────────────────────────────────────────

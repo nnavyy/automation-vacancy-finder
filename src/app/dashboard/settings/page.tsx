@@ -300,6 +300,7 @@ export default function SettingsPage() {
   const [tgToken, setTgToken] = useState<string | null>(null);
   const [tgLinked, setTgLinked] = useState(false);
   const [tgUsername, setTgUsername] = useState<string | null>(null);
+  const [tgBotUsername, setTgBotUsername] = useState<string>("Wongkiisbot");
   const [generatingTg, setGeneratingTg] = useState(false);
   const [copiedTg, setCopiedTg] = useState(false);
 
@@ -573,6 +574,7 @@ export default function SettingsPage() {
           if (json.data.token) setTgToken(json.data.token);
           setTgLinked(Boolean(json.data.linked));
           if (json.data.username) setTgUsername(json.data.username);
+          if (json.data.botUsername) setTgBotUsername(json.data.botUsername);
         }
       })
       .catch(() => {});
@@ -1148,6 +1150,7 @@ export default function SettingsPage() {
       if (json.success && json.data) {
         setTgToken(json.data.token);
         setTgLinked(false);
+        if (json.data.botUsername) setTgBotUsername(json.data.botUsername);
       }
     } finally {
       setGeneratingTg(false);
@@ -1156,7 +1159,7 @@ export default function SettingsPage() {
 
   const handleCopyTgToken = () => {
     if (!tgToken) return;
-    navigator.clipboard.writeText(`/link ${tgToken}`);
+    navigator.clipboard.writeText(`/start ${tgToken}`);
     setCopiedTg(true);
     setTimeout(() => setCopiedTg(false), 2000);
   };
@@ -2369,12 +2372,24 @@ export default function SettingsPage() {
 
             <div>
               <label className="block text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-1.5">
-                {language === "ru" ? "ТОКЕН СИНХРОНИЗАЦИИ УСТРОЙСТВА" : "DEVICE SYNC TOKEN"}
+                {language === "ru" ? "ТОКЕН СИНХРОНИЗАЦИИ ПРОФИЛЯ" : "PROFILE SYNC TOKEN"}
               </label>
-              <div className="flex items-center gap-2">
-                <div className="flex-1 bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs font-mono text-emerald-400">
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex-1 min-w-[140px] bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs font-mono text-emerald-400">
                   {tgToken || (language === "ru" ? "Нажмите 'Создать' для генерации токена привязки" : "Click 'Generate' to create a link token")}
                 </div>
+                {tgToken && (
+                  <a
+                    href={`https://t.me/${tgBotUsername}?start=${tgToken}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 text-xs font-medium border border-sky-500/30 transition-colors"
+                    title="Open bot in Telegram with 1-click account linking"
+                  >
+                    <Send size={13} />
+                    <span>{language === "ru" ? "Открыть бота" : "Connect in Telegram"}</span>
+                  </a>
+                )}
                 <button
                   type="button"
                   onClick={handleCopyTgToken}
@@ -2393,12 +2408,23 @@ export default function SettingsPage() {
                   {generatingTg ? "..." : (language === "ru" ? "Создать" : "Generate")}
                 </button>
               </div>
-              <p className="text-[10px] text-zinc-500 mt-1.5">
-                {language === "ru"
-                  ? "Отправьте эту команду аутентификации боту в Telegram: "
-                  : "Send this authentication command to the Telegram bot: "}
-                <code className="text-zinc-400">/link {tgToken || "TOKEN"}</code>
-              </p>
+              <div className="text-[10px] text-zinc-400 mt-2.5 space-y-1 bg-zinc-950/60 border border-zinc-800/80 p-2.5 rounded-lg">
+                <div className="font-semibold text-zinc-300">
+                  {language === "ru"
+                    ? "Все пользователи используют общего центрального бота. Как подключиться:"
+                    : "All users connect to the shared central bot. How to connect:"}
+                </div>
+                <div className="text-zinc-400">
+                  1. {language === "ru" ? "Нажмите 'Открыть бота' или откройте" : "Click 'Connect in Telegram' or open"}{" "}
+                  <a href={`https://t.me/${tgBotUsername}`} target="_blank" rel="noreferrer" className="text-sky-400 underline font-mono">@{tgBotUsername}</a>.
+                </div>
+                <div className="text-zinc-400">
+                  2. {language === "ru" ? "Отправьте команду" : "Send command"}:{" "}
+                  <code className="text-emerald-400 font-mono">/start {tgToken || "TOKEN"}</code>{" "}
+                  {language === "ru" ? "или просто вставьте сам токен" : "or simply paste the token"}{" "}
+                  <code className="text-zinc-300 font-mono">{tgToken || "TOKEN"}</code>.
+                </div>
+              </div>
             </div>
           </section>
 

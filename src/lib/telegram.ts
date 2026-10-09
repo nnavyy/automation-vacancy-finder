@@ -166,67 +166,93 @@ export async function sendMessage(
  * @param vacancyId - Internal DB ID used in callback_data payloads
  * @returns true if the Telegram message was delivered successfully
  */
-export async function sendVacancyNotification(
+function buildVacancyNotificationPayload(
   vacancy: NormalizedVacancy,
-  analysis: AIAnalysisResult,
+  rawAnalysis: AIAnalysisResult | Record<string, unknown> | null | undefined,
   vacancyId: string
-): Promise<boolean> {
+): { message: string; replyMarkup: object } {
+  const analysis = rawAnalysis || {};
+  const recRaw = ((analysis as any).recommendation || "apply").toString().toLowerCase();
   const recTag: Record<string, string> = {
     apply: "[APPLY]",
     maybe: "[MAYBE]",
     skip: "[SKIP]",
   };
-  const recommendationIcon = recTag[analysis.recommendation] ?? `[${analysis.recommendation.toUpperCase()}]`;
+  const recommendationIcon = recTag[recRaw] ?? `[${recRaw.toUpperCase()}]`;
 
   // ── Format match reasons ──────────────────────────────────
+  const matchReasonsRaw =
+    (analysis as any).match_reasons ?? (analysis as any).matchReasons;
+  const matchReasonsList: string[] = Array.isArray(matchReasonsRaw)
+    ? matchReasonsRaw.map((r) => String(r))
+    : [];
   const matchReasonsText =
-    analysis.match_reasons.length > 0
-      ? analysis.match_reasons.map((r) => `  - ${r}`).join("\n")
+    matchReasonsList.length > 0
+      ? matchReasonsList.map((r) => `  - ${r}`).join("\n")
       : "  (none detected)";
 
   // ── Format missing requirements ───────────────────────────
+  const missingRaw =
+    (analysis as any).missing_requirements ?? (analysis as any).missingRequirements;
+  const missingList: string[] = Array.isArray(missingRaw)
+    ? missingRaw.map((m) => String(m))
+    : [];
   const missingText =
-    analysis.missing_requirements.length > 0
-      ? analysis.missing_requirements.map((r) => `  - ${r}`).join("\n")
+    missingList.length > 0
+      ? missingList.map((m) => `  - ${m}`).join("\n")
       : "  (none)";
 
   // ── Format red flags ──────────────────────────────────────
+  const redFlagsRaw =
+    (analysis as any).red_flags ?? (analysis as any).redFlags;
+  const redFlagsList: any[] = Array.isArray(redFlagsRaw) ? redFlagsRaw : [];
   const redFlagTag: Record<string, string> = {
     high: "[HIGH]",
     medium: "[MEDIUM]",
     low: "[LOW]",
   };
   const redFlagsText =
-    analysis.red_flags.length > 0
-      ? analysis.red_flags
-          .map(
-            (f) =>
-              `  ${redFlagTag[f.severity] ?? "[ALERT]"} [${f.severity.toUpperCase()}] ` +
-              `${f.trigger_text}: ${f.reason}`
-          )
+    redFlagsList.length > 0
+      ? redFlagsList
+          .map((f) => {
+            const sev = (f.severity || "info").toString().toLowerCase();
+            const tag = redFlagTag[sev] ?? "[ALERT]";
+            const trigger = f.trigger_text ? `${f.trigger_text}: ` : "";
+            const reason = f.reason || "";
+            return `  ${tag} [${sev.toUpperCase()}] ${trigger}${reason}`;
+          })
           .join("\n")
       : "  None detected";
 
   // ── Cover letter preview (max 200 chars) ─────────────────
+  const coverLetterRaw =
+    (analysis as any).cover_letter ?? (analysis as any).coverLetter;
+  const coverLetterStr =
+    typeof coverLetterRaw === "string" ? coverLetterRaw.trim() : "";
   const coverPreview =
-    analysis.cover_letter.length > 200
-      ? `${analysis.cover_letter.slice(0, 200)}…`
-      : analysis.cover_letter;
+    coverLetterStr.length > 200
+      ? `${coverLetterStr.slice(0, 200)}…`
+      : coverLetterStr || "Cover letter available in dashboard";
+
+  const score =
+    (analysis as any).match_score ?? (analysis as any).matchScore ?? 0;
+  const confidence = (analysis as any).confidence ?? 100;
+  const bestLang =
+    (analysis as any).best_language ?? (analysis as any).bestLanguage ?? "Russian";
 
   // ── Compose the full message ──────────────────────────────
-  // All dynamic strings are HTML-escaped before insertion
-  const message = [
+  let message = [
     `<b>[Job Match] HeadHunter</b>`,
     ``,
-    `<b>Role:</b> ${escapeHtml(vacancy.title)}`,
+    `<b>Role:</b> ${escapeHtml(vacancy.title || "Untitled Vacancy")}`,
     `<b>Company:</b> ${escapeHtml(vacancy.company ?? "Not specified")}`,
     `<b>Location:</b> ${escapeHtml(vacancy.area ?? "Remote / Not specified")}`,
     `<b>Salary:</b> ${formatSalary(vacancy.salary)}`,
     `<b>Experience:</b> ${escapeHtml(vacancy.experience ?? "Not specified")}`,
     `<b>Format:</b> ${escapeHtml(vacancy.schedule ?? "Not specified")}`,
     ``,
-    `<b>Score:</b> ${analysis.match_score}/100  |  <b>Confidence:</b> ${analysis.confidence}%`,
-    `<b>Recommendation:</b> ${recommendationIcon} <b>${analysis.recommendation.toUpperCase()}</b>`,
+    `<b>Score:</b> ${score}/100  |  <b>Confidence:</b> ${confidence}%`,
+    `<b>Recommendation:</b> ${recommendationIcon} <b>${recRaw.toUpperCase()}</b>`,
     ``,
     `<b>Why it matches:</b>`,
     escapeHtml(matchReasonsText),
@@ -237,22 +263,25 @@ export async function sendVacancyNotification(
     `<b>Red flags:</b>`,
     escapeHtml(redFlagsText),
     ``,
-    `<b>Suggested language:</b> ${escapeHtml(analysis.best_language)}`,
+    `<b>Suggested language:</b> ${escapeHtml(bestLang)}`,
     ``,
     `<b>Cover letter preview:</b>`,
     `<i>${escapeHtml(coverPreview)}</i>`,
   ].join("\n");
 
+  // Enforce Telegram 4096 character safety limit
+  if (message.length > 4000) {
+    message = `${message.slice(0, 3950)}…\n<i>(truncated)</i>`;
+  }
+
   // ── Inline keyboard ───────────────────────────────────────
   const replyMarkup = {
     inline_keyboard: [
       [
-        // Row 1: primary actions
         { text: "Mark Applied", callback_data: `approve:${vacancyId}` },
         { text: "Skip",         callback_data: `skip:${vacancyId}` },
       ],
       [
-        // Row 2: secondary actions
         { text: "Save",         callback_data: `save:${vacancyId}` },
         { text: "Regenerate",   callback_data: `edit:${vacancyId}` },
       ],
@@ -260,7 +289,6 @@ export async function sendVacancyNotification(
         { text: "Type Manual",  callback_data: `edit_man:${vacancyId}` },
       ],
       [
-        // Row 3: direct link to vacancy on HH
         {
           text: "Open Vacancy",
           url: vacancy.url ?? `https://hh.ru/vacancy/${vacancy.hhId}`,
@@ -269,6 +297,23 @@ export async function sendVacancyNotification(
     ],
   };
 
+  return { message, replyMarkup };
+}
+
+/**
+ * Composes and sends a richly formatted vacancy notification to Telegram.
+ * Used for legacy single-tenant or default chat calls.
+ */
+export async function sendVacancyNotification(
+  vacancy: NormalizedVacancy,
+  analysis: AIAnalysisResult | any,
+  vacancyId: string
+): Promise<boolean> {
+  const { message, replyMarkup } = buildVacancyNotificationPayload(
+    vacancy,
+    analysis,
+    vacancyId
+  );
   return sendMessage(message, replyMarkup);
 }
 
@@ -278,76 +323,16 @@ export async function sendVacancyNotification(
  */
 export async function sendVacancyNotificationToUser(
   vacancy: NormalizedVacancy,
-  analysis: AIAnalysisResult,
+  analysis: AIAnalysisResult | any,
   vacancyId: string,
   chatId: string
 ): Promise<boolean> {
-  const recTag: Record<string, string> = { apply: "[APPLY]", maybe: "[MAYBE]", skip: "[SKIP]" };
-  const recommendationIcon = recTag[analysis.recommendation] ?? `[${analysis.recommendation.toUpperCase()}]`;
-
-  const matchReasonsText = analysis.match_reasons.length > 0
-    ? analysis.match_reasons.map((r) => `  - ${r}`).join("\n")
-    : "  (none detected)";
-
-  const missingText = analysis.missing_requirements.length > 0
-    ? analysis.missing_requirements.map((r) => `  - ${r}`).join("\n")
-    : "  (none)";
-
-  const redFlagTag: Record<string, string> = { high: "[HIGH]", medium: "[MEDIUM]", low: "[LOW]" };
-  const redFlagsText = analysis.red_flags.length > 0
-    ? analysis.red_flags.map((f) => `  ${redFlagTag[f.severity] ?? "[ALERT]"} [${f.severity.toUpperCase()}] ${f.trigger_text}: ${f.reason}`).join("\n")
-    : "  None detected";
-
-  const coverPreview = analysis.cover_letter.length > 200
-    ? `${analysis.cover_letter.slice(0, 200)}…`
-    : analysis.cover_letter;
-
-  const message = [
-    `<b>[Job Match] HeadHunter</b>`,
-    ``,
-    `<b>Role:</b> ${escapeHtml(vacancy.title)}`,
-    `<b>Company:</b> ${escapeHtml(vacancy.company ?? "Not specified")}`,
-    `<b>Location:</b> ${escapeHtml(vacancy.area ?? "Remote / Not specified")}`,
-    `<b>Salary:</b> ${formatSalary(vacancy.salary)}`,
-    `<b>Experience:</b> ${escapeHtml(vacancy.experience ?? "Not specified")}`,
-    ``,
-    `<b>Score:</b> ${analysis.match_score}/100  |  <b>Confidence:</b> ${analysis.confidence}%`,
-    `<b>Recommendation:</b> ${recommendationIcon} <b>${analysis.recommendation.toUpperCase()}</b>`,
-    ``,
-    `<b>Why it matches:</b>`,
-    escapeHtml(matchReasonsText),
-    ``,
-    `<b>Missing:</b>`,
-    escapeHtml(missingText),
-    ``,
-    `<b>Red flags:</b>`,
-    escapeHtml(redFlagsText),
-    ``,
-    `<b>Suggested language:</b> ${escapeHtml(analysis.best_language)}`,
-    ``,
-    `<b>Cover letter preview:</b>`,
-    `<i>${escapeHtml(coverPreview)}</i>`,
-  ].join("\n");
-
-  const replyMarkup = {
-    inline_keyboard: [
-      [
-        { text: "Mark Applied", callback_data: `approve:${vacancyId}` },
-        { text: "Skip",         callback_data: `skip:${vacancyId}` },
-      ],
-      [
-        { text: "Save",         callback_data: `save:${vacancyId}` },
-        { text: "Regenerate",   callback_data: `edit:${vacancyId}` },
-      ],
-      [
-        { text: "Type Manual",  callback_data: `edit_man:${vacancyId}` },
-      ],
-      [
-        { text: "Open Vacancy", url: vacancy.url ?? `https://hh.ru/vacancy/${vacancy.hhId}` },
-      ],
-    ],
-  };
-
+  const { message, replyMarkup } = buildVacancyNotificationPayload(
+    vacancy,
+    analysis,
+    vacancyId
+  );
   return sendMessage(message, replyMarkup, chatId);
 }
+
 

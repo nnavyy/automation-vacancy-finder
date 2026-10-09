@@ -10,6 +10,7 @@ import { analyzeVacancy } from "@/lib/aiAnalyzer";
 import { calculateRuleScore } from "@/lib/scoring";
 import { getApiUser, getOwnedVacancy } from "@/lib/auth-helpers";
 import { toSearchPrefData } from "@/lib/collectionPipeline";
+import { sendVacancyNotificationToUser } from "@/lib/telegram";
 import type { NormalizedVacancy, HHSalary } from "@/types";
 
 function toNormalizedVacancy(
@@ -120,9 +121,38 @@ export async function POST(req: NextRequest) {
       update: analysisData,
     });
 
+    let finalStatus = "analyzed";
+
+    // ── Dispatch Telegram notification if score meets threshold ──
+    const minScoreToNotify = pref?.minimumScoreToNotify ?? 75;
+    if (analysis.match_score >= minScoreToNotify) {
+      const link = await prisma.telegramLink.findFirst({
+        where: { userId: user.id, isActive: true },
+      });
+      const chatId = link?.telegramChatId || process.env.TELEGRAM_CHAT_ID;
+      if (chatId) {
+        const sent = await sendVacancyNotificationToUser(
+          vacancy,
+          analysis,
+          vacancyId,
+          chatId
+        );
+        if (sent) {
+          finalStatus = "notified";
+          await prisma.applicationLog.create({
+            data: {
+              vacancyId,
+              action: "notified",
+              notes: `Score: ${analysis.match_score}/100, Provider: ${provider} (${model}) [Manual Analysis]`,
+            },
+          });
+        }
+      }
+    }
+
     await prisma.vacancy.update({
       where: { id: vacancyId },
-      data: { status: "analyzed" },
+      data: { status: finalStatus },
     });
 
     return NextResponse.json({
