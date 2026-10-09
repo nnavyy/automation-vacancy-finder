@@ -3,21 +3,20 @@
 // ============================================================
 // Overview Top Matches Component
 // Displays top AI-scored vacancies with direct "Find HR" modal and "Apply via HH"
+// Fully localized (EN/RU) with zero emojis
 // ============================================================
 
 import { useState } from "react";
 import Link from "next/link";
 import {
-  ExternalLink,
   Users,
   Send,
   Sparkles,
   ArrowRight,
-  ShieldCheck,
-  Check,
   Calendar,
 } from "lucide-react";
 import RecruiterDossierModal, { RecruiterDossierData } from "@/components/RecruiterDossierModal";
+import { useLanguage } from "@/lib/i18n";
 
 export interface TopMatchVacancy {
   id: string;
@@ -41,12 +40,12 @@ interface OverviewTopMatchesProps {
   vacancies: TopMatchVacancy[];
 }
 
-function formatVacancyDate(dateStr?: string): string {
+function formatVacancyDate(dateStr?: string, lang: string = "en"): string {
   if (!dateStr) return "";
   try {
     const d = new Date(dateStr);
     if (isNaN(d.getTime())) return "";
-    return d.toLocaleDateString("en-US", {
+    return d.toLocaleDateString(lang === "ru" ? "ru-RU" : "en-US", {
       month: "short",
       day: "numeric",
       year: "numeric",
@@ -56,17 +55,22 @@ function formatVacancyDate(dateStr?: string): string {
   }
 }
 
-function formatSalary(salary: unknown): string {
-  if (!salary || typeof salary !== "object") return "Salary not specified";
+function formatSalary(salary: unknown, lang: string = "en"): string {
+  const notSpecified = lang === "ru" ? "Зарплата не указана" : "Salary not specified";
+  if (!salary || typeof salary !== "object") return notSpecified;
   const s = salary as { from?: number; to?: number; currency?: string };
-  if (!s.from && !s.to) return "Salary not specified";
+  if (!s.from && !s.to) return notSpecified;
+  const curr = s.currency ?? (lang === "ru" ? "руб." : "RUR");
+  const locale = lang === "ru" ? "ru-RU" : "en-US";
   if (s.from && s.to)
-    return `${s.from.toLocaleString("en-US")} – ${s.to.toLocaleString("en-US")} ${s.currency ?? "RUR"}`;
-  if (s.from) return `from ${s.from.toLocaleString("en-US")} ${s.currency ?? "RUR"}`;
-  return `up to ${s.to!.toLocaleString("en-US")} ${s.currency ?? "RUR"}`;
+    return `${s.from.toLocaleString(locale)} – ${s.to.toLocaleString(locale)} ${curr}`;
+  if (s.from)
+    return `${lang === "ru" ? "от" : "from"} ${s.from.toLocaleString(locale)} ${curr}`;
+  return `${lang === "ru" ? "до" : "up to"} ${s.to!.toLocaleString(locale)} ${curr}`;
 }
 
 export default function OverviewTopMatches({ vacancies }: OverviewTopMatchesProps) {
+  const { t, language } = useLanguage();
   const [dossierOpen, setDossierOpen] = useState(false);
   const [dossierData, setDossierData] = useState<RecruiterDossierData | null>(null);
   const [activeJobTitle, setActiveJobTitle] = useState("");
@@ -81,26 +85,32 @@ export default function OverviewTopMatches({ vacancies }: OverviewTopMatchesProp
       ? `+${phoneObj.country || ""}${phoneObj.city ? ` (${phoneObj.city})` : ""} ${phoneObj.number || ""}`.trim()
       : undefined;
     const directEmail = hhContacts?.email || undefined;
-    const directName = hhContacts?.name || `Hiring Manager · ${v.company}`;
+    const directName = hhContacts?.name || (language === "ru" ? `Нанимающий менеджер · ${v.company}` : `Hiring Manager · ${v.company}`);
 
     setDossierData({
       name: directName,
-      role: hhContacts?.name ? "Talent Acquisition / Contact Person" : "Lead Technical Recruiter / Talent Acquisition",
+      role: hhContacts?.name
+        ? (language === "ru" ? "Рекрутер / Контактное лицо" : "Talent Acquisition / Contact Person")
+        : (language === "ru" ? "Ведущий технический рекрутер" : "Lead Technical Recruiter / Talent Acquisition"),
       companyName: v.company,
-      department: "Engineering Recruitment",
+      department: language === "ru" ? "Подбор инженерных кадров" : "Engineering Recruitment",
       email: directEmail,
       emailVerified: Boolean(directEmail),
       phone: directPhone,
       synergyScore: v.analysis?.matchScore ?? 90,
-      preferredChannel: directEmail ? "Corporate Email" : "Direct Application / HH Portal",
-      responseWindow: "Active window 10:00 - 18:00 MSK",
+      preferredChannel: directEmail
+        ? (language === "ru" ? "Корпоративная почта" : "Corporate Email")
+        : (language === "ru" ? "Отклик / Портал HH" : "Direct Application / HH Portal"),
+      responseWindow: t("dossier.activeWindow"),
       historyLogs: [
         {
-          channel: "HeadHunter Auto-Index",
+          channel: t("dossier.hhAutoIndex"),
           target: v.title,
-          status: "Synchronized",
-          date: "Recently",
-          details: `Indexed from HeadHunter vacancy #${v.hhId}`,
+          status: language === "ru" ? "Синхронизировано" : "Synchronized",
+          date: language === "ru" ? "Недавно" : "Recently",
+          details: language === "ru"
+            ? `Индексировано по вакансии #${v.hhId}`
+            : `Indexed from HeadHunter vacancy #${v.hhId}`,
         },
       ],
     });
@@ -110,9 +120,13 @@ export default function OverviewTopMatches({ vacancies }: OverviewTopMatchesProp
   if (vacancies.length === 0) {
     return (
       <div className="p-8 text-center bg-zinc-900/40 border border-zinc-800/80 border-dashed rounded-xl">
-        <p className="text-sm text-zinc-300 font-medium">No analyzed vacancies yet</p>
+        <p className="text-sm text-zinc-300 font-medium">
+          {language === "ru" ? "Пока нет оцененных вакансий" : "No analyzed vacancies yet"}
+        </p>
         <p className="text-xs text-zinc-500 mt-1">
-          Run a collection or wait for the automatic crawler to index and score new opportunities.
+          {language === "ru"
+            ? "Запустите сбор или дождитесь автоматической индексации новых вакансий краулером."
+            : "Run a collection or wait for the automatic crawler to index and score new opportunities."}
         </p>
       </div>
     );
@@ -134,6 +148,8 @@ export default function OverviewTopMatches({ vacancies }: OverviewTopMatchesProp
           v.analysis?.summary ||
           (v.analysis?.matchReasons && v.analysis.matchReasons.length > 0
             ? v.analysis.matchReasons.join(". ")
+            : language === "ru"
+            ? "Высокое совпадение стека технологий с целевым профилем кандидата."
             : "Strong technical stack overlap with target candidate profile.");
 
         return (
@@ -165,7 +181,11 @@ export default function OverviewTopMatches({ vacancies }: OverviewTopMatchesProp
                             : "bg-zinc-800 text-zinc-400"
                         }`}
                       >
-                        {rec}
+                        {rec === "apply"
+                          ? (language === "ru" ? "отклик" : "apply")
+                          : rec === "maybe"
+                          ? (language === "ru" ? "возможно" : "maybe")
+                          : rec}
                       </span>
                     )}
                   </div>
@@ -174,14 +194,14 @@ export default function OverviewTopMatches({ vacancies }: OverviewTopMatchesProp
                     {v.area && <span>· {v.area}</span>}
                     <span>·</span>
                     <span className="font-mono text-zinc-300">
-                      {formatSalary(v.salary)}
+                      {formatSalary(v.salary, language)}
                     </span>
                     {v.createdAt && (
                       <>
                         <span>·</span>
                         <span className="text-zinc-400 inline-flex items-center gap-1">
                           <Calendar className="w-3 h-3 text-zinc-500" />
-                          {formatVacancyDate(v.createdAt)}
+                          {formatVacancyDate(v.createdAt, language)}
                         </span>
                       </>
                     )}
@@ -196,7 +216,11 @@ export default function OverviewTopMatches({ vacancies }: OverviewTopMatchesProp
                   <span className="text-[10px] text-zinc-500">/100</span>
                 </div>
                 <span className="text-[10px] uppercase font-semibold text-zinc-400 tracking-wider">
-                  {score >= 70 ? "High Synergy" : score >= 50 ? "Moderate" : "Borderline"}
+                  {score >= 70
+                    ? t("overview.highSynergy")
+                    : score >= 50
+                    ? (language === "ru" ? "УМЕРЕННАЯ" : "Moderate")
+                    : (language === "ru" ? "НИЗКАЯ" : "Borderline")}
                 </span>
               </div>
             </div>
@@ -205,7 +229,7 @@ export default function OverviewTopMatches({ vacancies }: OverviewTopMatchesProp
             <div className="p-3 bg-zinc-950/50 border border-zinc-800/80 rounded-lg text-xs text-zinc-300 flex items-start gap-2">
               <Sparkles className="w-3.5 h-3.5 text-violet-400 shrink-0 mt-0.5" />
               <p className="line-clamp-2 leading-relaxed">
-                <span className="font-semibold text-violet-300">AI Reasoning:</span>{" "}
+                <span className="font-semibold text-violet-300">{t("overview.aiReasoning")}:</span>{" "}
                 {reason}
               </p>
             </div>
@@ -218,7 +242,7 @@ export default function OverviewTopMatches({ vacancies }: OverviewTopMatchesProp
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-medium text-zinc-200 border border-zinc-700/80 transition-colors"
                 >
                   <Users className="w-3.5 h-3.5 text-sky-400" />
-                  Find HR
+                  {t("overview.findHr")}
                 </button>
 
                 <a
@@ -228,7 +252,7 @@ export default function OverviewTopMatches({ vacancies }: OverviewTopMatchesProp
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-400 border border-emerald-500/20 text-xs font-semibold transition-colors"
                 >
                   <Send className="w-3.5 h-3.5" />
-                  Apply via HH
+                  {t("overview.applyViaHh")}
                 </a>
               </div>
 
@@ -236,7 +260,7 @@ export default function OverviewTopMatches({ vacancies }: OverviewTopMatchesProp
                 href="/dashboard/vacancies"
                 className="text-xs text-zinc-400 hover:text-zinc-200 flex items-center gap-1 transition-colors"
               >
-                <span>Inspect in Split View</span>
+                <span>{t("overview.inspectSplit")}</span>
                 <ArrowRight className="w-3 h-3" />
               </Link>
             </div>

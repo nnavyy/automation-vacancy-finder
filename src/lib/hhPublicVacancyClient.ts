@@ -285,12 +285,12 @@ export async function fetchVacancyJsonLd(url: string): Promise<string | null> {
           if (data.description) {
             return stripHtml(data.description);
           }
-        } catch (e) {
+        } catch {
           // Ignore parse errors
         }
       }
     }
-  } catch (error) {
+  } catch {
     // Ignore network errors
   }
   return null;

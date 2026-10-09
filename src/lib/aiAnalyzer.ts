@@ -17,7 +17,6 @@
 import type {
   AIAnalysisResult,
   AIStatus,
-  AIFallbackResult,
   HHSalary,
   NormalizedVacancy,
   SimilarFeedbackExample,

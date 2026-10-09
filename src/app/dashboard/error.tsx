@@ -19,7 +19,6 @@ import {
   ChevronDown,
   ChevronUp,
   Sliders,
-  ExternalLink,
   Bot,
 } from "lucide-react";
 

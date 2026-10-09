@@ -4,10 +4,10 @@
 // Vacancies Split View (Master-Detail Double Layout)
 // Blazing fast client-side switching with deep AI match analysis
 // Clean, executive UI with zero slop badges or emojis
+// Fully localized (EN/RU)
 // ============================================================
 
 import { useState, useMemo } from "react";
-import Link from "next/link";
 import {
   Search,
   ExternalLink,
@@ -18,7 +18,6 @@ import {
   Users,
   CheckCircle2,
   AlertTriangle,
-  FileText,
   MapPin,
   Check,
   ChevronRight,
@@ -30,6 +29,7 @@ import {
   Calendar,
 } from "lucide-react";
 import RecruiterDossierModal, { RecruiterDossierData } from "@/components/RecruiterDossierModal";
+import { useLanguage } from "@/lib/i18n";
 
 export interface VacancyItem {
   id: string;
@@ -42,6 +42,7 @@ export interface VacancyItem {
   status: string;
   createdAt: string;
   description?: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   rawData?: any;
   analysis?: {
     matchScore: number;
@@ -65,12 +66,12 @@ interface VacanciesSplitViewProps {
   hasProfile: boolean;
 }
 
-function formatVacancyDate(dateStr?: string): string {
+function formatVacancyDate(dateStr?: string, lang: string = "en"): string {
   if (!dateStr) return "";
   try {
     const d = new Date(dateStr);
     if (isNaN(d.getTime())) return "";
-    return d.toLocaleDateString("en-US", {
+    return d.toLocaleDateString(lang === "ru" ? "ru-RU" : "en-US", {
       month: "short",
       day: "numeric",
       year: "numeric",
@@ -80,21 +81,24 @@ function formatVacancyDate(dateStr?: string): string {
   }
 }
 
-function formatSalary(salary: unknown): string {
-  if (!salary || typeof salary !== "object") return "Salary not specified";
+function formatSalary(salary: unknown, lang: string = "en"): string {
+  const notSpecified = lang === "ru" ? "Зарплата не указана" : "Salary not specified";
+  if (!salary || typeof salary !== "object") return notSpecified;
   const s = salary as { from?: number; to?: number; currency?: string };
-  if (!s.from && !s.to) return "Salary not specified";
+  if (!s.from && !s.to) return notSpecified;
+  const curr = s.currency ?? (lang === "ru" ? "руб." : "RUR");
+  const locale = lang === "ru" ? "ru-RU" : "en-US";
   if (s.from && s.to)
-    return `${s.from.toLocaleString("en-US")} – ${s.to.toLocaleString("en-US")} ${s.currency ?? "RUR"}`;
-  if (s.from) return `from ${s.from.toLocaleString("en-US")} ${s.currency ?? "RUR"}`;
-  return `up to ${s.to!.toLocaleString("en-US")} ${s.currency ?? "RUR"}`;
+    return `${s.from.toLocaleString(locale)} – ${s.to.toLocaleString(locale)} ${curr}`;
+  if (s.from) return `${lang === "ru" ? "от" : "from"} ${s.from.toLocaleString(locale)} ${curr}`;
+  return `${lang === "ru" ? "до" : "up to"} ${s.to!.toLocaleString(locale)} ${curr}`;
 }
 
 export default function VacanciesSplitView({
   initialVacancies,
   totalCount,
-  hasProfile,
 }: VacanciesSplitViewProps) {
+  const { t, language } = useLanguage();
   const [vacancies, setVacancies] = useState<VacancyItem[]>(initialVacancies);
   const [selectedId, setSelectedId] = useState<string>(
     initialVacancies[0]?.id ?? ""
@@ -253,16 +257,15 @@ export default function VacanciesSplitView({
       setShowTranslated(true);
       return;
     }
-
-    const textToTranslate = selectedVacancy.description || selectedVacancy.title;
-    if (!textToTranslate) return;
-
     setTranslating(true);
     try {
       const res = await fetch("/api/translate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: textToTranslate }),
+        body: JSON.stringify({
+          text: selectedVacancy.description || selectedVacancy.title,
+          targetLang: "EN",
+        }),
       });
       const json = await res.json();
       if (json.success && json.text) {
@@ -288,26 +291,32 @@ export default function VacanciesSplitView({
       ? `+${phoneObj.country || ""}${phoneObj.city ? ` (${phoneObj.city})` : ""} ${phoneObj.number || ""}`.trim()
       : undefined;
     const directEmail = hhContacts?.email || undefined;
-    const directName = hhContacts?.name || `Hiring Authority · ${vacancy.company}`;
+    const directName = hhContacts?.name || (language === "ru" ? `Нанимающий менеджер · ${vacancy.company}` : `Hiring Authority · ${vacancy.company}`);
 
     setDossierData({
       name: directName,
-      role: hhContacts?.name ? "Talent Acquisition / Contact Person" : "Lead Technical Recruiter / Talent Acquisition",
+      role: hhContacts?.name
+        ? (language === "ru" ? "Рекрутер / Контактное лицо" : "Talent Acquisition / Contact Person")
+        : (language === "ru" ? "Ведущий технический рекрутер" : "Lead Technical Recruiter / Talent Acquisition"),
       companyName: vacancy.company,
-      department: "Engineering Recruitment",
+      department: language === "ru" ? "Подбор инженерных кадров" : "Engineering Recruitment",
       email: directEmail,
       emailVerified: Boolean(directEmail),
       phone: directPhone,
       synergyScore: vacancy.analysis?.matchScore ?? 88,
-      preferredChannel: directEmail ? "Corporate Email" : "Direct Application / HH Portal",
-      responseWindow: "Active window 10:00 - 18:00 MSK",
+      preferredChannel: directEmail
+        ? (language === "ru" ? "Корпоративная почта" : "Corporate Email")
+        : (language === "ru" ? "Отклик / Портал HH" : "Direct Application / HH Portal"),
+      responseWindow: t("dossier.activeWindow"),
       historyLogs: [
         {
-          channel: "HeadHunter Auto-Index",
+          channel: t("dossier.hhAutoIndex"),
           target: vacancy.title,
-          status: "Synchronized",
-          date: "Recently",
-          details: `Indexed from HeadHunter vacancy ID #${vacancy.hhId}.`,
+          status: language === "ru" ? "Синхронизировано" : "Synchronized",
+          date: language === "ru" ? "Недавно" : "Recently",
+          details: language === "ru"
+            ? `Индексировано по вакансии ID #${vacancy.hhId}.`
+            : `Indexed from HeadHunter vacancy ID #${vacancy.hhId}.`,
         },
       ],
     });
@@ -328,7 +337,6 @@ export default function VacanciesSplitView({
 
   const generateLivePitch = async () => {
     if (!selectedVacancy) return;
-    // Switch to tailoring tab immediately so the user sees the generated pitch
     setActiveDetailTab("tailoring");
     setGeneratingPitch(true);
     try {
@@ -336,10 +344,11 @@ export default function VacanciesSplitView({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          contactName: "Hiring Manager",
+          contactName: language === "ru" ? "Нанимающий менеджер" : "Hiring Manager",
           contactRole: "Engineering Lead",
           companyName: selectedVacancy.company,
           jobTitle: selectedVacancy.title,
+          language: language === "ru" ? "Russian" : "English",
         }),
       });
       const json = await res.json();
@@ -369,14 +378,16 @@ export default function VacanciesSplitView({
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Filter positions, skills, or companies (e.g. Next.js, Novakid)..."
+              placeholder={t("vacancies.searchPlaceholder")}
               className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-10 pr-4 py-2 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-violet-500/60 focus:ring-1 focus:ring-violet-500/30 transition-all"
             />
           </div>
 
           <div className="flex items-center gap-2">
             <span className="text-xs text-zinc-400 font-mono">
-              {filteredVacancies.length} of {totalCount} vacancies
+              {t("vacancies.filteredOf")
+                .replace("{shown}", String(filteredVacancies.length))
+                .replace("{total}", String(totalCount))}
             </span>
           </div>
         </div>
@@ -384,35 +395,35 @@ export default function VacanciesSplitView({
         {/* Filter Pills */}
         <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-zinc-800/60">
           {[
-            { id: "all", label: "All Active", count: vacancies.filter((v) => v.status !== "skipped" && v.status !== "ignored").length },
+            { id: "all", label: t("vacancies.tabAll"), count: vacancies.filter((v) => v.status !== "skipped" && v.status !== "ignored").length },
             {
               id: "high",
-              label: "High Match",
+              label: t("vacancies.tabHigh"),
               count: vacancies.filter((v) => (v.analysis?.matchScore ?? 0) >= 70 && v.status !== "skipped").length,
             },
             {
               id: "maybe",
-              label: "Maybe",
+              label: t("vacancies.tabMaybe"),
               count: vacancies.filter((v) => v.analysis?.recommendation?.toLowerCase() === "maybe" && v.status !== "skipped").length,
             },
             {
               id: "analyzed",
-              label: "Analyzed",
+              label: t("vacancies.tabAnalyzed"),
               count: vacancies.filter((v) => v.analysis && v.analysis.matchScore > 0 && v.status !== "skipped").length,
             },
             {
               id: "applied",
-              label: "Applied",
+              label: t("vacancies.tabApplied"),
               count: vacancies.filter((v) => v.status.includes("applied")).length,
             },
             {
               id: "saved",
-              label: "Saved",
+              label: t("vacancies.tabSaved"),
               count: vacancies.filter((v) => v.status === "saved").length,
             },
             {
               id: "skip",
-              label: "Hidden / Skipped",
+              label: t("vacancies.tabSkip"),
               count: vacancies.filter((v) => v.status === "skipped" || v.status === "ignored").length,
             },
           ].map((tab) => {
@@ -447,9 +458,9 @@ export default function VacanciesSplitView({
         <div className="lg:col-span-5 space-y-2.5 max-h-[calc(100vh-230px)] overflow-y-auto pr-1">
           {filteredVacancies.length === 0 ? (
             <div className="p-8 text-center bg-zinc-900/40 border border-zinc-800/80 border-dashed rounded-xl">
-              <p className="text-sm text-zinc-300 font-medium">No vacancies match filter</p>
+              <p className="text-sm text-zinc-300 font-medium">{t("vacancies.noMatch")}</p>
               <p className="text-xs text-zinc-500 mt-1">
-                Try switching filter pills or clear the search input above.
+                {t("vacancies.noMatchDesc")}
               </p>
             </div>
           ) : (
@@ -500,7 +511,7 @@ export default function VacanciesSplitView({
                                 : "bg-rose-500/10 text-rose-400 border-rose-500/25"
                             }`}
                           >
-                            {matchScore}% MATCH
+                            {matchScore}% {language === "ru" ? "СОВПАДЕНИЕ" : "MATCH"}
                           </span>
                         )}
                       </div>
@@ -518,14 +529,14 @@ export default function VacanciesSplitView({
                         )}
                         <span>·</span>
                         <span className="text-zinc-300 font-mono">
-                          {formatSalary(v.salary)}
+                          {formatSalary(v.salary, language)}
                         </span>
                         {v.createdAt && (
                           <>
                             <span>·</span>
                             <span className="text-zinc-400 inline-flex items-center gap-1">
                               <Calendar className="w-3 h-3 text-zinc-500" />
-                              {formatVacancyDate(v.createdAt)}
+                              {formatVacancyDate(v.createdAt, language)}
                             </span>
                           </>
                         )}
@@ -543,20 +554,24 @@ export default function VacanciesSplitView({
                                 : "bg-zinc-800 text-zinc-400"
                             }`}
                           >
-                            {rec}
+                            {rec === "apply"
+                              ? (language === "ru" ? "отклик" : "apply")
+                              : rec === "maybe"
+                              ? (language === "ru" ? "возможно" : "maybe")
+                              : rec}
                           </span>
                         )}
 
                         {redFlagsCount > 0 && (
                           <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20 flex items-center gap-1">
                             <AlertTriangle className="w-3 h-3" />
-                            {redFlagsCount} FLAG{redFlagsCount > 1 ? "S" : ""}
+                            {redFlagsCount} {language === "ru" ? "РИСК" : "FLAG"}{language === "ru" ? "" : redFlagsCount > 1 ? "S" : ""}
                           </span>
                         )}
 
                         {isSelected && (
                           <span className="ml-auto text-[11px] font-semibold text-zinc-300 flex items-center gap-0.5">
-                            INSPECTING
+                            {t("vacancies.inspecting")}
                             <ChevronRight className="w-3 h-3" />
                           </span>
                         )}
@@ -591,7 +606,7 @@ export default function VacanciesSplitView({
                           {selectedVacancy.company}
                         </span>
                         <span className="text-[10px] px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-zinc-700">
-                          HH.ru Source
+                          {t("vacancies.hhSource")}
                         </span>
                       </div>
                       <h2 className="text-lg font-bold text-zinc-100 mt-0.5 leading-snug">
@@ -609,14 +624,14 @@ export default function VacanciesSplitView({
                           ? "bg-violet-600/20 text-violet-300 border-violet-500/30"
                           : "bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 border-zinc-700/60"
                       }`}
-                      title="Save vacancy"
+                      title={language === "ru" ? "Сохранить вакансию" : "Save vacancy"}
                     >
                       <Bookmark className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => handleHide(selectedVacancy.id)}
                       className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-rose-400 border border-zinc-700/60 transition-colors"
-                      title="Hide / Cull Vacancy"
+                      title={language === "ru" ? "Скрыть вакансию" : "Hide / Cull Vacancy"}
                     >
                       <EyeOff className="w-4 h-4" />
                     </button>
@@ -626,18 +641,18 @@ export default function VacanciesSplitView({
                 <div className="flex items-center gap-3 text-xs text-zinc-400 flex-wrap mt-2">
                   <span className="flex items-center gap-1">
                     <MapPin className="w-3.5 h-3.5 text-zinc-500" />
-                    {selectedVacancy.area || "Remote / CIS"}
+                    {selectedVacancy.area || (language === "ru" ? "Удаленно / СНГ" : "Remote / CIS")}
                   </span>
                   <span>·</span>
                   <span className="font-mono text-zinc-200 font-medium">
-                    {formatSalary(selectedVacancy.salary)}
+                    {formatSalary(selectedVacancy.salary, language)}
                   </span>
                   {selectedVacancy.createdAt && (
                     <>
                       <span>·</span>
                       <span className="flex items-center gap-1 text-zinc-400">
                         <Calendar className="w-3.5 h-3.5 text-zinc-500" />
-                        {formatVacancyDate(selectedVacancy.createdAt)}
+                        {formatVacancyDate(selectedVacancy.createdAt, language)}
                       </span>
                     </>
                   )}
@@ -648,7 +663,7 @@ export default function VacanciesSplitView({
                     rel="noopener noreferrer"
                     className="flex items-center gap-1 text-sky-400 hover:text-sky-300"
                   >
-                    <span>HH.ru Post</span>
+                    <span>{t("vacancies.hhPost")}</span>
                     <ExternalLink className="w-3 h-3" />
                   </a>
                 </div>
@@ -665,7 +680,7 @@ export default function VacanciesSplitView({
                     ) : (
                       <Sparkles className="w-3.5 h-3.5" />
                     )}
-                    Generate AI Pitch
+                    {t("vacancies.generatePitch")}
                   </button>
 
                   <a
@@ -676,7 +691,7 @@ export default function VacanciesSplitView({
                     className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-xs font-semibold text-white transition-all shadow-sm"
                   >
                     <Send className="w-3.5 h-3.5" />
-                    Apply via HH.ru
+                    {t("vacancies.applyHh")}
                   </a>
 
                   <button
@@ -684,7 +699,7 @@ export default function VacanciesSplitView({
                     className="flex items-center gap-2 px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-xs font-medium text-zinc-200 transition-all ml-auto"
                   >
                     <Users className="w-3.5 h-3.5 text-sky-400" />
-                    Find Recruiter
+                    {t("vacancies.findRecruiter")}
                   </button>
                 </div>
               </div>
@@ -692,20 +707,21 @@ export default function VacanciesSplitView({
               {/* Navigation Tabs inside Detail */}
               <div className="flex items-center gap-2 border-b border-zinc-800 pb-2">
                 {[
-                  { id: "analysis", label: "AI Deep Match Analysis" },
-                  { id: "description", label: "Full Job Description" },
-                  { id: "tailoring", label: "Outreach & Pitch" },
-                ].map((t) => (
+                  { id: "analysis", label: t("vacancies.tabDeepMatch") },
+                  { id: "description", label: t("vacancies.tabDescription") },
+                  { id: "tailoring", label: t("vacancies.tabPitch") },
+                ].map((tabItem) => (
                   <button
-                    key={t.id}
-                    onClick={() => setActiveDetailTab(t.id as any)}
+                    key={tabItem.id}
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    onClick={() => setActiveDetailTab(tabItem.id as any)}
                     className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors ${
-                      activeDetailTab === t.id
+                      activeDetailTab === tabItem.id
                         ? "bg-zinc-800 text-zinc-100"
                         : "text-zinc-500 hover:text-zinc-300"
                     }`}
                   >
-                    {t.label}
+                    {tabItem.label}
                   </button>
                 ))}
               </div>
@@ -719,10 +735,12 @@ export default function VacanciesSplitView({
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <div>
                           <h4 className="text-sm font-bold text-zinc-100">
-                            Vacancy Analysis Pending
+                            {language === "ru" ? "Ожидает анализа ИИ" : "Vacancy Analysis Pending"}
                           </h4>
                           <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
-                            This vacancy has not been analyzed against your active resume and target skills yet.
+                            {language === "ru"
+                              ? "Эта вакансия еще не проанализирована по вашему резюме и целевым навыкам."
+                              : "This vacancy has not been analyzed against your active resume and target skills yet."}
                           </p>
                         </div>
                         <button
@@ -735,7 +753,7 @@ export default function VacanciesSplitView({
                           ) : (
                             <Sparkles className="w-3.5 h-3.5" />
                           )}
-                          Run AI Analysis
+                          {language === "ru" ? "Запустить анализ ИИ" : "Run AI Analysis"}
                         </button>
                       </div>
                     </div>
@@ -753,12 +771,18 @@ export default function VacanciesSplitView({
                           <div>
                             <h4 className="text-sm font-bold text-zinc-100">
                               {selectedVacancy.analysis?.recommendation
-                                ? selectedVacancy.analysis.recommendation.toUpperCase() + " Compatibility"
-                                : "Profile Analysis Completed"}
+                                ? (selectedVacancy.analysis.recommendation === "apply"
+                                    ? (language === "ru" ? "ВЫСОКАЯ СОВМЕСТИМОСТЬ" : "HIGH COMPATIBILITY")
+                                    : selectedVacancy.analysis.recommendation === "maybe"
+                                    ? (language === "ru" ? "СРЕДНЯЯ СОВМЕСТИМОСТЬ" : "MODERATE COMPATIBILITY")
+                                    : (language === "ru" ? "НИЗКАЯ СОВМЕСТИМОСТЬ" : "LOW COMPATIBILITY"))
+                                : (language === "ru" ? "Анализ профиля завершен" : "Profile Analysis Completed")}
                             </h4>
                             <p className="text-xs text-zinc-400 mt-0.5">
                               {selectedVacancy.analysis?.summary ||
-                                "Candidate technical profile aligns with vacancy requirements."}
+                                (language === "ru"
+                                  ? "Технический профиль соискателя соответствует требованиям вакансии."
+                                  : "Candidate technical profile aligns with vacancy requirements.")}
                             </p>
                           </div>
                         </div>
@@ -767,28 +791,28 @@ export default function VacanciesSplitView({
                           onClick={() => handleRunAnalysis(selectedVacancy.id)}
                           disabled={analyzingId === selectedVacancy.id}
                           className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs text-zinc-300 border border-zinc-700 transition-colors shrink-0"
-                          title="Re-run analysis"
+                          title={language === "ru" ? "Пересчитать" : "Re-run analysis"}
                         >
                           {analyzingId === selectedVacancy.id ? (
                             <Loader2 className="w-3 h-3 animate-spin" />
                           ) : (
                             <RotateCcw className="w-3 h-3 text-zinc-400" />
                           )}
-                          Re-analyze
+                          {t("vacancies.reAnalyze")}
                         </button>
                       </div>
 
                       {/* Skill Matrix Verification */}
                       <div>
                         <h5 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2.5">
-                          Skill Matrix Verification
+                          {t("vacancies.skillMatrixTitle")}
                         </h5>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           {/* Verified Matches */}
                           <div className="p-3.5 bg-zinc-950/40 border border-zinc-800 rounded-xl space-y-2">
                             <span className="text-xs font-semibold text-emerald-400 flex items-center gap-1.5">
                               <CheckCircle2 className="w-3.5 h-3.5" />
-                              Verified Match (Target Profile)
+                              {t("vacancies.verifiedMatch")}
                             </span>
                             <div className="space-y-1.5">
                               {selectedVacancy.analysis?.matchReasons &&
@@ -800,7 +824,9 @@ export default function VacanciesSplitView({
                                   </div>
                                 ))
                               ) : (
-                                <p className="text-xs text-zinc-500">No strong matches verified</p>
+                                <p className="text-xs text-zinc-500">
+                                  {language === "ru" ? "Нет подтвержденных совпадений" : "No strong matches verified"}
+                                </p>
                               )}
                             </div>
                           </div>
@@ -809,7 +835,7 @@ export default function VacanciesSplitView({
                           <div className="p-3.5 bg-zinc-950/40 border border-zinc-800 rounded-xl space-y-2">
                             <span className="text-xs font-semibold text-amber-400 flex items-center gap-1.5">
                               <AlertTriangle className="w-3.5 h-3.5" />
-                              Gaps & Deviations (To Address)
+                              {t("vacancies.gapsTitle")}
                             </span>
                             <div className="space-y-1.5">
                               {selectedVacancy.analysis?.missingRequirements &&
@@ -821,7 +847,7 @@ export default function VacanciesSplitView({
                                   </div>
                                 ))
                               ) : (
-                                <p className="text-xs text-zinc-500">No major gaps identified</p>
+                                <p className="text-xs text-zinc-500">{t("vacancies.noGaps")}</p>
                               )}
                             </div>
                           </div>
@@ -833,7 +859,9 @@ export default function VacanciesSplitView({
                         <div className="p-4 rounded-xl bg-rose-500/5 border border-rose-500/20 space-y-2">
                           <span className="text-xs font-semibold text-rose-400 flex items-center gap-1.5">
                             <AlertTriangle className="w-3.5 h-3.5" />
-                            Potential Risk Flags Identified ({selectedVacancy.analysis.redFlags.length})
+                            {language === "ru"
+                              ? `Обнаружены потенциальные риски (${selectedVacancy.analysis.redFlags.length})`
+                              : `Potential Risk Flags Identified (${selectedVacancy.analysis.redFlags.length})`}
                           </span>
                           <div className="space-y-1.5">
                             {selectedVacancy.analysis.redFlags.map((rf, idx) => (
@@ -855,7 +883,9 @@ export default function VacanciesSplitView({
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-semibold text-zinc-300">
-                      {showTranslated ? "Translated English Text" : "Original Vacancy Text"}
+                      {language === "ru"
+                        ? (showTranslated ? "Переведенный текст" : "Оригинальный текст вакансии")
+                        : (showTranslated ? "Translated English Text" : "Original Vacancy Text")}
                     </span>
                     <div className="flex items-center gap-2">
                       <button
@@ -866,17 +896,17 @@ export default function VacanciesSplitView({
                           if (text) copyDescriptionText(text);
                         }}
                         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-medium text-zinc-200 border border-zinc-700 transition-colors"
-                        title="Copy job description text to clipboard"
+                        title={language === "ru" ? "Копировать текст" : "Copy job description text to clipboard"}
                       >
                         {copiedDesc ? (
                           <>
                             <CheckCheck className="w-3.5 h-3.5 text-emerald-400" />
-                            <span className="text-emerald-400">Copied</span>
+                            <span className="text-emerald-400">{language === "ru" ? "Скопировано" : "Copied"}</span>
                           </>
                         ) : (
                           <>
                             <Copy className="w-3.5 h-3.5 text-zinc-400" />
-                            <span>Copy Text</span>
+                            <span>{language === "ru" ? "Копировать" : "Copy Text"}</span>
                           </>
                         )}
                       </button>
@@ -890,7 +920,9 @@ export default function VacanciesSplitView({
                         ) : (
                           <Languages className="w-3.5 h-3.5 text-sky-400" />
                         )}
-                        {showTranslated ? "Show Original" : "Translate to English"}
+                        {language === "ru"
+                          ? (showTranslated ? "Показать оригинал" : "Перевести")
+                          : (showTranslated ? "Show Original" : "Translate to English")}
                       </button>
                     </div>
                   </div>
@@ -899,7 +931,9 @@ export default function VacanciesSplitView({
                     {showTranslated && translations[selectedVacancy.id]
                       ? translations[selectedVacancy.id]
                       : selectedVacancy.description ||
-                        "Full description available directly on HeadHunter portal via external link above."}
+                        (language === "ru"
+                          ? "Полный текст вакансии доступен по ссылке на портале HeadHunter выше."
+                          : "Full description available directly on HeadHunter portal via external link above.")}
                   </div>
                 </div>
               )}
@@ -909,7 +943,7 @@ export default function VacanciesSplitView({
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-semibold text-zinc-300">
-                      Tailored Pitch & Direct Outreach
+                      {language === "ru" ? "Персонализированный питч и прямое обращение" : "Tailored Pitch & Direct Outreach"}
                     </span>
                     {(customPitch || selectedVacancy.analysis?.coverLetter) && (
                       <button
@@ -921,12 +955,12 @@ export default function VacanciesSplitView({
                         {copiedPitch ? (
                           <>
                             <CheckCheck className="w-3.5 h-3.5 text-emerald-400" />
-                            Copied
+                            {language === "ru" ? "Скопировано" : "Copied"}
                           </>
                         ) : (
                           <>
                             <Copy className="w-3.5 h-3.5" />
-                            Copy Text
+                            {language === "ru" ? "Копировать" : "Copy Text"}
                           </>
                         )}
                       </button>
@@ -936,13 +970,19 @@ export default function VacanciesSplitView({
                   {generatingPitch ? (
                     <div className="p-8 rounded-xl bg-zinc-950/60 border border-zinc-800 flex flex-col items-center justify-center gap-2 text-zinc-400 text-xs">
                       <Loader2 className="w-5 h-5 animate-spin text-violet-400" />
-                      <span>Synthesizing tailored pitch for {selectedVacancy.company}...</span>
+                      <span>
+                        {language === "ru"
+                          ? `Генерация питча для ${selectedVacancy.company}...`
+                          : `Synthesizing tailored pitch for ${selectedVacancy.company}...`}
+                      </span>
                     </div>
                   ) : (
                     <div className="p-4 rounded-xl bg-zinc-950/60 border border-zinc-800 text-xs text-zinc-300 leading-relaxed whitespace-pre-wrap">
                       {customPitch ||
                         selectedVacancy.analysis?.coverLetter ||
-                        "No cover letter generated yet. Click 'Generate AI Pitch' button above to synthesize one instantly."}
+                        (language === "ru"
+                          ? "Сопроводительное письмо еще не создано. Нажмите кнопку 'Сгенерировать AI-питч' выше."
+                          : "No cover letter generated yet. Click 'Generate AI Pitch' button above to synthesize one instantly.")}
                     </div>
                   )}
                 </div>
@@ -950,7 +990,9 @@ export default function VacanciesSplitView({
             </>
           ) : (
             <div className="py-20 text-center text-zinc-500">
-              Select a vacancy from the left list to inspect details.
+              {language === "ru"
+                ? "Выберите вакансию из списка слева для просмотра деталей."
+                : "Select a vacancy from the left list to inspect details."}
             </div>
           )}
         </div>

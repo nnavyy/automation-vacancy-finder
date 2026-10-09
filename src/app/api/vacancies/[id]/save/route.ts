@@ -17,7 +17,6 @@
 // ============================================================
 
 import { NextRequest, NextResponse } from "next/server";
-import prisma from "@/lib/db";
 import { saveFeedback } from "@/lib/feedbackLearning";
 import { getApiUser, getOwnedVacancy } from "@/lib/auth-helpers";
 

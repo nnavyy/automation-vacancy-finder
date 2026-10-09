@@ -17,24 +17,13 @@ import {
   Sparkles,
   Copy,
   CheckCheck,
-  ChevronDown,
-  ChevronUp,
   Globe,
   Loader2,
   AlertCircle,
-  Star,
-  UserCheck,
   Briefcase,
-  ShieldCheck,
-  Check,
   ExternalLink,
   RefreshCw,
   FileText,
-  Compass,
-  Send,
-  ArrowRight,
-  TrendingUp,
-  Layers,
 } from "lucide-react";
 import RecruiterDossierModal, { RecruiterDossierData } from "@/components/RecruiterDossierModal";
 
@@ -307,7 +296,6 @@ function CompanyIntelContent() {
     (activeCompany?.domain ? `https://${activeCompany.domain}` : undefined);
   const careersUrl = activeMetadata.careersUrl;
   const companyLinkedinUrl = activeMetadata.linkedinUrl || activeCompany?.linkedinUrl;
-  const generalEmails = activeMetadata.generalEmails ?? [];
   const crawledSources = activeMetadata.crawledSources ?? [];
 
   return (
@@ -696,7 +684,12 @@ function CompanyIntelContent() {
 
           {/* Decision Maker Cards List */}
           <div className="space-y-3.5">
-            {filteredContacts.length === 0 ? (
+            {loading ? (
+              <div className="p-10 text-center bg-zinc-900/40 border border-zinc-800/80 rounded-2xl">
+                <Loader2 className="w-6 h-6 text-violet-400 animate-spin mx-auto mb-2" />
+                <p className="text-sm text-zinc-300 font-medium">Loading intelligence data...</p>
+              </div>
+            ) : filteredContacts.length === 0 ? (
               <div className="p-10 text-center bg-zinc-900/40 border border-zinc-800/80 border-dashed rounded-2xl">
                 <AlertCircle className="w-6 h-6 text-zinc-600 mx-auto mb-2" />
                 <p className="text-sm text-zinc-300 font-medium">

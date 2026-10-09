@@ -468,7 +468,7 @@ export default function UnderConstruction404({ is404 = true }: { is404?: boolean
                 </div>
                 <div className="min-w-0">
                   <p className="text-[10px] text-zinc-400 font-medium">{t.directEmail}</p>
-                  <p className="text-xs font-mono text-zinc-200 truncate">nandazhafran@gmail.com</p>
+                  <p className="text-xs font-mono text-zinc-200 truncate privacy-blur-text">nandazhafran@gmail.com</p>
                 </div>
               </div>
               <button

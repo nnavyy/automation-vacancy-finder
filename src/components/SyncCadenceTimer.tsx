@@ -3,11 +3,12 @@
 // ============================================================
 // Sync Cadence Timer Component
 // Live countdown for autonomous 30-minute sync cycles
-// Clean, executive UI with zero slop badges or emojis
+// Clean, executive UI with full i18n localization (EN/RU)
 // ============================================================
 
 import { useState, useEffect } from "react";
 import { Clock, RefreshCw } from "lucide-react";
+import { useLanguage } from "@/lib/i18n";
 
 interface SyncCadenceTimerProps {
   initialLastSyncedAt?: string;
@@ -16,18 +17,18 @@ interface SyncCadenceTimerProps {
 export default function SyncCadenceTimer({
   initialLastSyncedAt,
 }: SyncCadenceTimerProps) {
+  const { t, language } = useLanguage();
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(
     initialLastSyncedAt || null
   );
-  const [timeAgoText, setTimeAgoText] = useState<string>("Checking...");
-  const [nextSyncText, setNextSyncText] = useState<string>("Calculating...");
+  const [timeAgoText, setTimeAgoText] = useState<string>(
+    language === "ru" ? "Проверка..." : "Checking..."
+  );
+  const [nextSyncText, setNextSyncText] = useState<string>(
+    language === "ru" ? "Расчет..." : "Calculating..."
+  );
   const [progressPercent, setProgressPercent] = useState<number>(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   const fetchStatus = async () => {
     try {
@@ -56,14 +57,18 @@ export default function SyncCadenceTimer({
       // Format elapsed time
       const elapsedSec = Math.floor(elapsedMs / 1000);
       if (elapsedSec < 60) {
-        setTimeAgoText(`${elapsedSec}s ago`);
+        setTimeAgoText(language === "ru" ? `${elapsedSec} сек назад` : `${elapsedSec}s ago`);
       } else {
         const elapsedMin = Math.floor(elapsedSec / 60);
         if (elapsedMin < 60) {
-          setTimeAgoText(`${elapsedMin}m ago`);
+          setTimeAgoText(language === "ru" ? `${elapsedMin} мин назад` : `${elapsedMin}m ago`);
         } else {
           const hours = Math.floor(elapsedMin / 60);
-          setTimeAgoText(`${hours}h ${elapsedMin % 60}m ago`);
+          setTimeAgoText(
+            language === "ru"
+              ? `${hours} ч ${elapsedMin % 60} мин назад`
+              : `${hours}h ${elapsedMin % 60}m ago`
+          );
         }
       }
 
@@ -76,9 +81,15 @@ export default function SyncCadenceTimer({
       const remMins = Math.floor(remainingSec / 60);
       const remSecs = remainingSec % 60;
 
-      setNextSyncText(
-        `${remMins.toString().padStart(2, "0")}m ${remSecs.toString().padStart(2, "0")}s`
-      );
+      if (language === "ru") {
+        setNextSyncText(
+          `${remMins.toString().padStart(2, "0")} мин ${remSecs.toString().padStart(2, "0")} сек`
+        );
+      } else {
+        setNextSyncText(
+          `${remMins.toString().padStart(2, "0")}m ${remSecs.toString().padStart(2, "0")}s`
+        );
+      }
 
       const percent = Math.min(100, Math.max(0, (msIntoCurrentCycle / cycleDurationMs) * 100));
       setProgressPercent(percent);
@@ -87,7 +98,7 @@ export default function SyncCadenceTimer({
     updateCountdown();
     const ticker = setInterval(updateCountdown, 1000);
     return () => clearInterval(ticker);
-  }, [lastSyncedAt]);
+  }, [lastSyncedAt, language]);
 
   const handleManualCheck = async () => {
     setIsRefreshing(true);
@@ -98,21 +109,21 @@ export default function SyncCadenceTimer({
   return (
     <div className="space-y-2.5 text-xs">
       <div className="flex items-center justify-between p-2.5 rounded-lg bg-zinc-950/40 border border-zinc-800">
-        <span className="text-zinc-400">HH.ru Session Status</span>
-        <span className="font-mono text-emerald-400 font-medium">Valid Active</span>
+        <span className="text-zinc-400">{t("overview.sessionStatus")}</span>
+        <span className="font-mono text-emerald-400 font-medium">{t("overview.validActive")}</span>
       </div>
 
       <div className="p-3 rounded-lg bg-zinc-950/40 border border-zinc-800 space-y-2">
         <div className="flex items-center justify-between">
           <span className="text-zinc-400 flex items-center gap-1.5">
             <Clock className="w-3.5 h-3.5 text-zinc-500" />
-            Autonomous Cadence
+            {t("overview.cadence")}
           </span>
           <button
             onClick={handleManualCheck}
             disabled={isRefreshing}
             className="text-zinc-500 hover:text-zinc-300 transition-colors p-0.5"
-            title="Refresh sync status"
+            title={language === "ru" ? "Обновить статус" : "Refresh sync status"}
           >
             <RefreshCw className={`w-3 h-3 ${isRefreshing ? "animate-spin" : ""}`} />
           </button>
@@ -121,7 +132,7 @@ export default function SyncCadenceTimer({
         <div className="grid grid-cols-2 gap-2 pt-1 border-t border-zinc-800/80">
           <div>
             <span className="text-[10px] text-zinc-500 block uppercase tracking-wider font-semibold">
-              Last Synced
+              {t("overview.lastSynced")}
             </span>
             <span className="font-mono text-zinc-200 font-medium text-xs">
               {timeAgoText}
@@ -130,7 +141,7 @@ export default function SyncCadenceTimer({
 
           <div className="text-right">
             <span className="text-[10px] text-zinc-500 block uppercase tracking-wider font-semibold">
-              Next Sync in
+              {t("overview.nextSyncIn")}
             </span>
             <span className="font-mono text-violet-400 font-semibold text-xs">
               {nextSyncText}

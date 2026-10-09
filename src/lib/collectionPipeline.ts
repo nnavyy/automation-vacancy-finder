@@ -5,6 +5,7 @@
 // All vacancies are stored with userId for data isolation.
 // ============================================================
 
+import crypto from "crypto";
 import prisma from "@/lib/db";
 import { collectAllVacancies, fetchVacancyJsonLd } from "@/lib/hhPublicVacancyClient";
 import { passesBasicFilter } from "@/lib/ruleFilter";
@@ -271,8 +272,6 @@ export async function runCollectionPipeline(
       const fullDesc = await fetchVacancyJsonLd(vacancy.url!);
       if (fullDesc && fullDesc.length > (vacancy.description?.length || 0)) {
         vacancy.description = fullDesc;
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const crypto = require("crypto");
         vacancy.descriptionHash = crypto.createHash("md5").update(fullDesc).digest("hex");
         await prisma.vacancy.update({
           where: { id: dbVacancyId },

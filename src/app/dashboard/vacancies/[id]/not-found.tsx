@@ -9,7 +9,6 @@ import {
   Briefcase,
   LayoutDashboard,
   ArrowLeft,
-  Sparkles,
 } from "lucide-react";
 
 export default function VacancyNotFound() {

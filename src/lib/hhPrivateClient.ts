@@ -164,7 +164,7 @@ function extractHHInitialState(html: string): Record<string, any> | null {
     if (stateMatch) {
       return JSON.parse(decodeHtmlEntities(stateMatch[1]));
     }
-  } catch (e) {
+  } catch {
     // Ignore JSON parse errors
   }
   return null;

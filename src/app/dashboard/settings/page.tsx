@@ -23,11 +23,8 @@ import {
   Check,
   Globe,
   AlertTriangle,
-  ChevronDown,
-  ChevronUp,
   Download,
   Upload,
-  Shield,
   Activity,
   Sliders,
   ChevronRight,
@@ -222,33 +219,58 @@ const WORK_FORMAT_OPTIONS = [
   { label: "Office", value: "office" },
 ];
 
-// ── Helpers ───────────────────────────────────────────────────
 
-function toComma(arr: unknown): string {
-  if (Array.isArray(arr)) return arr.join(", ");
-  if (typeof arr === "string") return arr;
-  return "";
-}
-
-function fromComma(str: unknown): string[] {
-  if (typeof str !== "string") return [];
-  return str.split(",").map((s) => s.trim()).filter(Boolean);
-}
-
-function formatRelativeTime(dateStr?: string | Date | null): string {
-  if (!dateStr) return "Never";
+function formatRelativeTime(dateStr?: string | Date | null, lang: string = "en"): string {
+  if (!dateStr) return lang === "ru" ? "Никогда" : "Never";
   const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return "Never";
+  if (isNaN(d.getTime())) return lang === "ru" ? "Никогда" : "Never";
   const diffMs = Date.now() - d.getTime();
   const diffMins = Math.floor(diffMs / 60000);
-  if (diffMins < 1) return "Just now";
-  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffMins < 1) return lang === "ru" ? "Только что" : "Just now";
+  if (diffMins < 60) return lang === "ru" ? `${diffMins} мин назад` : `${diffMins}m ago`;
   const diffHours = Math.floor(diffMins / 60);
-  if (diffHours < 24) return `${diffHours}h ago`;
-  return d.toLocaleDateString("en-US", { day: "numeric", month: "short" });
+  if (diffHours < 24) return lang === "ru" ? `${diffHours} ч назад` : `${diffHours}h ago`;
+  return d.toLocaleDateString(lang === "ru" ? "ru-RU" : "en-US", { day: "numeric", month: "short" });
+}
+
+function getExperienceLabel(value: string, lang: string): string {
+  if (lang === "ru") {
+    switch (value) {
+      case "noExperience": return "Без опыта";
+      case "between1And3": return "1–3 года";
+      case "between3And6": return "3–6 лет";
+      case "moreThan6": return "Более 6 лет";
+      default: return value;
+    }
+  }
+  switch (value) {
+    case "noExperience": return "No Experience";
+    case "between1And3": return "1–3 Years";
+    case "between3And6": return "3–6 Years";
+    case "moreThan6": return "6+ Years";
+    default: return value;
+  }
+}
+
+function getWorkFormatLabel(value: string, lang: string): string {
+  if (lang === "ru") {
+    switch (value) {
+      case "remote": return "Удаленно";
+      case "hybrid": return "Гибрид";
+      case "office": return "Офис";
+      default: return value;
+    }
+  }
+  switch (value) {
+    case "remote": return "Remote";
+    case "hybrid": return "Hybrid";
+    case "office": return "Office";
+    default: return value;
+  }
 }
 
 // ── Main Page Component ───────────────────────────────────────
+
 
 export default function SettingsPage() {
   const { language, setLanguage, t } = useLanguage();
@@ -270,7 +292,6 @@ export default function SettingsPage() {
   const [hhResumes, setHhResumes] = useState<Array<{ id: string; title: string; status?: { name: string } }>>([]);
   const [checkingSession, setCheckingSession] = useState(false);
   const [hhConnectMode, setHhConnectMode] = useState<"console" | "oauth">("console");
-  const [showManualCookie, setShowManualCookie] = useState(false);
 
   // Portfolio crawling test state
   const [testingPortfolio, setTestingPortfolio] = useState(false);
@@ -281,7 +302,6 @@ export default function SettingsPage() {
   const [tgUsername, setTgUsername] = useState<string | null>(null);
   const [generatingTg, setGeneratingTg] = useState(false);
   const [copiedTg, setCopiedTg] = useState(false);
-  const [copiedSnippet, setCopiedSnippet] = useState(false);
 
   // Live telemetry stats loaded from backend
   const [stats, setStats] = useState({
@@ -1061,9 +1081,13 @@ export default function SettingsPage() {
       {/* ── Top Header Bar ── */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pt-2 pb-5 border-b border-zinc-800/80">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-zinc-100">Settings</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-zinc-100">
+            {language === "ru" ? "Настройки" : "Settings"}
+          </h1>
           <p className="text-xs text-zinc-400 mt-1 max-w-2xl">
-            Configure automated job search preferences, AI evaluation rules, safety heuristics, and HH.ru session sync pipelines.
+            {language === "ru"
+              ? "Параметры автоматического поиска работы, правила оценки ИИ, фильтры безопасности и синхронизация с HH.ru."
+              : "Configure automated job search preferences, AI evaluation rules, safety heuristics, and HH.ru session sync pipelines."}
           </p>
         </div>
 
@@ -1075,7 +1099,7 @@ export default function SettingsPage() {
             className="flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-xs font-semibold shadow-sm transition-all disabled:opacity-50"
           >
             {saving ? <RefreshCw size={14} className="animate-spin text-zinc-950" /> : <Save size={14} />}
-            <span>Save Settings</span>
+            <span>{language === "ru" ? "Сохранить настройки" : "Save Settings"}</span>
             <kbd className="hidden sm:inline bg-emerald-600/60 text-zinc-950 px-1.5 py-0.5 rounded text-[10px] font-mono">
               Ctrl+S
             </kbd>
@@ -1089,24 +1113,25 @@ export default function SettingsPage() {
           {/* Strict rule: NO round colored dot! Icon is clean and safe */}
           <Activity size={13} className="text-emerald-400 shrink-0" />
           <span>
-            Database state synced &bull; Last snapshot updated {lastSavedTime}
+            {language === "ru" ? "База данных синхронизирована • Последнее обновление " : "Database state synced \u2022 Last snapshot updated "}
+            {lastSavedTime}
           </span>
         </div>
         <div className="text-[11px] font-mono uppercase font-medium flex items-center gap-1.5">
           {autoSaveStatus === "saving" ? (
             <span className="text-amber-300 flex items-center gap-1.5 font-semibold">
               <RefreshCw size={11} className="animate-spin text-amber-300" />
-              Auto-saving...
+              {language === "ru" ? "Автосохранение..." : "Auto-saving..."}
             </span>
           ) : autoSaveStatus === "saved" ? (
             <span className="text-emerald-400 flex items-center gap-1.5 font-semibold">
               <Check size={11} className="text-emerald-400" />
-              Auto-saved
+              {language === "ru" ? "Автосохранено" : "Auto-saved"}
             </span>
           ) : (
             <span className="text-emerald-400/80 font-semibold flex items-center gap-1">
               <Check size={11} className="text-emerald-400/80" />
-              Auto-save active
+              {language === "ru" ? "Автосохранение активно" : "Auto-save active"}
             </span>
           )}
         </div>
@@ -1139,7 +1164,9 @@ export default function SettingsPage() {
           <section className="bg-zinc-900/70 border border-zinc-800/90 rounded-xl p-5 backdrop-blur-sm">
             <div className="flex items-center gap-2 pb-3 border-b border-zinc-800/60">
               <FileText size={16} className="text-emerald-400" />
-              <h2 className="text-sm font-semibold text-zinc-100">Import Profile via JSON</h2>
+              <h2 className="text-sm font-semibold text-zinc-100">
+                {language === "ru" ? "Импорт профиля через JSON" : "Import Profile via JSON"}
+              </h2>
             </div>
 
             <div className="mt-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -1149,7 +1176,9 @@ export default function SettingsPage() {
                   className="flex items-center gap-2 cursor-pointer bg-zinc-800 hover:bg-zinc-700 border border-zinc-700/80 text-zinc-100 px-3.5 py-1.5 rounded-lg text-xs font-medium transition-colors"
                 >
                   {translatingJson ? <RefreshCw size={13} className="animate-spin text-zinc-400" /> : <Upload size={13} className="text-zinc-400" />}
-                  {translatingJson ? "Processing..." : "Upload JSON"}
+                  {translatingJson
+                    ? (language === "ru" ? "Обработка..." : "Processing...")
+                    : (language === "ru" ? "Загрузить JSON" : "Upload JSON")}
                   <input
                     id="json-file-input"
                     type="file"
@@ -1173,7 +1202,7 @@ export default function SettingsPage() {
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-850 hover:bg-zinc-800 text-zinc-300 text-xs font-medium border border-zinc-800 transition-colors"
                 >
                   <Download size={13} className="text-zinc-400" />
-                  Export Profile JSON
+                  {language === "ru" ? "Экспорт профиля JSON" : "Export Profile JSON"}
                 </button>
               </div>
 
@@ -1186,7 +1215,7 @@ export default function SettingsPage() {
                   className="w-3.5 h-3.5 rounded bg-zinc-800 border-zinc-700 accent-emerald-500 cursor-pointer"
                 />
                 <label htmlFor="translate-json-toggle" className="text-xs text-zinc-400 cursor-pointer select-none">
-                  Translate RU &rarr; EN on import
+                  {language === "ru" ? "Переводить RU \u2192 EN при импорте" : "Translate RU \u2192 EN on import"}
                 </label>
               </div>
             </div>
@@ -1196,19 +1225,21 @@ export default function SettingsPage() {
           <section className="bg-zinc-900/70 border border-zinc-800/90 rounded-xl p-5 backdrop-blur-sm">
             <div className="flex items-center gap-2 pb-3 border-b border-zinc-800/60">
               <Target size={16} className="text-emerald-400" />
-              <h2 className="text-sm font-semibold text-zinc-100">Profile Identity</h2>
+              <h2 className="text-sm font-semibold text-zinc-100">
+                {language === "ru" ? "Целевой профиль кандидата" : "Profile Identity"}
+              </h2>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
               <div>
                 <label className="block text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-1.5">
-                  PROFILE NAME
+                  {language === "ru" ? "НАЗВАНИЕ ПРОФИЛЯ" : "PROFILE NAME"}
                 </label>
                 <input
                   type="text"
                   value={form.name}
                   onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
-                  placeholder="e.g. Full Stack Developer"
+                  placeholder={language === "ru" ? "например, Full Stack Разработчик" : "e.g. Full Stack Developer"}
                   className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-100 placeholder-zinc-600 focus:border-emerald-500/60 focus:outline-none transition-colors"
                 />
               </div>
@@ -1216,12 +1247,12 @@ export default function SettingsPage() {
               <div>
                 <TagInput
                   id="target-roles"
-                  label="TARGET ROLES"
+                  label={language === "ru" ? "ЦЕЛЕВЫЕ ДОЛЖНОСТИ" : "TARGET ROLES"}
                   value={form.targetRoles}
                   onChange={(roles) => setForm((p) => ({ ...p, targetRoles: roles }))}
-                  placeholder="Type role (e.g. 'fron') & Enter..."
+                  placeholder={language === "ru" ? "Введите должность (напр. 'фронт') & Enter..." : "Type role (e.g. 'fron') & Enter..."}
                   catalog={ROLES}
-                  hint="Type keywords like 'fron' to see recommendations."
+                  hint={language === "ru" ? "Введите ключевые слова для выбора рекомендаций." : "Type keywords like 'fron' to see recommendations."}
                 />
               </div>
             </div>
@@ -1305,7 +1336,7 @@ export default function SettingsPage() {
               </div>
               <div className="flex items-center gap-3 text-[10px] text-zinc-500 font-mono">
                 <span>{t("hh.ttl", "TTL: ~30 days")}</span>
-                <span>Last: {formatRelativeTime(form.hhLastVerifiedAt)}</span>
+                <span>{language === "ru" ? "Посл.: " : "Last: "}{formatRelativeTime(form.hhLastVerifiedAt, language)}</span>
               </div>
             </div>
 
@@ -1389,9 +1420,9 @@ export default function SettingsPage() {
                           type="button"
                           onClick={handleDisconnectHH}
                           className="flex items-center justify-center gap-1 px-3 py-2 rounded-lg bg-zinc-800 hover:bg-red-950/40 hover:text-red-400 text-zinc-400 text-xs border border-zinc-700 transition-colors shrink-0"
-                          title="Clear and disconnect this token"
+                          title={language === "ru" ? "Очистить и отключить этот токен" : "Clear and disconnect this token"}
                         >
-                          <span>Disconnect</span>
+                          <span>{language === "ru" ? "Отключить" : "Disconnect"}</span>
                         </button>
                       )}
                     </div>
@@ -1424,7 +1455,8 @@ export default function SettingsPage() {
               <div className="flex items-center gap-2">
                 <Check size={14} className="text-emerald-400 shrink-0" />
                 <span className="text-zinc-300">
-                  Connected to Resume: <strong className="text-zinc-100">{form.hhResumeTitle || "Fullstack-разработчик"}</strong>
+                  {language === "ru" ? "Привязано к резюме: " : "Connected to Resume: "}
+                  <strong className="text-zinc-100">{form.hhResumeTitle || (language === "ru" ? "Fullstack-разработчик" : "Fullstack Developer")}</strong>
                   {form.hhResumeId && <span className="text-zinc-500 ml-1 font-mono">#{form.hhResumeId}</span>}
                 </span>
               </div>
@@ -1452,36 +1484,56 @@ export default function SettingsPage() {
                   </select>
                 ) : (
                   <span className="bg-zinc-900 border border-zinc-800 px-2 py-0.5 rounded text-zinc-300">
-                    {form.hhResumeTitle ? `${form.hhResumeTitle} (Default)` : "No resume chosen"}
+                    {form.hhResumeTitle
+                      ? `${form.hhResumeTitle} ${language === "ru" ? "(По умолчанию)" : "(Default)"}`
+                      : (language === "ru" ? "Резюме не выбрано" : "No resume chosen")}
                   </span>
                 )}
-                <span className="text-[10px] text-zinc-500 font-mono">Auto-bump every 4 hours &bull; Last: 42m ago</span>
+                <span className="text-[10px] text-zinc-500 font-mono">
+                  {language === "ru" ? "Авто-поднятие каждые 4 ч • 42м назад" : "Auto-bump every 4 hours \u2022 Last: 42m ago"}
+                </span>
               </div>
             </div>
 
             {/* 3 Metrics Mini Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="bg-zinc-950 border border-zinc-800/80 rounded-lg p-3">
-                <div className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">TOTAL AUTO-APPLIES</div>
+                <div className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">
+                  {language === "ru" ? "ВСЕГО АВТО-ОТКЛИКОВ" : "TOTAL AUTO-APPLIES"}
+                </div>
                 <div className="mt-1 flex items-baseline gap-2">
                   <span className="text-xl font-bold font-mono text-zinc-100">{form.hhTotalApplications || 142}</span>
-                  <span className="text-[10px] text-emerald-400 font-mono">+14 this week</span>
+                  <span className="text-[10px] text-emerald-400 font-mono">
+                    {language === "ru" ? "+14 за неделю" : "+14 this week"}
+                  </span>
                 </div>
               </div>
 
               <div className="bg-zinc-950 border border-zinc-800/80 rounded-lg p-3">
-                <div className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">CAPTURED EXPIRY</div>
+                <div className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">
+                  {language === "ru" ? "СРОК ТОКЕНА" : "CAPTURED EXPIRY"}
+                </div>
                 <div className="mt-1 flex items-baseline gap-2">
-                  <span className="text-xl font-bold font-mono text-zinc-100">~30 Days</span>
-                  <span className="text-[10px] text-zinc-500 font-mono">Auto-renew</span>
+                  <span className="text-xl font-bold font-mono text-zinc-100">
+                    {language === "ru" ? "~30 Дней" : "~30 Days"}
+                  </span>
+                  <span className="text-[10px] text-zinc-500 font-mono">
+                    {language === "ru" ? "Автопродление" : "Auto-renew"}
+                  </span>
                 </div>
               </div>
 
               <div className="bg-zinc-950 border border-zinc-800/80 rounded-lg p-3">
-                <div className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">KEEPALIVE INTERVAL</div>
+                <div className="text-[10px] font-semibold text-zinc-400 uppercase tracking-wider">
+                  {language === "ru" ? "ИНТЕРВАЛ KEEPALIVE" : "KEEPALIVE INTERVAL"}
+                </div>
                 <div className="mt-1 flex items-baseline gap-2">
-                  <span className="text-xl font-bold font-mono text-zinc-100">15 min</span>
-                  <span className="text-[10px] text-emerald-400 font-mono">Active Daemon</span>
+                  <span className="text-xl font-bold font-mono text-zinc-100">
+                    {language === "ru" ? "15 мин" : "15 min"}
+                  </span>
+                  <span className="text-[10px] text-emerald-400 font-mono">
+                    {language === "ru" ? "Активный демон" : "Active Daemon"}
+                  </span>
                 </div>
               </div>
             </div>
@@ -1491,17 +1543,19 @@ export default function SettingsPage() {
           <section id="section-search-filters" className="bg-zinc-900/70 border border-zinc-800/90 rounded-xl p-5 backdrop-blur-sm space-y-4">
             <div className="flex items-center gap-2 pb-3 border-b border-zinc-800/60">
               <Search size={16} className="text-emerald-400" />
-              <h2 className="text-sm font-semibold text-zinc-100">Search &amp; Matching Criteria</h2>
+              <h2 className="text-sm font-semibold text-zinc-100">
+                {language === "ru" ? "Критерии поиска и сопоставления" : "Search & Matching Criteria"}
+              </h2>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <TagInput
                   id="search-keywords-en"
-                  label="ENGLISH KEYWORDS"
+                  label={language === "ru" ? "КЛЮЧЕВЫЕ СЛОВА (EN)" : "ENGLISH KEYWORDS"}
                   value={form.searchKeywordsEn}
                   onChange={(kws) => setForm((p) => ({ ...p, searchKeywordsEn: kws }))}
-                  placeholder="e.g. React, Next.js, TypeScript..."
+                  placeholder={language === "ru" ? "напр. React, Next.js, TypeScript..." : "e.g. React, Next.js, TypeScript..."}
                   catalog={SKILLS}
                 />
               </div>
@@ -1509,10 +1563,10 @@ export default function SettingsPage() {
               <div>
                 <TagInput
                   id="search-keywords-ru"
-                  label="RUSSIAN KEYWORDS"
+                  label={language === "ru" ? "КЛЮЧЕВЫЕ СЛОВА (RU)" : "RUSSIAN KEYWORDS"}
                   value={form.searchKeywordsRu}
                   onChange={(kws) => setForm((p) => ({ ...p, searchKeywordsRu: kws }))}
-                  placeholder="e.g. Фронтенд, Разработчик..."
+                  placeholder={language === "ru" ? "напр. Фронтенд, Разработчик..." : "e.g. Фронтенд, Разработчик..."}
                   catalog={KEYWORDS_RU}
                 />
               </div>
@@ -1522,10 +1576,10 @@ export default function SettingsPage() {
               <div>
                 <TagInput
                   id="required-skills"
-                  label="REQUIRED SKILLS (HARD CRITERIA)"
+                  label={language === "ru" ? "ОБЯЗАТЕЛЬНЫЕ НАВЫКИ (HARD SKILLS)" : "REQUIRED SKILLS (HARD CRITERIA)"}
                   value={form.requiredSkills}
                   onChange={(skills) => setForm((p) => ({ ...p, requiredSkills: skills }))}
-                  placeholder="e.g. React, TypeScript, Node.js..."
+                  placeholder={language === "ru" ? "напр. React, TypeScript, Node.js..." : "e.g. React, TypeScript, Node.js..."}
                   catalog={SKILLS}
                 />
               </div>
@@ -1533,10 +1587,10 @@ export default function SettingsPage() {
               <div>
                 <TagInput
                   id="nice-to-have-skills"
-                  label="NICE-TO-HAVE SKILLS (BONUS WEIGHT)"
+                  label={language === "ru" ? "ЖЕЛАТЕЛЬНЫЕ НАВЫКИ (БОНУСНЫЙ ВЕС)" : "NICE-TO-HAVE SKILLS (BONUS WEIGHT)"}
                   value={form.niceToHaveSkills}
                   onChange={(skills) => setForm((p) => ({ ...p, niceToHaveSkills: skills }))}
-                  placeholder="e.g. Docker, GraphQL, Tailwind..."
+                  placeholder={language === "ru" ? "напр. Docker, GraphQL, Tailwind..." : "e.g. Docker, GraphQL, Tailwind..."}
                   catalog={SKILLS}
                 />
               </div>
@@ -1545,7 +1599,7 @@ export default function SettingsPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
               <div>
                 <label className="block text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-2">
-                  EXPERIENCE LEVEL
+                  {language === "ru" ? "ОПЫТ РАБОТЫ" : "EXPERIENCE LEVEL"}
                 </label>
                 <div className="grid grid-cols-2 gap-2">
                   {EXPERIENCE_OPTIONS.map((opt) => {
@@ -1565,7 +1619,7 @@ export default function SettingsPage() {
                           onChange={() => toggleArrayItem("experience", opt.value)}
                           className="w-3.5 h-3.5 rounded bg-zinc-900 border-zinc-700 accent-emerald-500"
                         />
-                        <span>{opt.label}</span>
+                        <span>{getExperienceLabel(opt.value, language)}</span>
                       </label>
                     );
                   })}
@@ -1574,7 +1628,7 @@ export default function SettingsPage() {
 
               <div>
                 <label className="block text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-2">
-                  WORK FORMAT
+                  {language === "ru" ? "ФОРМАТ РАБОТЫ" : "WORK FORMAT"}
                 </label>
                 <div className="grid grid-cols-3 gap-2">
                   {WORK_FORMAT_OPTIONS.map((opt) => {
@@ -1594,7 +1648,7 @@ export default function SettingsPage() {
                           onChange={() => toggleArrayItem("workFormat", opt.value)}
                           className="w-3.5 h-3.5 rounded bg-zinc-900 border-zinc-700 accent-emerald-500"
                         />
-                        <span>{opt.label}</span>
+                        <span>{getWorkFormatLabel(opt.value, language)}</span>
                       </label>
                     );
                   })}
@@ -1607,14 +1661,16 @@ export default function SettingsPage() {
           <section className="bg-zinc-900/70 border border-zinc-800/90 rounded-xl p-5 backdrop-blur-sm space-y-4">
             <div className="flex items-center gap-2 pb-3 border-b border-zinc-800/60">
               <Sliders size={16} className="text-emerald-400" />
-              <h2 className="text-sm font-semibold text-zinc-100">Scoring &amp; Notification Thresholds</h2>
+              <h2 className="text-sm font-semibold text-zinc-100">
+                {language === "ru" ? "Пороги скоринга и уведомлений" : "Scoring & Notification Thresholds"}
+              </h2>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <label className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
-                    MIN MATCH SCORE
+                    {language === "ru" ? "МИН. БАЛЛ МЭТЧА" : "MIN MATCH SCORE"}
                   </label>
                   <span className="text-xs font-mono font-bold text-emerald-400">
                     {form.minimumScoreToNotify} / 100
@@ -1629,12 +1685,14 @@ export default function SettingsPage() {
                   onChange={(e) => setForm((p) => ({ ...p, minimumScoreToNotify: parseInt(e.target.value, 10) }))}
                   className="w-full accent-emerald-500 bg-zinc-800 h-1.5 rounded-lg cursor-pointer"
                 />
-                <p className="text-[10px] text-zinc-500 mt-1">Only alert on high alignment</p>
+                <p className="text-[10px] text-zinc-500 mt-1">
+                  {language === "ru" ? "Уведомлять только при высоком совпадении" : "Only alert on high alignment"}
+                </p>
               </div>
 
               <div>
                 <label className="block text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-1.5">
-                  MAX ALERTS / DAY
+                  {language === "ru" ? "МАКС. УВЕДОМЛЕНИЙ В ДЕНЬ" : "MAX ALERTS / DAY"}
                 </label>
                 <input
                   type="number"
@@ -1644,12 +1702,14 @@ export default function SettingsPage() {
                   onChange={(e) => setForm((p) => ({ ...p, maxNotificationsPerDay: e.target.value }))}
                   className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-100 focus:border-emerald-500/60 focus:outline-none"
                 />
-                <p className="text-[10px] text-zinc-500 mt-1">Avoid notification fatigue</p>
+                <p className="text-[10px] text-zinc-500 mt-1">
+                  {language === "ru" ? "Защита от спама уведомлений" : "Avoid notification fatigue"}
+                </p>
               </div>
 
               <div>
                 <label className="block text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-1.5">
-                  MINIMUM SALARY
+                  {language === "ru" ? "МИНИМАЛЬНАЯ ЗАРПЛАТА" : "MINIMUM SALARY"}
                 </label>
                 <div className="flex gap-2">
                   <input
@@ -1669,7 +1729,9 @@ export default function SettingsPage() {
                     <option value="EUR">EUR</option>
                   </select>
                 </div>
-                <p className="text-[10px] text-zinc-500 mt-1">Net after taxes</p>
+                <p className="text-[10px] text-zinc-500 mt-1">
+                  {language === "ru" ? "На руки (после вычета налогов)" : "Net after taxes"}
+                </p>
               </div>
             </div>
 
@@ -1677,10 +1739,10 @@ export default function SettingsPage() {
               <div>
                 <TagInput
                   id="exclude-keywords"
-                  label="NEGATIVE STACK FILTERS (EXCLUDE)"
+                  label={language === "ru" ? "ФИЛЬТРЫ ИСКЛЮЧЕНИЙ (НЕЖЕЛАТЕЛЬНЫЙ СТЕК)" : "NEGATIVE STACK FILTERS (EXCLUDE)"}
                   value={form.excludeKeywords}
                   onChange={(tags) => setForm((p) => ({ ...p, excludeKeywords: tags }))}
-                  placeholder="e.g. 1C, PHP, Bitrix..."
+                  placeholder={language === "ru" ? "напр. 1C, PHP, Bitrix..." : "e.g. 1C, PHP, Bitrix..."}
                   catalog={EXCLUDE_KEYWORDS}
                 />
               </div>
@@ -1688,10 +1750,10 @@ export default function SettingsPage() {
               <div>
                 <TagInput
                   id="red-flag-keywords"
-                  label="RED FLAG KEYWORDS (AUTO DISCARD)"
+                  label={language === "ru" ? "СТОП-СЛОВА (АВТОМАТИЧЕСКИЙ ОТСЕВ)" : "RED FLAG KEYWORDS (AUTO DISCARD)"}
                   value={form.redFlagKeywords}
                   onChange={(tags) => setForm((p) => ({ ...p, redFlagKeywords: tags }))}
-                  placeholder="e.g. deposit, unpaid, паспорт..."
+                  placeholder={language === "ru" ? "напр. залог, неоплачиваемый, паспорт..." : "e.g. deposit, unpaid, паспорт..."}
                   catalog={RED_FLAG_KEYWORDS}
                 />
               </div>
@@ -1702,28 +1764,36 @@ export default function SettingsPage() {
           <section id="section-ai-context" className="bg-zinc-900/70 border border-zinc-800/90 rounded-xl p-5 backdrop-blur-sm space-y-4">
             <div className="flex items-center gap-2 pb-3 border-b border-zinc-800/60">
               <Sparkles size={16} className="text-emerald-400" />
-              <h2 className="text-sm font-semibold text-zinc-100">Cover Letter Context &amp; AI Generation</h2>
+              <h2 className="text-sm font-semibold text-zinc-100">
+                {language === "ru" ? "Контекст сопроводительного письма и ИИ" : "Cover Letter Context & AI Generation"}
+              </h2>
             </div>
 
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
-                  CANDIDATE CONTEXT &amp; KEY HIGHLIGHTS
+                  {language === "ru" ? "КОНТЕКСТ КАНДИДАТА И КЛЮЧЕВЫЕ ДОСТИЖЕНИЯ" : "CANDIDATE CONTEXT & KEY HIGHLIGHTS"}
                 </label>
-                <span className="text-[10px] text-zinc-500 font-mono">Injects dynamically into LLM prompts</span>
+                <span className="text-[10px] text-zinc-500 font-mono">
+                  {language === "ru" ? "Динамически внедряется в промпты LLM" : "Injects dynamically into LLM prompts"}
+                </span>
               </div>
               <textarea
                 rows={7}
                 value={form.resumeText}
                 onChange={(e) => setForm((p) => ({ ...p, resumeText: e.target.value }))}
-                placeholder="Describe your career highlights, tech stack preferences, and strengths for the cover letter..."
+                placeholder={
+                  language === "ru"
+                    ? "Опишите ваши ключевые достижения, стек технологий и сильные стороны для сопроводительного письма..."
+                    : "Describe your career highlights, tech stack preferences, and strengths for the cover letter..."
+                }
                 className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-xs text-zinc-200 placeholder-zinc-600 focus:border-emerald-500/60 focus:outline-none font-mono leading-relaxed"
               />
             </div>
 
             <div>
               <label className="block text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-1.5">
-                PORTFOLIO / GITHUB CRAWL URL
+                {language === "ru" ? "URL ПОРТФОЛИО / GITHUB ДЛЯ АНАЛИЗА" : "PORTFOLIO / GITHUB CRAWL URL"}
               </label>
               <div className="flex gap-2">
                 <input
@@ -1740,7 +1810,7 @@ export default function SettingsPage() {
                   className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium border border-zinc-700 transition-colors disabled:opacity-50"
                 >
                   {testingPortfolio ? <RefreshCw size={13} className="animate-spin text-emerald-400" /> : <Bot size={13} />}
-                  <span>Test Crawl Bot</span>
+                  <span>{language === "ru" ? "Проверить краулер" : "Test Crawl Bot"}</span>
                 </button>
               </div>
             </div>
@@ -1750,11 +1820,15 @@ export default function SettingsPage() {
           <section className="bg-zinc-900/70 border border-zinc-800/90 rounded-xl p-5 backdrop-blur-sm space-y-5">
             <div className="flex items-center gap-2 pb-3 border-b border-zinc-800/60">
               <Bot size={16} className="text-emerald-400" />
-              <h2 className="text-sm font-semibold text-zinc-100">AI Model Strategy &amp; BYOK Configuration</h2>
+              <h2 className="text-sm font-semibold text-zinc-100">
+                {language === "ru" ? "Стратегия моделей ИИ и конфигурация BYOK" : "AI Model Strategy & BYOK Configuration"}
+              </h2>
             </div>
 
             <p className="text-xs text-zinc-400 leading-relaxed">
-              Assign dedicated AI engines to specific tasks (Deep Context Analysis vs. Cover Letter Drafting), bring your own API keys (BYOK) from any provider, connect local models (Ollama/vLLM), and configure cascade failover priority.
+              {language === "ru"
+                ? "Назначайте специализированные ИИ-модели под конкретные задачи (глубокий анализ вакансий vs составление писем), подключайте свои API-ключи (BYOK), локальные модели (Ollama/vLLM) и настраивайте каскадный переход при сбоях."
+                : "Assign dedicated AI engines to specific tasks (Deep Context Analysis vs. Cover Letter Drafting), bring your own API keys (BYOK) from any provider, connect local models (Ollama/vLLM), and configure cascade failover priority."}
             </p>
 
             {/* Subsection 1: Task-Specific Routing */}
@@ -1763,13 +1837,19 @@ export default function SettingsPage() {
               <div className="bg-zinc-950/80 border border-zinc-800/90 rounded-lg p-4 space-y-3">
                 <div className="flex items-center gap-2 text-zinc-200">
                   <Cpu size={15} className="text-blue-400" />
-                  <span className="text-xs font-semibold">Deep Context &amp; Scoring</span>
+                  <span className="text-xs font-semibold">
+                    {language === "ru" ? "Глубокий анализ контекста и скоринг" : "Deep Context & Scoring"}
+                  </span>
                 </div>
                 <p className="text-[11px] text-zinc-400">
-                  Engine used to score job-resume compatibility, identify red flags, and analyze vacancy requirements.
+                  {language === "ru"
+                    ? "Модель для оценки соответствия резюме вакансии, выявления стоп-факторов и анализа требований."
+                    : "Engine used to score job-resume compatibility, identify red flags, and analyze vacancy requirements."}
                 </p>
                 <div>
-                  <label className="text-[11px] font-mono text-zinc-400 mb-1 block">Assigned Provider</label>
+                  <label className="text-[11px] font-mono text-zinc-400 mb-1 block">
+                    {language === "ru" ? "Назначенный провайдер" : "Assigned Provider"}
+                  </label>
                   <select
                     value={form.aiCustomConfig?.taskRouting?.deepAnalysis || form.aiProviderOrder[0] || "deepseek"}
                     onChange={(e) => updateTaskRouting("deepAnalysis", e.target.value as AIProvider)}
@@ -1790,13 +1870,19 @@ export default function SettingsPage() {
               <div className="bg-zinc-950/80 border border-zinc-800/90 rounded-lg p-4 space-y-3">
                 <div className="flex items-center gap-2 text-zinc-200">
                   <Zap size={15} className="text-emerald-400" />
-                  <span className="text-xs font-semibold">Cover Letter Generation</span>
+                  <span className="text-xs font-semibold">
+                    {language === "ru" ? "Генерация сопроводительных писем" : "Cover Letter Generation"}
+                  </span>
                 </div>
                 <p className="text-[11px] text-zinc-400">
-                  Engine used to draft tailored, human-sounding cover letters adapted to your portfolio and resume.
+                  {language === "ru"
+                    ? "Модель для составления персонализированных сопроводительных писем с учетом резюме и портфолио."
+                    : "Engine used to draft tailored, human-sounding cover letters adapted to your portfolio and resume."}
                 </p>
                 <div>
-                  <label className="text-[11px] font-mono text-zinc-400 mb-1 block">Assigned Provider</label>
+                  <label className="text-[11px] font-mono text-zinc-400 mb-1 block">
+                    {language === "ru" ? "Назначенный провайдер" : "Assigned Provider"}
+                  </label>
                   <select
                     value={form.aiCustomConfig?.taskRouting?.coverLetter || form.aiProviderOrder[0] || "deepseek"}
                     onChange={(e) => updateTaskRouting("coverLetter", e.target.value as AIProvider)}
@@ -1819,10 +1905,12 @@ export default function SettingsPage() {
               <div className="flex items-center justify-between border-b border-zinc-800/60 pb-3">
                 <div className="flex items-center gap-2">
                   <Key size={14} className="text-amber-400" />
-                  <span className="text-xs font-semibold text-zinc-200">Custom Provider Credentials (BYOK)</span>
+                  <span className="text-xs font-semibold text-zinc-200">
+                    {language === "ru" ? "Пользовательские ключи API (BYOK)" : "Custom Provider Credentials (BYOK)"}
+                  </span>
                 </div>
                 <span className="text-[10px] font-mono text-zinc-400">
-                  Config stored per profile
+                  {language === "ru" ? "Хранится в профиле" : "Config stored per profile"}
                 </span>
               </div>
 
@@ -1866,7 +1954,7 @@ export default function SettingsPage() {
                   <div className="space-y-3.5 pt-2">
                     <div>
                       <div className="text-xs font-semibold text-zinc-100 flex items-center gap-2">
-                        <span>{provMeta.label} Configuration</span>
+                        <span>{provMeta.label} {language === "ru" ? "Конфигурация" : "Configuration"}</span>
                         <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300 border border-zinc-700">
                           {provMeta.tag}
                         </span>
@@ -1878,10 +1966,14 @@ export default function SettingsPage() {
                     <div className="space-y-1">
                       <div className="flex items-center justify-between">
                         <label className="text-[11px] font-mono text-zinc-300">
-                          {provMeta.isLocal ? "Bearer Token (Optional for Localhost)" : "API Key (BYOK)"}
+                          {provMeta.isLocal
+                            ? (language === "ru" ? "Bearer Token (Опционально для Localhost)" : "Bearer Token (Optional for Localhost)")
+                            : (language === "ru" ? "Ключ API (BYOK)" : "API Key (BYOK)")}
                         </label>
                         <span className="text-[10px] text-zinc-500">
-                          {currentProvConfig.apiKey ? "Custom key active" : "Using system environment if empty"}
+                          {currentProvConfig.apiKey
+                            ? (language === "ru" ? "Активен пользовательский ключ" : "Custom key active")
+                            : (language === "ru" ? "Используются системные переменные" : "Using system environment if empty")}
                         </span>
                       </div>
                       <div className="relative">
@@ -1922,13 +2014,15 @@ export default function SettingsPage() {
 
                     {/* Model Name & Presets */}
                     <div className="space-y-1.5">
-                      <label className="text-[11px] font-mono text-zinc-300">Model Name</label>
+                      <label className="text-[11px] font-mono text-zinc-300">
+                        {language === "ru" ? "Название модели" : "Model Name"}
+                      </label>
                       <div className="flex items-center gap-2">
                         <input
                           type="text"
                           value={currentProvConfig.model || ""}
                           onChange={(e) => updateProviderConfig(selectedAiTab, { model: e.target.value })}
-                          placeholder={`Default: ${provMeta.defaultModel}`}
+                          placeholder={`${language === "ru" ? "По умолчанию" : "Default"}: ${provMeta.defaultModel}`}
                           className="flex-1 bg-zinc-900 border border-zinc-700/80 rounded-lg px-3 py-2 text-xs font-mono text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-emerald-500"
                         />
                         {currentProvConfig.model && (
@@ -1937,14 +2031,16 @@ export default function SettingsPage() {
                             onClick={() => updateProviderConfig(selectedAiTab, { model: "" })}
                             className="px-2.5 py-2 rounded-lg bg-zinc-800 text-zinc-400 hover:text-zinc-200 text-xs border border-zinc-700 transition-colors"
                           >
-                            Reset
+                            {language === "ru" ? "Сброс" : "Reset"}
                           </button>
                         )}
                       </div>
 
                       {/* Quick Model Presets */}
                       <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
-                        <span className="text-[10px] font-mono text-zinc-500">Presets:</span>
+                        <span className="text-[10px] font-mono text-zinc-500">
+                          {language === "ru" ? "Пресеты:" : "Presets:"}
+                        </span>
                         {provMeta.presets.map((preset) => (
                           <button
                             key={preset}
@@ -1971,7 +2067,11 @@ export default function SettingsPage() {
                         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-100 text-xs font-medium border border-zinc-700 transition-colors disabled:opacity-50"
                       >
                         {testingAi ? <RefreshCw size={13} className="animate-spin text-emerald-400" /> : <Play size={13} />}
-                        <span>{testingAi ? "Testing Ping..." : "Test Connection"}</span>
+                        <span>
+                          {testingAi
+                            ? (language === "ru" ? "Тестирование..." : "Testing Ping...")
+                            : (language === "ru" ? "Проверить подключение" : "Test Connection")}
+                        </span>
                       </button>
 
                       {testAiResult && testAiResult.provider === selectedAiTab && (
@@ -1999,9 +2099,13 @@ export default function SettingsPage() {
             <div className="space-y-2.5 pt-2">
               <div className="flex items-center justify-between">
                 <div>
-                  <span className="text-xs font-semibold text-zinc-200">Cascade Failover Priority</span>
+                  <span className="text-xs font-semibold text-zinc-200">
+                    {language === "ru" ? "Каскадный приоритет переключения" : "Cascade Failover Priority"}
+                  </span>
                   <p className="text-[11px] text-zinc-400">
-                    Failover sequence if primary engines encounter rate limits or temporary network errors.
+                    {language === "ru"
+                      ? "Последовательность переключения при лимитах запросов или сетевых ошибках."
+                      : "Failover sequence if primary engines encounter rate limits or temporary network errors."}
                   </p>
                 </div>
                 <button
@@ -2029,7 +2133,7 @@ export default function SettingsPage() {
                   disabled={form.aiProviderOrder.length >= 7}
                   className="text-[11px] px-2.5 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                 >
-                  + Add Provider to Chain
+                  {language === "ru" ? "+ Добавить в цепочку" : "+ Add Provider to Chain"}
                 </button>
               </div>
 
@@ -2063,7 +2167,7 @@ export default function SettingsPage() {
                             <span className="text-[10px] font-mono text-zinc-400">({activeModel})</span>
                             {idx === 0 && (
                               <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 uppercase font-semibold">
-                                Primary
+                                {language === "ru" ? "Основной" : "Primary"}
                               </span>
                             )}
                           </div>
@@ -2127,20 +2231,24 @@ export default function SettingsPage() {
             <div className="flex items-center justify-between pb-3 border-b border-zinc-800/60">
               <div className="flex items-center gap-2">
                 <Send size={16} className="text-emerald-400" />
-                <h2 className="text-sm font-semibold text-zinc-100">Telegram Bot Notifications</h2>
+                <h2 className="text-sm font-semibold text-zinc-100">
+                  {language === "ru" ? "Уведомления через Telegram-бота" : "Telegram Bot Notifications"}
+                </h2>
               </div>
               <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-800 text-zinc-300 border border-zinc-700">
-                {tgLinked ? `Linked as @${tgUsername || "Telegram User"}` : "Unlinked"}
+                {tgLinked
+                  ? (language === "ru" ? `Подключен как @${tgUsername || "Telegram"}` : `Linked as @${tgUsername || "Telegram User"}`)
+                  : (language === "ru" ? "Не подключен" : "Unlinked")}
               </span>
             </div>
 
             <div>
               <label className="block text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-1.5">
-                DEVICE SYNC TOKEN
+                {language === "ru" ? "ТОКЕН СИНХРОНИЗАЦИИ УСТРОЙСТВА" : "DEVICE SYNC TOKEN"}
               </label>
               <div className="flex items-center gap-2">
                 <div className="flex-1 bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs font-mono text-emerald-400">
-                  {tgToken || "Click 'Generate' to create a link token"}
+                  {tgToken || (language === "ru" ? "Нажмите 'Создать' для генерации токена привязки" : "Click 'Generate' to create a link token")}
                 </div>
                 <button
                   type="button"
@@ -2157,11 +2265,14 @@ export default function SettingsPage() {
                   disabled={generatingTg}
                   className="px-3 py-2 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 text-xs font-medium border border-emerald-500/20 transition-colors disabled:opacity-50"
                 >
-                  {generatingTg ? "..." : "Generate"}
+                  {generatingTg ? "..." : (language === "ru" ? "Создать" : "Generate")}
                 </button>
               </div>
               <p className="text-[10px] text-zinc-500 mt-1.5">
-                Send this authentication command to the Telegram bot: <code className="text-zinc-400">/link {tgToken || "TOKEN"}</code>
+                {language === "ru"
+                  ? "Отправьте эту команду аутентификации боту в Telegram: "
+                  : "Send this authentication command to the Telegram bot: "}
+                <code className="text-zinc-400">/link {tgToken || "TOKEN"}</code>
               </p>
             </div>
           </section>
@@ -2211,17 +2322,21 @@ export default function SettingsPage() {
                       : "bg-zinc-800 text-zinc-400 border-zinc-700"
                   }`}
                 >
-                  {form.hhSessionStatus === "active" ? "SESSION ACTIVE" : "SESSION DISCONNECTED"}
+                  {form.hhSessionStatus === "active"
+                    ? (language === "ru" ? "СЕССИЯ АКТИВНА" : "SESSION ACTIVE")
+                    : (language === "ru" ? "СЕССИЯ ОТКЛЮЧЕНА" : "SESSION DISCONNECTED")}
                 </span>
               </div>
             </div>
 
             <div>
               <h3 className="text-base font-bold text-zinc-100">
-                {form.hhProfileName || form.name || "Candidate Profile"}
+                {form.hhProfileName || form.name || (language === "ru" ? "Профиль соискателя" : "Candidate Profile")}
               </h3>
               <p className="text-xs text-zinc-400 mt-0.5">
-                {form.hhResumeTitle ? `Active CV: ${form.hhResumeTitle}` : "Connect your HeadHunter account to sync resumes"}
+                {form.hhResumeTitle
+                  ? (language === "ru" ? `Активное резюме: ${form.hhResumeTitle}` : `Active CV: ${form.hhResumeTitle}`)
+                  : (language === "ru" ? "Подключите HeadHunter для синхронизации резюме" : "Connect your HeadHunter account to sync resumes")}
               </p>
             </div>
 
@@ -2229,15 +2344,21 @@ export default function SettingsPage() {
             <div className="grid grid-cols-3 gap-2 pt-2 border-t border-zinc-800/80 text-center">
               <div>
                 <div className="text-lg font-bold font-mono text-zinc-100">{stats.appliedCount || form.hhTotalApplications || 0}</div>
-                <div className="text-[9px] font-semibold text-zinc-500 uppercase tracking-wider mt-0.5">RESPONSES</div>
+                <div className="text-[9px] font-semibold text-zinc-500 uppercase tracking-wider mt-0.5">
+                  {language === "ru" ? "ОТКЛИКИ" : "RESPONSES"}
+                </div>
               </div>
               <div>
                 <div className="text-lg font-bold font-mono text-zinc-100">{form.hhResumeTitle ? 1 : 0}</div>
-                <div className="text-[9px] font-semibold text-zinc-500 uppercase tracking-wider mt-0.5">ACTIVE CV</div>
+                <div className="text-[9px] font-semibold text-zinc-500 uppercase tracking-wider mt-0.5">
+                  {language === "ru" ? "АКТИВНЫХ РЕЗЮМЕ" : "ACTIVE CV"}
+                </div>
               </div>
               <div>
                 <div className="text-lg font-bold font-mono text-emerald-400">{stats.avgScore || 0}%</div>
-                <div className="text-[9px] font-semibold text-zinc-500 uppercase tracking-wider mt-0.5">AVG MATCH</div>
+                <div className="text-[9px] font-semibold text-zinc-500 uppercase tracking-wider mt-0.5">
+                  {language === "ru" ? "СРЕДНИЙ МЭТЧ" : "AVG MATCH"}
+                </div>
               </div>
             </div>
 
@@ -2250,7 +2371,7 @@ export default function SettingsPage() {
                 className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-xs font-semibold transition-colors disabled:opacity-50"
               >
                 {checkingSession ? <RefreshCw size={13} className="animate-spin text-zinc-950" /> : <RotateCw size={13} />}
-                <span>Check & Refresh Session</span>
+                <span>{language === "ru" ? "Проверить и обновить сессию" : "Check & Refresh Session"}</span>
               </button>
 
               <button
@@ -2260,7 +2381,7 @@ export default function SettingsPage() {
                 className="w-full flex items-center justify-center gap-2 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-medium border border-zinc-700/80 transition-colors disabled:opacity-50"
               >
                 {syncingHH ? <RefreshCw size={13} className="animate-spin text-emerald-400" /> : <RefreshCw size={13} />}
-                <span>Sync History to Local DB</span>
+                <span>{language === "ru" ? "Синхронизировать историю в БД" : "Sync History to Local DB"}</span>
               </button>
             </div>
           </div>
@@ -2270,29 +2391,31 @@ export default function SettingsPage() {
             <div className="flex items-center justify-between pb-2 border-b border-zinc-800/60">
               <div className="flex items-center gap-2">
                 <Activity size={15} className="text-emerald-400" />
-                <h3 className="text-xs font-semibold text-zinc-200 uppercase tracking-wider">Worker Telemetry</h3>
+                <h3 className="text-xs font-semibold text-zinc-200 uppercase tracking-wider">
+                  {language === "ru" ? "Телеметрия воркера" : "Worker Telemetry"}
+                </h3>
               </div>
               {/* NO round dot: clean text pill */}
               <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-medium">
-                Active Daemon
+                {language === "ru" ? "Активный демон" : "Active Daemon"}
               </span>
             </div>
 
             <div className="space-y-2.5 text-xs">
               <div className="flex items-center justify-between">
-                <span className="text-zinc-400">Sync Cadence</span>
-                <span className="font-mono text-zinc-200">Daily Cron (00:00 UTC)</span>
+                <span className="text-zinc-400">{language === "ru" ? "Частота синхронизации" : "Sync Cadence"}</span>
+                <span className="font-mono text-zinc-200">{language === "ru" ? "Ежедневный крон (00:00 UTC)" : "Daily Cron (00:00 UTC)"}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-zinc-400">Score Threshold</span>
-                <span className="font-mono text-emerald-400">{form.minimumScoreToNotify}% min match</span>
+                <span className="text-zinc-400">{language === "ru" ? "Порог совпадения" : "Score Threshold"}</span>
+                <span className="font-mono text-emerald-400">{form.minimumScoreToNotify}% {language === "ru" ? "мин. мэтч" : "min match"}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-zinc-400">Max Alerts</span>
-                <span className="font-mono text-zinc-200">{form.maxNotificationsPerDay} / day</span>
+                <span className="text-zinc-400">{language === "ru" ? "Макс. уведомлений" : "Max Alerts"}</span>
+                <span className="font-mono text-zinc-200">{form.maxNotificationsPerDay} / {language === "ru" ? "день" : "day"}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-zinc-400">Primary Provider</span>
+                <span className="text-zinc-400">{language === "ru" ? "Основной провайдер" : "Primary Provider"}</span>
                 <span className="font-mono text-zinc-200 uppercase">{form.aiProviderOrder[0] || "groq"}</span>
               </div>
             </div>
@@ -2301,7 +2424,7 @@ export default function SettingsPage() {
           {/* ── Card 3: Quick Section Jump ── */}
           <div className="bg-zinc-900/80 border border-zinc-800 rounded-xl p-5 space-y-3">
             <h3 className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
-              QUICK SECTION JUMP
+              {language === "ru" ? "БЫСТРЫЙ ПЕРЕХОД" : "QUICK SECTION JUMP"}
             </h3>
 
             <div className="space-y-1.5 text-xs">
@@ -2310,7 +2433,7 @@ export default function SettingsPage() {
                 onClick={() => scrollToSection("section-hh-sync")}
                 className="w-full flex items-center justify-between p-2 rounded-lg text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors text-left"
               >
-                <span>HH.ru Sync &amp; Auth</span>
+                <span>{language === "ru" ? "Синхронизация и авторизация HH.ru" : "HH.ru Sync & Auth"}</span>
                 <ChevronRight size={14} className="text-zinc-500" />
               </button>
 
@@ -2319,7 +2442,7 @@ export default function SettingsPage() {
                 onClick={() => scrollToSection("section-search-filters")}
                 className="w-full flex items-center justify-between p-2 rounded-lg text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors text-left"
               >
-                <span>Search &amp; Match Filters</span>
+                <span>{language === "ru" ? "Фильтры поиска и соответствия" : "Search & Match Filters"}</span>
                 <ChevronRight size={14} className="text-zinc-500" />
               </button>
 
@@ -2328,7 +2451,7 @@ export default function SettingsPage() {
                 onClick={() => scrollToSection("section-ai-context")}
                 className="w-full flex items-center justify-between p-2 rounded-lg text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors text-left"
               >
-                <span>AI Context &amp; LLM Rules</span>
+                <span>{language === "ru" ? "Контекст ИИ и правила LLM" : "AI Context & LLM Rules"}</span>
                 <ChevronRight size={14} className="text-zinc-500" />
               </button>
 
@@ -2337,7 +2460,7 @@ export default function SettingsPage() {
                 onClick={() => scrollToSection("section-telegram")}
                 className="w-full flex items-center justify-between p-2 rounded-lg text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors text-left"
               >
-                <span>Telegram Bot Pipeline</span>
+                <span>{language === "ru" ? "Пайплайн Telegram-бота" : "Telegram Bot Pipeline"}</span>
                 <ChevronRight size={14} className="text-zinc-500" />
               </button>
             </div>

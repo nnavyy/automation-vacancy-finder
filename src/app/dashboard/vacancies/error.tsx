@@ -12,7 +12,6 @@ import {
   LayoutDashboard,
   Briefcase,
   Database,
-  ArrowLeft,
   Copy,
   Check,
   Sparkles,

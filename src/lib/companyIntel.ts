@@ -217,7 +217,7 @@ export async function resolveCompanyDomain(
 
 export async function crawlCompanyWebsite(
   domain: string,
-  companyName: string
+  _companyName: string
 ): Promise<{
   website: string;
   careersUrl?: string;
@@ -573,7 +573,7 @@ export function mergeContacts(
   for (const c of osintContacts) {
     const key = makeKey(c);
     let matched = false;
-    for (const [k, existing] of map.entries()) {
+    for (const existing of map.values()) {
       if (
         (existing.linkedinUrl && c.linkedinUrl && existing.linkedinUrl === c.linkedinUrl) ||
         existing.name.toLowerCase().trim() === c.name.toLowerCase().trim()

@@ -41,7 +41,6 @@ interface AnalyticsDashboardProps {
 
 export default function AnalyticsDashboard({
   initialVacancies,
-  totalCount,
 }: AnalyticsDashboardProps) {
   const { language, t } = useLanguage();
   const [timeRange, setTimeRange] = useState<"30d" | "14d" | "all">("30d");
