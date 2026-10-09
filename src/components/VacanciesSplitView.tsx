@@ -13,6 +13,7 @@ import {
   Search,
   ExternalLink,
   Bookmark,
+  Eye,
   EyeOff,
   Sparkles,
   Send,
@@ -236,13 +237,16 @@ export default function VacanciesSplitView({
       });
   };
 
-  const handleHide = async (vacancyId: string) => {
+  const handleToggleHide = async (vacancyId: string) => {
     const target = vacancies.find((v) => v.id === vacancyId);
     if (!target) return;
     const previousStatus = target.status;
+    const isCurrentlyHidden =
+      previousStatus === "skipped" || previousStatus === "ignored" || previousStatus === "low_priority";
+    const newStatus = isCurrentlyHidden ? "new" : "skipped";
 
-    // 1. Immediately advance selectedId to next item (0ms instant response)
-    if (selectedId === vacancyId) {
+    // 1. If hiding the currently selected vacancy, advance to next item (0ms instant response)
+    if (!isCurrentlyHidden && selectedId === vacancyId) {
       const currentIndex = filteredVacancies.findIndex((v) => v.id === vacancyId);
       const nextRemaining = filteredVacancies.filter((v) => v.id !== vacancyId);
       if (nextRemaining.length > 0) {
@@ -252,30 +256,32 @@ export default function VacanciesSplitView({
       }
     }
 
-    // 2. Optimistic update (0ms instant removal)
+    // 2. Optimistic update (0ms instant response)
     setVacancies((prev) =>
-      prev.map((v) => (v.id === vacancyId ? { ...v, status: "skipped" } : v))
+      prev.map((v) => (v.id === vacancyId ? { ...v, status: newStatus } : v))
     );
 
-    // 3. Non-blocking background sync
+    // 3. Non-blocking background sync with auto-rollback
     fetch(`/api/vacancies/${vacancyId}/status`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: "skipped" }),
+      body: JSON.stringify({ status: newStatus }),
     })
       .then((res) => {
         if (!res.ok) throw new Error("Status update failed");
       })
       .catch((err) => {
-        console.error("[handleHide] network rollback:", err);
+        console.error("[handleToggleHide] network rollback:", err);
         setVacancies((prev) =>
           prev.map((v) => (v.id === vacancyId ? { ...v, status: previousStatus } : v))
         );
-        if (selectedId === vacancyId) {
+        if (!isCurrentlyHidden && selectedId === vacancyId) {
           setSelectedId(vacancyId);
         }
       });
   };
+
+  const handleHide = handleToggleHide;
 
   const handleRunAnalysis = async (vacancyId: string) => {
     setAnalyzingId(vacancyId);
@@ -497,7 +503,7 @@ export default function VacanciesSplitView({
             {
               id: "skip",
               label: t("vacancies.tabSkip"),
-              count: vacancies.filter((v) => v.status === "skipped" || v.status === "ignored").length,
+              count: vacancies.filter((v) => v.status === "skipped" || v.status === "ignored" || v.status === "low_priority").length,
             },
           ].map((tab) => {
             const active = filterTab === tab.id;
@@ -703,12 +709,24 @@ export default function VacanciesSplitView({
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleHide(v.id);
+                              handleToggleHide(v.id);
                             }}
-                            className="p-1 rounded hover:bg-zinc-800 text-zinc-500 hover:text-rose-400 transition-all active:scale-90"
-                            title={language === "ru" ? "Скрыть" : "Hide"}
+                            className={`p-1 rounded hover:bg-zinc-800 transition-all active:scale-90 ${
+                              v.status === "skipped" || v.status === "ignored" || v.status === "low_priority"
+                                ? "text-amber-400 hover:text-emerald-400"
+                                : "text-zinc-500 hover:text-rose-400"
+                            }`}
+                            title={
+                              v.status === "skipped" || v.status === "ignored" || v.status === "low_priority"
+                                ? (language === "ru" ? "Восстановить" : "Restore / Unhide")
+                                : (language === "ru" ? "Скрыть" : "Hide")
+                            }
                           >
-                            <EyeOff className="w-3.5 h-3.5" />
+                            {v.status === "skipped" || v.status === "ignored" || v.status === "low_priority" ? (
+                              <Eye className="w-3.5 h-3.5" />
+                            ) : (
+                              <EyeOff className="w-3.5 h-3.5" />
+                            )}
                           </button>
                           {isSelected && (
                             <span className="text-[11px] font-semibold text-zinc-300 flex items-center gap-0.5 ml-1">
@@ -800,11 +818,23 @@ export default function VacanciesSplitView({
                     </button>
                     <button
                       type="button"
-                      onClick={() => handleHide(selectedVacancy.id)}
-                      className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-rose-400 border border-zinc-700/60 transition-all active:scale-90"
-                      title={language === "ru" ? "Скрыть вакансию" : "Hide / Cull Vacancy"}
+                      onClick={() => handleToggleHide(selectedVacancy.id)}
+                      className={`p-2 rounded-lg border transition-all active:scale-90 ${
+                        selectedVacancy.status === "skipped" || selectedVacancy.status === "ignored" || selectedVacancy.status === "low_priority"
+                          ? "bg-amber-500/10 hover:bg-emerald-500/10 text-amber-400 hover:text-emerald-400 border-amber-500/30 hover:border-emerald-500/30"
+                          : "bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-rose-400 border border-zinc-700/60"
+                      }`}
+                      title={
+                        selectedVacancy.status === "skipped" || selectedVacancy.status === "ignored" || selectedVacancy.status === "low_priority"
+                          ? (language === "ru" ? "Восстановить вакансию" : "Restore / Unhide Vacancy")
+                          : (language === "ru" ? "Скрыть вакансию" : "Hide / Cull Vacancy")
+                      }
                     >
-                      <EyeOff className="w-4 h-4" />
+                      {selectedVacancy.status === "skipped" || selectedVacancy.status === "ignored" || selectedVacancy.status === "low_priority" ? (
+                        <Eye className="w-4 h-4" />
+                      ) : (
+                        <EyeOff className="w-4 h-4" />
+                      )}
                     </button>
                   </div>
                 </div>
