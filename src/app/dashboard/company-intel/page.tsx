@@ -1,8 +1,9 @@
 "use client";
 
 // ============================================================
-// Nanda AI Job Assistant — Company Intelligence & Recruiter Directory
+// HH Job Copilot — Company Intelligence & Recruiter Directory
 // Multi-engine crawler with quick company switcher, decision makers, and inline AI pitch generator
+// Dynamic localization support (EN / RU)
 // ============================================================
 
 import { useState, useEffect, useCallback, Suspense, useMemo } from "react";
@@ -26,6 +27,7 @@ import {
   FileText,
 } from "lucide-react";
 import RecruiterDossierModal, { RecruiterDossierData } from "@/components/RecruiterDossierModal";
+import { useLanguage } from "@/lib/i18n";
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -82,6 +84,7 @@ function parseIntelMetadata(description?: string): CompanyMetadata {
 // ── Main Content Component ────────────────────────────────────
 
 function CompanyIntelContent() {
+  const { t, language } = useLanguage();
   const searchParams = useSearchParams();
   const [intels, setIntels] = useState<CompanyIntel[]>([]);
   const [selectedId, setSelectedId] = useState<string>("");
@@ -112,7 +115,6 @@ function CompanyIntelContent() {
       if (json.success && Array.isArray(json.data)) {
         setIntels(json.data);
         if (json.data.length > 0 && !selectedId) {
-          // Default to first company or Novakid if present
           const novakid = json.data.find((c: any) => c.companyName.includes("Novakid"));
           setSelectedId(novakid ? novakid.id : json.data[0].id);
         }
@@ -305,20 +307,23 @@ function CompanyIntelContent() {
         <div>
           <div className="flex items-center gap-2 mb-1">
             <h1 className="text-xl font-bold text-zinc-100 tracking-tight">
-              Company Intel & Recruiter Directory
+              {t("intel.title", "Company Intel & Recruiter Directory")}
             </h1>
             <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono">
-              AUTOMATED OSINT
+              {t("intel.osintBadge", "AUTOMATED OSINT")}
             </span>
           </div>
           <p className="text-zinc-400 text-sm">
-            Discover verified hiring managers, tech leads, and HR contacts for target vacancies. Generate personalized, high-converting cold pitches via AI engine.
+            {t(
+              "intel.subtitle",
+              "Discover verified hiring managers, tech leads, and HR contacts for target vacancies. Generate personalized, high-converting cold pitches via AI engine."
+            )}
           </p>
         </div>
 
         <div className="flex items-center gap-2">
           <span className="text-xs px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-300 font-mono">
-            Active Multi-Engine Crawler
+            {t("intel.activeCrawler", "Active Multi-Engine Crawler")}
           </span>
         </div>
       </div>
@@ -327,50 +332,64 @@ function CompanyIntelContent() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
         <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-2xl p-4 backdrop-blur-sm space-y-1.5">
           <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
-            Tracked Companies
+            {t("intel.trackedCompanies", "Tracked Companies")}
           </span>
           <div className="flex items-baseline gap-2">
             <span className="text-2xl font-black text-zinc-100">{totalTracked}</span>
-            <span className="text-[11px] text-zinc-400">entities</span>
-          </div>
-          <p className="text-[11px] text-emerald-400">+4 added from recent crawl</p>
-        </div>
-
-        <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-2xl p-4 backdrop-blur-sm space-y-1.5">
-          <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
-            Decision Makers
-          </span>
-          <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-black text-violet-400">
-              {totalDecisionMakers}
+            <span className="text-[11px] text-zinc-400">
+              {t("intel.entities", "entities")}
             </span>
-            <span className="text-[11px] text-zinc-400">identified</span>
           </div>
-          <p className="text-[11px] text-violet-300">
-            {totalVerifiedEmails} direct verified channels
+          <p className="text-[11px] text-emerald-400">
+            {t("intel.addedRecent", "+4 added from recent crawl")}
           </p>
         </div>
 
         <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-2xl p-4 backdrop-blur-sm space-y-1.5">
           <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
-            Outreach Pitches
+            {t("intel.decisionMakers", "Decision Makers")}
           </span>
           <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-black text-emerald-400">18</span>
-            <span className="text-[11px] text-zinc-400">delivered</span>
+            <span className="text-2xl font-black text-violet-400">
+              {totalDecisionMakers}
+            </span>
+            <span className="text-[11px] text-zinc-400">
+              {t("intel.identified", "identified")}
+            </span>
           </div>
-          <p className="text-[11px] text-emerald-400">38.8% positive reply rate</p>
+          <p className="text-[11px] text-violet-300">
+            {totalVerifiedEmails} {t("intel.directVerifiedChannels", "direct verified channels")}
+          </p>
         </div>
 
         <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-2xl p-4 backdrop-blur-sm space-y-1.5">
           <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
-            Avg Response Time
+            {t("intel.outreachPitches", "Outreach Pitches")}
+          </span>
+          <div className="flex items-baseline gap-2">
+            <span className="text-2xl font-black text-emerald-400">18</span>
+            <span className="text-[11px] text-zinc-400">
+              {t("intel.delivered", "delivered")}
+            </span>
+          </div>
+          <p className="text-[11px] text-emerald-400">
+            {t("intel.replyRate", "38.8% positive reply rate")}
+          </p>
+        </div>
+
+        <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-2xl p-4 backdrop-blur-sm space-y-1.5">
+          <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
+            {t("intel.avgResponse", "Avg Response Time")}
           </span>
           <div className="flex items-baseline gap-2">
             <span className="text-2xl font-black text-sky-400">1.8</span>
-            <span className="text-[11px] text-zinc-400">days</span>
+            <span className="text-[11px] text-zinc-400">
+              {t("intel.days", "days")}
+            </span>
           </div>
-          <p className="text-[11px] text-sky-400">4.2x faster than HH standard</p>
+          <p className="text-[11px] text-sky-400">
+            {t("intel.fasterHh", "4.2x faster than HH standard")}
+          </p>
         </div>
       </div>
 
@@ -383,7 +402,10 @@ function CompanyIntelContent() {
               type="text"
               value={companyName}
               onChange={(e) => setCompanyName(e.target.value)}
-              placeholder="Target company name or domain (e.g. Novakid Inc, Grab, cian.ru)..."
+              placeholder={t(
+                "intel.searchPlaceholder",
+                "Target company name or domain (e.g. Novakid Inc, Grab, cian.ru)..."
+              )}
               disabled={searching}
               className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-10 pr-4 py-2.5 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-violet-500/60 focus:ring-1 focus:ring-violet-500/30 transition-all"
             />
@@ -395,7 +417,7 @@ function CompanyIntelContent() {
               type="text"
               value={roleQuery}
               onChange={(e) => setRoleQuery(e.target.value)}
-              placeholder="Target role (e.g. Head of Frontend)"
+              placeholder={t("intel.rolePlaceholder", "Target role (e.g. Head of Frontend)")}
               className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-10 pr-4 py-2.5 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-violet-500/60 focus:ring-1 focus:ring-violet-500/30 transition-all"
             />
           </div>
@@ -408,12 +430,12 @@ function CompanyIntelContent() {
             {searching ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                Crawling...
+                {t("intel.crawling", "Crawling...")}
               </>
             ) : (
               <>
                 <Search className="w-4 h-4" />
-                Deep Crawl
+                {t("intel.deepCrawl", "Deep Crawl")}
               </>
             )}
           </button>
@@ -429,7 +451,7 @@ function CompanyIntelContent() {
         {/* Quick OSINT Presets */}
         <div className="flex items-center gap-2 pt-1 border-t border-zinc-800/60 flex-wrap text-xs">
           <span className="text-zinc-500 font-semibold uppercase text-[10px] tracking-wider">
-            OSINT Presets:
+            {t("intel.presets", "OSINT Presets:")}
           </span>
           <a
             href={`https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(
@@ -440,7 +462,7 @@ function CompanyIntelContent() {
             className="px-2.5 py-1 rounded-md bg-zinc-800 hover:bg-zinc-700 text-sky-400 transition-colors flex items-center gap-1"
           >
             <Linkedin className="w-3 h-3" />
-            LinkedIn Decision Makers
+            {t("intel.presetLinkedin", "LinkedIn Decision Makers")}
           </a>
           <a
             href={`https://www.google.com/search?q=site:linkedin.com/in+"${encodeURIComponent(
@@ -451,7 +473,7 @@ function CompanyIntelContent() {
             className="px-2.5 py-1 rounded-md bg-zinc-800 hover:bg-zinc-700 text-amber-400 transition-colors flex items-center gap-1"
           >
             <Search className="w-3 h-3" />
-            Google X-Ray Recruiter
+            {t("intel.presetGoogle", "Google X-Ray Recruiter")}
           </a>
           <a
             href={`https://www.glassdoor.com/Search/results.htm?keyword=${encodeURIComponent(
@@ -462,7 +484,7 @@ function CompanyIntelContent() {
             className="px-2.5 py-1 rounded-md bg-zinc-800 hover:bg-zinc-700 text-emerald-400 transition-colors flex items-center gap-1"
           >
             <Globe className="w-3 h-3" />
-            Glassdoor Sentiment
+            {t("intel.presetGlassdoor", "Glassdoor Sentiment")}
           </a>
         </div>
       </div>
@@ -517,7 +539,7 @@ function CompanyIntelContent() {
                     className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded bg-zinc-800 text-zinc-300 hover:text-white transition-colors"
                   >
                     <Globe className="w-3 h-3 text-violet-400" />
-                    Website
+                    {t("intel.website", "Website")}
                   </a>
                 )}
                 {careersUrl && (
@@ -528,7 +550,7 @@ function CompanyIntelContent() {
                     className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors"
                   >
                     <Briefcase className="w-3 h-3" />
-                    Careers Portal
+                    {t("intel.careers", "Careers Portal")}
                   </a>
                 )}
                 {companyLinkedinUrl && (
@@ -539,7 +561,7 @@ function CompanyIntelContent() {
                     className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded bg-sky-500/10 text-sky-400 hover:bg-sky-500/20 transition-colors"
                   >
                     <Linkedin className="w-3 h-3" />
-                    LinkedIn
+                    {t("intel.linkedin", "LinkedIn")}
                   </a>
                 )}
               </div>
@@ -547,7 +569,7 @@ function CompanyIntelContent() {
               {/* Engineering Tech Stack Footprint */}
               <div className="space-y-1.5 pt-1 border-t border-zinc-800/80">
                 <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
-                  Engineering Tech Stack Footprint
+                  {t("intel.techFootprint", "Engineering Tech Stack Footprint")}
                 </span>
                 <div className="flex flex-wrap gap-1.5">
                   {["React 18", "TypeScript", "Next.js", "Node.js", "WebSockets", "TailwindCSS", "Python"].map(
@@ -566,10 +588,13 @@ function CompanyIntelContent() {
               {/* Hiring Dynamics & Insights */}
               <div className="space-y-1.5 pt-1 border-t border-zinc-800/80">
                 <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
-                  Hiring Dynamics & Insights
+                  {t("intel.hiringDynamics", "Hiring Dynamics & Insights")}
                 </span>
                 <p className="text-xs text-zinc-400 leading-relaxed">
-                  Values asynchronous autonomy. English & Russian bilingual team setup. Engineering interview cadence: 1 screening + 1 deep technical architecture session.
+                  {t(
+                    "intel.hiringDesc",
+                    "Values asynchronous autonomy. English & Russian bilingual team setup. Engineering interview cadence: 1 screening + 1 deep technical architecture session."
+                  )}
                 </p>
               </div>
 
@@ -577,9 +602,13 @@ function CompanyIntelContent() {
               <div className="p-3 rounded-xl bg-emerald-500/5 border border-emerald-500/20 flex items-center justify-between text-xs">
                 <div>
                   <span className="font-bold text-emerald-400 text-sm">96%</span>
-                  <span className="text-zinc-400 ml-1.5">Stack Alignment</span>
+                  <span className="text-zinc-400 ml-1.5">
+                    {t("intel.stackAlignment", "Stack Alignment")}
+                  </span>
                 </div>
-                <span className="text-zinc-400">Fits Candidate Target</span>
+                <span className="text-zinc-400">
+                  {t("intel.fitsCandidate", "Fits Candidate Target")}
+                </span>
               </div>
             </div>
           ) : null}
@@ -588,10 +617,10 @@ function CompanyIntelContent() {
           <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-2xl p-4 backdrop-blur-sm space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
-                Recent Company Analyses
+                {t("intel.recentAnalyses", "Recent Company Analyses")}
               </span>
               <span className="text-xs text-zinc-500 font-mono">
-                {intels.length} saved
+                {intels.length} {t("intel.saved", "saved")}
               </span>
             </div>
 
@@ -615,7 +644,7 @@ function CompanyIntelContent() {
                       <div className="min-w-0">
                         <p className="text-xs font-bold truncate">{item.companyName}</p>
                         <p className="text-[10px] text-zinc-500 truncate">
-                          {item.contacts.length} decision contact{item.contacts.length !== 1 ? "s" : ""}
+                          {item.contacts.length} {t("intel.decisionContacts", "contacts")}
                         </p>
                       </div>
                     </div>
@@ -644,7 +673,7 @@ function CompanyIntelContent() {
             <div className="flex items-center gap-2">
               <Users className="w-4 h-4 text-emerald-400" />
               <h2 className="text-sm font-bold text-zinc-100 uppercase tracking-wider">
-                Identified Decision Makers ({filteredContacts.length})
+                {t("intel.decisionMakersTitle", "Identified Decision Makers")} ({filteredContacts.length})
               </h2>
             </div>
 
@@ -657,7 +686,7 @@ function CompanyIntelContent() {
                     : "bg-zinc-800 text-zinc-400 hover:text-zinc-200"
                 }`}
               >
-                All ({activeCompany?.contacts.length ?? 0})
+                {t("intel.filterAll", "All")} ({activeCompany?.contacts.length ?? 0})
               </button>
               <button
                 onClick={() => setContactFilter("tech")}
@@ -667,7 +696,7 @@ function CompanyIntelContent() {
                     : "bg-zinc-800 text-zinc-400 hover:text-zinc-200"
                 }`}
               >
-                Tech Leads
+                {t("intel.filterTech", "Tech Leads")}
               </button>
               <button
                 onClick={() => setContactFilter("hr")}
@@ -677,7 +706,7 @@ function CompanyIntelContent() {
                     : "bg-zinc-800 text-zinc-400 hover:text-zinc-200"
                 }`}
               >
-                HR & Talent
+                {t("intel.filterHr", "HR & Talent")}
               </button>
             </div>
           </div>
@@ -728,7 +757,7 @@ function CompanyIntelContent() {
                               {contact.name}
                             </h4>
                             <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">
-                              {contact.seniority ?? "Leader"}
+                              {contact.seniority ?? (language === "ru" ? "Руководитель" : "Leader")}
                             </span>
                           </div>
                           <p className="text-xs text-zinc-400 mt-0.5">
@@ -743,7 +772,7 @@ function CompanyIntelContent() {
                           {synergy}%
                         </div>
                         <span className="text-[10px] text-zinc-500 uppercase font-semibold">
-                          Synergy Score
+                          {t("intel.synergyScore", "Synergy Score")}
                         </span>
                       </div>
                     </div>
@@ -765,7 +794,7 @@ function CompanyIntelContent() {
                           className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-sky-500/10 text-sky-400 border border-sky-500/20 hover:bg-sky-500/20 transition-colors"
                         >
                           <Linkedin className="w-3.5 h-3.5" />
-                          LinkedIn Profile
+                          {t("intel.linkedinProfile", "LinkedIn Profile")}
                           <ExternalLink className="w-3 h-3 ml-0.5" />
                         </a>
                       )}
@@ -774,7 +803,7 @@ function CompanyIntelContent() {
                         onClick={() => openDossier(contact)}
                         className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition-colors ml-auto text-xs font-medium"
                       >
-                        Inspect Dossier
+                        {t("intel.inspectDossier", "Inspect Dossier")}
                       </button>
                     </div>
 
@@ -782,7 +811,7 @@ function CompanyIntelContent() {
                     <div className="pt-2 border-t border-zinc-800/80 flex items-center justify-between gap-2 flex-wrap">
                       <div className="flex items-center gap-1.5 text-xs">
                         <span className="text-[11px] text-zinc-500 uppercase font-semibold">
-                          Synthesize Pitch:
+                          {t("intel.synthesizePitch", "Synthesize Pitch:")}
                         </span>
                         <button
                           onClick={() =>
@@ -790,7 +819,7 @@ function CompanyIntelContent() {
                           }
                           className="px-2.5 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs transition-colors"
                         >
-                          Telegram DM (RU)
+                          {t("intel.pitchTelegram", "Telegram DM (RU)")}
                         </button>
                         <button
                           onClick={() =>
@@ -798,7 +827,7 @@ function CompanyIntelContent() {
                           }
                           className="px-2.5 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs transition-colors"
                         >
-                          Cold Email (EN)
+                          {t("intel.pitchEmail", "Cold Email (EN)")}
                         </button>
                         <button
                           onClick={() =>
@@ -806,7 +835,7 @@ function CompanyIntelContent() {
                           }
                           className="px-2.5 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs transition-colors"
                         >
-                          LinkedIn Note
+                          {t("intel.pitchLinkedin", "LinkedIn Note")}
                         </button>
                       </div>
                     </div>
@@ -863,7 +892,7 @@ function CompanyIntelContent() {
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-zinc-300 flex items-center gap-1.5 uppercase tracking-wider">
                   <FileText className="w-4 h-4 text-violet-400" />
-                  Crawled Search Results & Web Sources ({crawledSources.length})
+                  {t("intel.crawledSources", "Crawled Search Results & Web Sources")} ({crawledSources.length})
                 </span>
               </div>
               <div className="space-y-2 max-h-60 overflow-y-auto pr-1">

@@ -58,7 +58,13 @@ Track application attrition across the conversion funnel, visualize compatibilit
 Bypass the HR black hole. Automatically uncover hiring managers and tech leads via domain OSINT, with tailored cold-outreach drafting adapted to your portfolio.
 
 <div align="center">
-  <img src="screenshots/06_find_recruiter_dossier.png" alt="Recruiter Intelligence & Company OSINT" width="90%" />
+  <img src="screenshots/06_company_intel.png" alt="Company Intelligence & Recruiter Directory" width="90%" />
+</div>
+
+<br />
+
+<div align="center">
+  <img src="screenshots/06_find_recruiter_dossier.png" alt="Recruiter Intelligence Dossier" width="90%" />
 </div>
 
 ---
