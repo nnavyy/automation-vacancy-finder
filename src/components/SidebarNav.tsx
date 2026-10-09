@@ -13,7 +13,6 @@ import {
   CheckCircle,
   BarChart2,
   Settings,
-  Cpu,
   Users,
   LucideIcon,
   ChevronDown,
@@ -23,6 +22,7 @@ import {
 import { useState, useEffect } from "react";
 import { BRAND_NAME, BRAND_SHORT } from "@/lib/brand";
 import { useLanguage } from "@/lib/i18n";
+import { BrandLogo } from "@/components/BrandLogo";
 
 interface NavItem {
   icon: LucideIcon;
@@ -98,9 +98,7 @@ export default function SidebarNav({ onNavigate }: { onNavigate?: () => void }) 
       {/* Logo / Profile Switcher */}
       <div className="px-5 py-5 border-b border-zinc-800/80">
         <div className="flex items-center gap-2.5 mb-3">
-          <div className="w-7 h-7 rounded-lg bg-emerald-600 flex items-center justify-center shrink-0 shadow-sm">
-            <Cpu size={14} className="text-white" />
-          </div>
+          <BrandLogo size={28} className="shrink-0 drop-shadow-sm" />
           <div>
             <p className="text-sm font-semibold text-zinc-100 leading-tight">
               {BRAND_NAME}

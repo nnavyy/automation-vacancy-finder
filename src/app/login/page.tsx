@@ -12,8 +12,9 @@ import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Loader2, Mail, Lock, Cpu, ArrowRight } from "lucide-react";
+import { Loader2, Mail, Lock, ArrowRight } from "lucide-react";
 import { BRAND_NAME } from "@/lib/brand";
+import { BrandLogo } from "@/components/BrandLogo";
 
 export default function LoginPage() {
   // Jika maintenance mode aktif, kunci dan tampilkan Under Construction
@@ -60,9 +61,7 @@ export default function LoginPage() {
 
         {/* Logo & Header */}
         <div className="flex flex-col items-center mb-8 text-center">
-          <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mb-4 shadow-sm">
-            <Cpu size={22} className="text-emerald-400" />
-          </div>
+          <BrandLogo size={48} className="mb-4 drop-shadow-md" />
           <h1 className="text-xl font-bold text-zinc-100 tracking-tight">
             {BRAND_NAME}
           </h1>
