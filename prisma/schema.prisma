@@ -1,0 +1,309 @@
+// ============================================================
+// Nanda AI Job Assistant — Prisma Schema (Multi-User SaaS)
+// Database: NeonDB (PostgreSQL)
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ============================================================
+// User — Auth account (email + password)
+// ============================================================
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  searchPreferences  SearchPreference[]
+  telegramLinks      TelegramLink[]
+  vacancies          Vacancy[]
+  passwordResetTokens PasswordResetToken[]
+  companyIntels      CompanyIntel[]
+
+  @@map("users")
+}
+
+// ============================================================
+// Search Preference — Configurable job search settings
+// ============================================================
+model SearchPreference {
+  id                     String  @id @default(cuid())
+  userId                 String
+  user                   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  name                   String  @default("Default")
+  targetRoles            Json    // string[]
+  searchKeywordsEn       Json    // string[]
+  searchKeywordsRu       Json    // string[]
+  requiredSkills         Json    // string[]
+  niceToHaveSkills       Json    // string[]
+  experience             Json    // string[]
+  workFormat             Json    // string[]
+  salaryMinimum          Int?
+  salaryCurrency         String  @default("RUR")
+  excludeKeywords        Json    // string[]
+  redFlagKeywords        Json    // string[]
+  minimumScoreToNotify   Int     @default(70)
+  maxNotificationsPerDay Int     @default(20)
+  aiProviderOrder        Json    // string[]
+  coverLetterLanguage    String  @default("English")
+  resumeText             String?
+  portfolioUrl           String?
+
+  hhToken                String?
+  hhResumeId             String?
+  hhResumeTitle          String?
+  hhProfileName          String?
+  hhProfileAvatar        String?
+  hhTotalApplications    Int?      @default(0)
+  hhSessionStatus        String?   @default("unknown")
+  hhLastVerifiedAt       DateTime?
+  hhExpiresAt            DateTime?
+
+  collectionStatus       Json?   // { running: boolean, analyzed: number, total: number, startedAt: string }
+  isActive               Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("search_preferences")
+}
+
+// ============================================================
+// Vacancy — Raw vacancy data from HH public endpoint
+// ============================================================
+model Vacancy {
+  id              String  @id @default(cuid())
+  userId          String
+  user            User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  hhId            String
+  title           String
+  company         String?
+  area            String?
+  salary          Json?
+  url             String?
+  applyUrl        String?
+  apiUrl          String?
+  experience      String?
+  employment      String?
+  schedule        String?
+  workFormat      Json?
+  snippet         Json?
+  description     String?
+  descriptionHash String?
+  rawData         Json?
+  sourceKeyword   String?
+  status          String   @default("new")
+  filterReason    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  analysis  VacancyAnalysis?
+  feedbacks VacancyFeedback[]
+  logs      ApplicationLog[]
+
+  @@unique([userId, hhId])
+  @@index([userId, status])
+  @@index([userId, createdAt])
+  @@map("vacancies")
+}
+
+// ============================================================
+// Vacancy Analysis — AI analysis result
+// ============================================================
+model VacancyAnalysis {
+  id                  String  @id @default(cuid())
+  vacancyId           String  @unique
+  vacancy             Vacancy @relation(fields: [vacancyId], references: [id], onDelete: Cascade)
+
+  providerUsed        String?
+  modelUsed           String?
+  matchScore          Int
+  ruleScore           Int?
+  recommendation      String
+  bestLanguage        String
+  summary             String?
+  matchReasons        Json?
+  missingRequirements Json?
+  redFlags            Json?
+  coverLetter         String?
+  questions           Json?
+  confidence          Int?
+  aiStatus            String  @default("completed")
+
+  createdAt DateTime @default(now())
+
+  @@index([matchScore])
+  @@map("vacancy_analyses")
+}
+
+// ============================================================
+// Vacancy Feedback
+// ============================================================
+model VacancyFeedback {
+  id             String  @id @default(cuid())
+  vacancyId      String
+  vacancy        Vacancy @relation(fields: [vacancyId], references: [id], onDelete: Cascade)
+
+  userAction     String
+  outcome        String?
+  userReason     String?
+  recruiterReply Boolean?
+  interview      Boolean?
+  rejected       Boolean?
+  notes          String?
+
+  createdAt DateTime @default(now())
+
+  @@index([vacancyId])
+  @@map("vacancy_feedbacks")
+}
+
+// ============================================================
+// Application Log
+// ============================================================
+model ApplicationLog {
+  id        String  @id @default(cuid())
+  vacancyId String
+  vacancy   Vacancy @relation(fields: [vacancyId], references: [id], onDelete: Cascade)
+
+  action    String
+  notes     String?
+
+  createdAt DateTime @default(now())
+
+  @@index([vacancyId])
+  @@map("application_logs")
+}
+
+// ============================================================
+// AI Usage Log
+// ============================================================
+model AiUsageLog {
+  id           String  @id @default(cuid())
+  provider     String
+  model        String
+  requestType  String
+  status       String
+  inputTokens  Int?
+  outputTokens Int?
+  errorMessage String?
+
+  createdAt DateTime @default(now())
+
+  @@map("ai_usage_logs")
+}
+
+// ============================================================
+// Telegram Link — Token-based bot ↔ dashboard linking
+// ============================================================
+model TelegramLink {
+  id               String    @id @default(cuid())
+  userId           String
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  token            String    @unique
+  telegramChatId   String?   @unique
+  telegramUsername String?
+  linkedAt         DateTime?
+  isActive         Boolean   @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("telegram_links")
+}
+
+// ============================================================
+// Password Reset Token
+// ============================================================
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@map("password_reset_tokens")
+}
+
+// ============================================================
+// Company Intel — hasil pencarian struktur org perusahaan
+// ============================================================
+model CompanyIntel {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  companyName String
+  domain      String?
+  linkedinUrl String?
+  industry    String?
+  size        String?
+  description String?
+  vacancyId   String?  // optional: linked ke vacancy tertentu
+
+  contacts    CompanyContact[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("company_intel")
+}
+
+// ============================================================
+// Company Contact — individual kontak yang ditemukan
+// ============================================================
+model CompanyContact {
+  id              String       @id @default(cuid())
+  companyIntelId  String
+  companyIntel    CompanyIntel @relation(fields: [companyIntelId], references: [id], onDelete: Cascade)
+
+  name            String
+  role            String       // "CEO", "Hiring Manager", "Recruiter", dst
+  department      String?
+  linkedinUrl     String?
+  email           String?
+  emailVerified   Boolean      @default(false)
+  seniority       String?      // "C-Level", "VP", "Director", "Manager", "IC"
+  firstName       String?
+  lastName        String?
+
+  createdAt       DateTime @default(now())
+
+  @@map("company_contacts")
+}
+
+// ============================================================
+// CatalogTerm — Dynamic auto-updating suggestion dictionary
+// Tracks popularity of roles, skills, and keywords across users
+// ============================================================
+model CatalogTerm {
+  id         String   @id @default(cuid())
+  category   String   // "roles" | "skills" | "keywords_ru" | "keywords_en" | "exclude" | "red_flag"
+  value      String
+  lang       String   @default("all") // "en" | "ru" | "all"
+  usageCount Int      @default(1)
+  isCurated  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([category, value])
+  @@index([category, usageCount])
+  @@map("catalog_terms")
+}

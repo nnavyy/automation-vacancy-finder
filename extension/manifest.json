@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "HH Job Copilot — 1-Click Sync",
+  "version": "1.0.0",
+  "description": "Sync your HeadHunter (hh.ru) account session to HH Job Copilot Dashboard with 1 click without needing DevTools.",
+  "permissions": [
+    "cookies",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "*://*.hh.ru/*",
+    "https://automation-vacancy-finder-phi.vercel.app/*",
+    "http://localhost:3000/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Sync HH Account"
+  }
+}

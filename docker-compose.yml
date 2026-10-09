@@ -1,0 +1,55 @@
+# ============================================================
+# HH Job Copilot — Docker Compose for 1-Click Self-Hosting
+# Run: docker compose up -d
+# ============================================================
+
+version: "3.8"
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: hh-job-copilot-db
+    restart: always
+    environment:
+      POSTGRES_USER: hhuser
+      POSTGRES_PASSWORD: hhpassword
+      POSTGRES_DB: hh_copilot
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hhuser -d hh_copilot"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: hh-job-copilot-app
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://hhuser:hhpassword@db:5432/hh_copilot?schema=public
+      - APP_BASE_URL=http://localhost:3000
+      - NEXT_PUBLIC_APP_URL=http://localhost:3000
+      - AUTH_SECRET=generate-a-secure-32-byte-secret-here
+      - ENCRYPTION_KEY=generate-a-secure-32-byte-secret-here
+      - CRON_SECRET=local-cron-secret-key
+      - HH_USER_AGENT=HHJobCopilot/1.0 (selfhost@localhost)
+    env_file:
+      - path: .env
+        required: false
+      - path: .env.local
+        required: false
+
+volumes:
+  postgres_data:
+    driver: local
