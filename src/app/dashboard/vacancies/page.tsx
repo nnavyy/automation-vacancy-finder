@@ -23,8 +23,13 @@ export default async function VacanciesPage({
   const where: Record<string, any> = { userId: user.id };
   if (status === "applied_manual") {
     where.status = { in: ["applied_manual", "applied_hh"] };
+  } else if (status === "skip" || status === "ignored") {
+    where.status = { in: ["skipped", "ignored", "low_priority"] };
   } else if (status) {
     where.status = status;
+  } else {
+    // Default: prioritize active matching opportunities, exclude non-target/spam
+    where.status = { notIn: ["ignored", "low_priority", "skipped"] };
   }
 
   let vacancies: any[] = [];
@@ -43,7 +48,10 @@ export default async function VacanciesPage({
           where,
           skip,
           take: limit,
-          orderBy: { createdAt: "desc" },
+          orderBy: [
+            { analysis: { matchScore: "desc" } },
+            { createdAt: "desc" },
+          ],
           select: {
             id: true,
             hhId: true,

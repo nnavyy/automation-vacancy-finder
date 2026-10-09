@@ -130,8 +130,8 @@ export default function VacanciesSplitView({
   // Filtered vacancies list
   const filteredVacancies = useMemo(() => {
     return vacancies.filter((v) => {
-      // If not in the "skip" tab, hide skipped/ignored items
-      if (filterTab !== "skip" && (v.status === "skipped" || v.status === "ignored")) {
+      // If not in the "skip" tab, hide skipped/ignored/low_priority items
+      if (filterTab !== "skip" && (v.status === "skipped" || v.status === "ignored" || v.status === "low_priority")) {
         return false;
       }
 
@@ -147,7 +147,7 @@ export default function VacanciesSplitView({
       } else if (filterTab === "saved") {
         if (v.status !== "saved") return false;
       } else if (filterTab === "skip") {
-        if (v.status !== "skipped" && v.status !== "ignored") return false;
+        if (v.status !== "skipped" && v.status !== "ignored" && v.status !== "low_priority") return false;
       }
 
       // Search query

@@ -36,6 +36,7 @@ interface DashboardOverviewProps {
   lastSyncIso?: string;
   topMatches: TopMatchVacancy[];
   targetRoles: string[];
+  matchThreshold?: number;
 }
 
 export default function DashboardOverview({
@@ -52,6 +53,7 @@ export default function DashboardOverview({
   lastSyncIso,
   topMatches,
   targetRoles,
+  matchThreshold,
 }: DashboardOverviewProps) {
   const { t, language } = useLanguage();
 
@@ -268,9 +270,17 @@ export default function DashboardOverview({
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-base font-bold text-zinc-100 tracking-tight">
-              {t("overview.topMatches")}
-            </h2>
+            <div className="flex items-center gap-2.5">
+              <h2 className="text-base font-bold text-zinc-100 tracking-tight">
+                {t("overview.topMatches")}
+              </h2>
+              {matchThreshold !== undefined && (
+                <span className="text-[11px] font-mono font-medium text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-md flex items-center gap-1">
+                  <Sparkles className="w-3 h-3 text-emerald-400" />
+                  Score ≥ {matchThreshold}%
+                </span>
+              )}
+            </div>
             <p className="text-xs text-zinc-500 mt-0.5">
               {t("overview.topMatchesDesc")}
             </p>

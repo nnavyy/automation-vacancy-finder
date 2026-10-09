@@ -17,10 +17,11 @@ import type { SearchPreferenceData } from "@/types";
  * @returns Deduplicated array of query strings (max 20)
  */
 export function buildSearchQueries(pref: SearchPreferenceData): string[] {
-  // Merge EN and RU keywords into a single list
+  // Prioritize candidate's exact target roles first, followed by EN and RU search keywords
   const allKeywords: string[] = [
-    ...pref.searchKeywordsEn,
-    ...pref.searchKeywordsRu,
+    ...(pref.targetRoles ?? []),
+    ...(pref.searchKeywordsEn ?? []),
+    ...(pref.searchKeywordsRu ?? []),
   ];
 
   // Trim, filter empties, then deduplicate using Array.from + Set

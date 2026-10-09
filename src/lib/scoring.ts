@@ -197,6 +197,9 @@ export function calculateRuleScore(
   if (matchesAny(title, effectiveTitleKeywords)) {
     score += 25;
     reasons.push(`+25 Title matches target roles / keywords`);
+  } else if (pref?.targetRoles && pref.targetRoles.length > 0) {
+    score -= 20;
+    penalties.push("-20 Title does not match candidate target roles or keywords");
   }
 
   // ── 2. REMOTE / WORK FORMAT FIT (+20) ───────────────────────

@@ -22,8 +22,17 @@ export default async function DashboardPage() {
   let lastSyncIso: string | undefined;
   let topMatches: any[] = [];
   let userPref: any = null;
+  let threshold = 65;
 
   try {
+    const pref = await withRetry(() =>
+      prisma.searchPreference.findFirst({
+        where: { userId: user.id, isActive: true },
+      })
+    );
+    userPref = pref;
+    threshold = pref?.minimumScoreToNotify ?? 65;
+
     const [
       allCount,
       statusGroups,
@@ -33,8 +42,7 @@ export default async function DashboardPage() {
       maybeScoreCount,
       lowScoreCount,
       latestVacancy,
-      topVacancies,
-      pref,
+      filteredTopVacancies,
     ] = await withRetry(() =>
       Promise.all([
         prisma.vacancy.count({ where: { userId: user.id } }),
@@ -68,7 +76,49 @@ export default async function DashboardPage() {
         prisma.vacancy.findMany({
           where: {
             userId: user.id,
-            analysis: { isNot: null },
+            status: { notIn: ["ignored", "low_priority", "skipped"] },
+            analysis: {
+              matchScore: { gte: threshold },
+              recommendation: { not: "skip" },
+            },
+          },
+          take: 6,
+          orderBy: { analysis: { matchScore: "desc" } },
+          select: {
+            id: true,
+            hhId: true,
+            title: true,
+            company: true,
+            area: true,
+            salary: true,
+            url: true,
+            status: true,
+            createdAt: true,
+            analysis: {
+              select: {
+                matchScore: true,
+                recommendation: true,
+                summary: true,
+                matchReasons: true,
+              },
+            },
+          },
+        }),
+      ])
+    );
+
+    let finalTopMatches = filteredTopVacancies;
+    if (finalTopMatches.length === 0) {
+      // Fallback: If no vacancy passes the strict threshold yet, show top analyzed matching roles >= 50
+      finalTopMatches = await withRetry(() =>
+        prisma.vacancy.findMany({
+          where: {
+            userId: user.id,
+            status: { notIn: ["ignored", "low_priority", "skipped"] },
+            analysis: {
+              matchScore: { gte: 50 },
+              recommendation: { not: "skip" },
+            },
           },
           take: 5,
           orderBy: { analysis: { matchScore: "desc" } },
@@ -91,16 +141,12 @@ export default async function DashboardPage() {
               },
             },
           },
-        }),
-        prisma.searchPreference.findFirst({
-          where: { userId: user.id, isActive: true },
-        }),
-      ])
-    );
+        })
+      );
+    }
 
     total = allCount;
-    topMatches = topVacancies;
-    userPref = pref;
+    topMatches = finalTopMatches;
     aiPending = pendingCount;
     avgScore = scoreAgg._avg.matchScore ? Math.round(scoreAgg._avg.matchScore) : 0;
     analyzedCount = scoreAgg._count.matchScore ?? 0;
@@ -163,6 +209,7 @@ export default async function DashboardPage() {
       lastSyncIso={lastSyncIso}
       topMatches={formattedTopMatches}
       targetRoles={targetRoles}
+      matchThreshold={threshold}
     />
   );
 }

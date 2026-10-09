@@ -6,9 +6,11 @@
 // ============================================================
 
 import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { Play, Loader2, CheckCircle, XCircle, RefreshCw } from "lucide-react";
 
 export default function RunCollectionButton() {
+  const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [progress, setProgress] = useState<{ analyzed: number; total: number } | null>(null);
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
@@ -54,6 +56,8 @@ export default function RunCollectionButton() {
                 ok: true,
                 message: `Collection complete — ${status?.analyzed ?? 0} analyzed.`,
               });
+              // Automatically refresh the dashboard data so top matches and stats immediately appear
+              router.refresh();
               setTimeout(() => setResult(null), 8000);
             }
           }
@@ -90,6 +94,7 @@ export default function RunCollectionButton() {
     setStale(false);
     setLoading(false);
     setProgress(null);
+    router.refresh();
   };
 
   return (

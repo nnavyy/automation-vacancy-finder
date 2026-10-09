@@ -53,6 +53,64 @@ const OTP_PASSPORT_PATTERNS: string[] = [
 /** HH experience IDs that indicate a senior-level role (6+ years) */
 const SENIOR_EXPERIENCE_IDS: string[] = ["more6", "moreThan6"];
 
+/** Irrelevant non-development / non-target roles that HH.ru fuzzy search often incorrectly returns */
+const IRRELEVANT_ROLE_PATTERNS: string[] = [
+  "техник",
+  "техническ специалист",
+  "технической поддержки",
+  "техническая поддержка",
+  "специалист техподдержки",
+  "инженер техподдержки",
+  "дежурный инженер",
+  "сервисный инженер",
+  "инженер по ремонту",
+  "инженер связи",
+  "системный администратор",
+  "сисадмин",
+  "эникей",
+  "эникейщик",
+  "монтажник",
+  "helpdesk",
+  "service desk",
+  "call-центр",
+  "колл-центр",
+  "коллцентр",
+  "оператор call",
+  "оператор колл",
+  "оператор на телефон",
+  "оператор чата",
+  "оператор пк",
+  "оператор базы",
+  "оператор ввода",
+  "диспетчер",
+  "менеджер по продажам",
+  "менеджер по работе с клиентами",
+  "менеджер по входящим",
+  "клиентский менеджер",
+  "специалист по продажам",
+  "продавец",
+  "кассир",
+  "консультант банка",
+  "геймер",
+  "игрок в онлайн",
+  "бустер",
+  "водитель",
+  "курьер",
+  "кладовщик",
+  "комплектовщик",
+  "упаковщик",
+  "уборщик",
+  "повар",
+  "охранник",
+  "риелтор",
+  "копирайтер",
+  "контент-менеджер",
+  "модератор",
+  "smm",
+  "таргетолог",
+  "телемаркетолог",
+];
+
 // ── Helper ────────────────────────────────────────────────────
 
 /**
@@ -170,6 +228,30 @@ export function passesBasicFilter(
       passes: false,
       reason: `Requests sensitive personal documents or OTP code — detected: "${otpMatch}"`,
     };
+  }
+
+  // ── Rule 8: Disqualify irrelevant non-target / support / sales / call-center roles ──
+  const titleLower = (vacancy.title ?? "").toLowerCase();
+  const userWantsSupportOrSales = pref.targetRoles?.some((role) => {
+    const r = role.toLowerCase();
+    return (
+      r.includes("поддержк") ||
+      r.includes("support") ||
+      r.includes("helpdesk") ||
+      r.includes("продаж") ||
+      r.includes("sales") ||
+      r.includes("оператор")
+    );
+  });
+
+  if (!userWantsSupportOrSales) {
+    const irrelevantMatch = containsAny(titleLower, IRRELEVANT_ROLE_PATTERNS);
+    if (irrelevantMatch) {
+      return {
+        passes: false,
+        reason: `Title indicates non-target support/sales/operator role — detected: "${irrelevantMatch}"`,
+      };
+    }
   }
 
   // All checks passed — vacancy may proceed to AI analysis
