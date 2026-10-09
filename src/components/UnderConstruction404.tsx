@@ -21,7 +21,6 @@ import {
   ArrowRight,
   ExternalLink,
   Star,
-  Activity,
   Cpu,
   Layers,
   CheckCircle2,
@@ -36,15 +35,13 @@ const CONTENT = {
     brandDesc: "Autonomous AI Job Search for HeadHunter",
     githubRepo: "GitHub Repository",
     status404: "HTTP 404 · Route Under Construction",
-    statusBeta: "Private Beta · Maintenance Mode",
+    statusBeta: "Private Beta · Invite Only",
     headlineStart: "We're Building Something",
     headlineHighlight: "Extraordinary",
     subtitle: "The public portal is temporarily closed while our neural scoring engine, HeadHunter session pipeline, and telemetry models undergo final closed-beta calibration.",
     pillMatching: "Neural Vacancy Matching",
     pillDossier: "Recruiter Decision Dossier",
     pillAntiBan: "Humanized Anti-Ban Throttling",
-    progressTitle: "Engine Calibration & Pipeline Sync",
-    progressPercent: "88% Completed",
     countdownTitle: "Official Release Countdown",
     dateText: "October 24–26, 2026",
     days: "Days",
@@ -62,15 +59,13 @@ const CONTENT = {
     brandDesc: "Автономный ИИ-поиск работы на HeadHunter",
     githubRepo: "Репозиторий GitHub",
     status404: "HTTP 404 · Страница в разработке",
-    statusBeta: "Закрытый бета-тест · Режим обслуживания",
+    statusBeta: "Закрытый бета-тест · Только по приглашениям",
     headlineStart: "Мы создаем нечто",
     headlineHighlight: "исключительное",
     subtitle: "Публичный портал временно закрыт: наш нейросетевой скоринг, модуль сессий HeadHunter и телеметрия проходят финальную калибровку закрытого бета-тестирования.",
     pillMatching: "Нейросетевой подбор вакансий",
     pillDossier: "Досье на рекрутера",
     pillAntiBan: "Защита от блокировок HH.ru",
-    progressTitle: "Калибровка движка и синхронизация",
-    progressPercent: "88% Завершено",
     countdownTitle: "Обратный отсчет до официального релиза",
     dateText: "24–26 октября 2026",
     days: "Дней",
@@ -360,22 +355,6 @@ export default function UnderConstruction404({ is404 = true }: { is404?: boolean
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-zinc-900/90 border border-zinc-800 text-[11px] font-mono text-zinc-300">
             <CheckCircle2 className="w-3 h-3 text-teal-400" /> {t.pillAntiBan}
           </span>
-        </div>
-
-        {/* Progress Bar (Elementor Pro Maintenance Gauge) */}
-        <div className="w-full max-w-xl bg-zinc-900/60 border border-zinc-800/80 rounded-xl p-4 mb-6 text-left backdrop-blur-md">
-          <div className="flex items-center justify-between text-xs mb-2">
-            <span className="text-zinc-400 font-mono flex items-center gap-1.5 font-medium">
-              <Activity className="w-3.5 h-3.5 text-emerald-400" />
-              {t.progressTitle}
-            </span>
-            <span className="font-mono font-bold text-emerald-400">{t.progressPercent}</span>
-          </div>
-          <div className="w-full h-2 bg-zinc-950 rounded-full overflow-hidden border border-zinc-800">
-            <div className="h-full bg-gradient-to-r from-emerald-500 via-teal-400 to-sky-400 rounded-full w-[88%] relative">
-              <div className="absolute inset-0 bg-white/20 animate-pulse" />
-            </div>
-          </div>
         </div>
 
         {/* Live Countdown Timer Section */}
