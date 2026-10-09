@@ -180,31 +180,69 @@ export default function VacanciesSplitView({
     return found ?? filteredVacancies[0] ?? null;
   }, [filteredVacancies, selectedId]);
 
-  const handleStatusChange = async (newStatus: string) => {
-    if (!selectedVacancy) return;
-    try {
-      await fetch(`/api/vacancies/${selectedVacancy.id}/status`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: newStatus }),
+  const handleToggleSave = async (vacancyId: string) => {
+    const target = vacancies.find((v) => v.id === vacancyId);
+    if (!target) return;
+    const previousStatus = target.status;
+    const newStatus = previousStatus === "saved" ? "new" : "saved";
+
+    // 1. Optimistic update (0ms instant response)
+    setVacancies((prev) =>
+      prev.map((v) => (v.id === vacancyId ? { ...v, status: newStatus } : v))
+    );
+
+    // 2. Non-blocking background sync with auto-revert on failure
+    fetch(`/api/vacancies/${vacancyId}/status`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: newStatus }),
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error("Status update failed");
+      })
+      .catch((err) => {
+        console.error("[handleToggleSave] network rollback:", err);
+        setVacancies((prev) =>
+          prev.map((v) => (v.id === vacancyId ? { ...v, status: previousStatus } : v))
+        );
       });
-      setVacancies((prev) =>
-        prev.map((v) =>
-          v.id === selectedVacancy.id ? { ...v, status: newStatus } : v
-        )
-      );
-    } catch {}
+  };
+
+  const handleStatusChange = async (newStatus: string, targetId?: string) => {
+    const vacancyId = targetId || selectedVacancy?.id;
+    if (!vacancyId) return;
+    const target = vacancies.find((v) => v.id === vacancyId);
+    const previousStatus = target?.status || "new";
+
+    // 1. Optimistic update (0ms instant response)
+    setVacancies((prev) =>
+      prev.map((v) => (v.id === vacancyId ? { ...v, status: newStatus } : v))
+    );
+
+    // 2. Non-blocking background sync
+    fetch(`/api/vacancies/${vacancyId}/status`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: newStatus }),
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error("Status update failed");
+      })
+      .catch((err) => {
+        console.error("[handleStatusChange] network rollback:", err);
+        setVacancies((prev) =>
+          prev.map((v) => (v.id === vacancyId ? { ...v, status: previousStatus } : v))
+        );
+      });
   };
 
   const handleHide = async (vacancyId: string) => {
-    try {
-      await fetch(`/api/vacancies/${vacancyId}/status`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "skipped" }),
-      });
+    const target = vacancies.find((v) => v.id === vacancyId);
+    if (!target) return;
+    const previousStatus = target.status;
 
-      // Find next vacancy to select before updating state
+    // 1. Immediately advance selectedId to next item (0ms instant response)
+    if (selectedId === vacancyId) {
       const currentIndex = filteredVacancies.findIndex((v) => v.id === vacancyId);
       const nextRemaining = filteredVacancies.filter((v) => v.id !== vacancyId);
       if (nextRemaining.length > 0) {
@@ -212,11 +250,31 @@ export default function VacanciesSplitView({
           nextRemaining[Math.min(currentIndex, nextRemaining.length - 1)];
         setSelectedId(nextTarget.id);
       }
+    }
 
-      setVacancies((prev) =>
-        prev.map((v) => (v.id === vacancyId ? { ...v, status: "skipped" } : v))
-      );
-    } catch {}
+    // 2. Optimistic update (0ms instant removal)
+    setVacancies((prev) =>
+      prev.map((v) => (v.id === vacancyId ? { ...v, status: "skipped" } : v))
+    );
+
+    // 3. Non-blocking background sync
+    fetch(`/api/vacancies/${vacancyId}/status`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "skipped" }),
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error("Status update failed");
+      })
+      .catch((err) => {
+        console.error("[handleHide] network rollback:", err);
+        setVacancies((prev) =>
+          prev.map((v) => (v.id === vacancyId ? { ...v, status: previousStatus } : v))
+        );
+        if (selectedId === vacancyId) {
+          setSelectedId(vacancyId);
+        }
+      });
   };
 
   const handleRunAnalysis = async (vacancyId: string) => {
@@ -513,22 +571,50 @@ export default function VacanciesSplitView({
 
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-2 mb-1">
-                        <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider truncate">
-                          {v.company}
-                        </span>
-                        {matchScore > 0 && (
-                          <span
-                            className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${
-                              matchScore >= 70
-                                ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/25"
-                                : matchScore >= 45
-                                ? "bg-amber-500/10 text-amber-400 border-amber-500/25"
-                                : "bg-rose-500/10 text-rose-400 border-rose-500/25"
-                            }`}
-                          >
-                            {matchScore}% {language === "ru" ? "СОВПАДЕНИЕ" : "MATCH"}
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider truncate">
+                            {v.company}
                           </span>
-                        )}
+                          {v.company && (
+                            <Link
+                              href={`/dashboard/company-intel?company=${encodeURIComponent(v.company)}`}
+                              onClick={(e) => e.stopPropagation()}
+                              className="text-[10px] text-zinc-400 hover:text-emerald-300 bg-zinc-800/80 hover:bg-emerald-950/50 border border-zinc-700/60 hover:border-emerald-500/40 px-1.5 py-0.5 rounded transition-all inline-flex items-center gap-1 group/intel shrink-0"
+                              title={
+                                language === "ru"
+                                  ? `Открыть ${v.company} в Company Intel`
+                                  : `Inspect ${v.company} in Company Intel`
+                              }
+                            >
+                              <Building2 className="w-3 h-3 text-emerald-400 group-hover/intel:scale-110 transition-transform" />
+                              <span className="font-mono text-[9px] uppercase tracking-wider text-emerald-400">Intel</span>
+                            </Link>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {v.status === "saved" && (
+                            <span
+                              className="p-0.5 text-violet-400"
+                              title={language === "ru" ? "Сохранено" : "Saved"}
+                            >
+                              <Bookmark className="w-3 h-3 fill-violet-400" />
+                            </span>
+                          )}
+                          {matchScore > 0 && (
+                            <span
+                              className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${
+                                matchScore >= 70
+                                  ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/25"
+                                  : matchScore >= 45
+                                  ? "bg-amber-500/10 text-amber-400 border-amber-500/25"
+                                  : "bg-rose-500/10 text-rose-400 border-rose-500/25"
+                              }`}
+                            >
+                              {matchScore}% {language === "ru" ? "СОВПАДЕНИЕ" : "MATCH"}
+                            </span>
+                          )}
+                        </div>
                       </div>
 
                       <h4 className="text-sm font-bold text-zinc-100 line-clamp-1 leading-snug">
@@ -557,7 +643,7 @@ export default function VacanciesSplitView({
                         )}
                       </div>
 
-                      {/* Tags row */}
+                      {/* Tags & Quick Actions row */}
                       <div className="flex items-center gap-1.5 mt-2 flex-wrap">
                         {rec && matchScore > 0 && (
                           <span
@@ -584,12 +670,52 @@ export default function VacanciesSplitView({
                           </span>
                         )}
 
-                        {isSelected && (
-                          <span className="ml-auto text-[11px] font-semibold text-zinc-300 flex items-center gap-0.5">
-                            {t("vacancies.inspecting")}
-                            <ChevronRight className="w-3 h-3" />
-                          </span>
-                        )}
+                        {/* Card quick save & hide buttons */}
+                        <div className="ml-auto flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleToggleSave(v.id);
+                            }}
+                            className={`p-1 rounded hover:bg-zinc-800 transition-all active:scale-90 ${
+                              v.status === "saved"
+                                ? "text-violet-400"
+                                : "text-zinc-500 hover:text-zinc-300"
+                            }`}
+                            title={
+                              language === "ru"
+                                ? v.status === "saved"
+                                  ? "Убрать из сохраненных"
+                                  : "Сохранить"
+                                : v.status === "saved"
+                                ? "Remove from saved"
+                                : "Save"
+                            }
+                          >
+                            <Bookmark
+                              className={`w-3.5 h-3.5 ${
+                                v.status === "saved" ? "fill-violet-400" : ""
+                              }`}
+                            />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleHide(v.id);
+                            }}
+                            className="p-1 rounded hover:bg-zinc-800 text-zinc-500 hover:text-rose-400 transition-all active:scale-90"
+                            title={language === "ru" ? "Скрыть" : "Hide"}
+                          >
+                            <EyeOff className="w-3.5 h-3.5" />
+                          </button>
+                          {isSelected && (
+                            <span className="text-[11px] font-semibold text-zinc-300 flex items-center gap-0.5 ml-1">
+                              <ChevronRight className="w-3 h-3" />
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -616,47 +742,66 @@ export default function VacanciesSplitView({
                         .toUpperCase()}
                     </div>
                     <div>
-                      <div className="flex items-center gap-2">
-                        {selectedVacancy.company ? (
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-bold text-zinc-300 uppercase tracking-wider">
+                          {selectedVacancy.company || "Unknown"}
+                        </span>
+                        {selectedVacancy.company && (
                           <Link
                             href={`/dashboard/company-intel?company=${encodeURIComponent(selectedVacancy.company)}`}
-                            className="text-xs font-bold text-zinc-300 hover:text-emerald-400 inline-flex items-center gap-1.5 uppercase tracking-wider transition-colors group"
-                            title={language === "ru" ? "Открыть Company Intel" : "Inspect company in Company Intel"}
+                            className="text-[11px] font-semibold text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/25 px-2 py-0.5 rounded-md inline-flex items-center gap-1.5 transition-all active:scale-95 group/cintel"
+                            title={
+                              language === "ru"
+                                ? `Открыть профиль компании ${selectedVacancy.company} в Company Intel`
+                                : `Inspect ${selectedVacancy.company} in Company Intel`
+                            }
                           >
-                            <span>{selectedVacancy.company}</span>
-                            <Building2 className="w-3.5 h-3.5 text-zinc-500 group-hover:text-emerald-400 transition-colors" />
+                            <Building2 className="w-3.5 h-3.5 text-emerald-400 group-hover/cintel:scale-110 transition-transform" />
+                            <span>Company Intel</span>
                           </Link>
-                        ) : (
-                          <span className="text-xs font-bold text-zinc-300 uppercase tracking-wider">
-                            Unknown
-                          </span>
                         )}
                         <span className="text-[10px] px-2 py-0.5 rounded bg-zinc-800 text-zinc-400 border border-zinc-700">
                           {t("vacancies.hhSource")}
                         </span>
                       </div>
-                      <h2 className="text-lg font-bold text-zinc-100 mt-0.5 leading-snug">
+                      <h2 className="text-lg font-bold text-zinc-100 mt-1 leading-snug">
                         {selectedVacancy.title}
                       </h2>
                     </div>
                   </div>
 
-                  {/* Quick actions top right */}
+                  {/* Quick actions top right (0ms Optimistic UI) */}
                   <div className="flex items-center gap-1.5 shrink-0">
                     <button
-                      onClick={() => handleStatusChange("saved")}
-                      className={`p-2 rounded-lg border transition-colors ${
+                      type="button"
+                      onClick={() => handleToggleSave(selectedVacancy.id)}
+                      className={`p-2 rounded-lg border transition-all active:scale-90 ${
                         selectedVacancy.status === "saved"
-                          ? "bg-violet-600/20 text-violet-300 border-violet-500/30"
+                          ? "bg-violet-600/20 text-violet-300 border-violet-500/40 ring-1 ring-violet-500/30"
                           : "bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 border-zinc-700/60"
                       }`}
-                      title={language === "ru" ? "Сохранить вакансию" : "Save vacancy"}
+                      title={
+                        language === "ru"
+                          ? selectedVacancy.status === "saved"
+                            ? "Убрать из сохраненных"
+                            : "Сохранить вакансию"
+                          : selectedVacancy.status === "saved"
+                          ? "Remove from saved"
+                          : "Save vacancy"
+                      }
                     >
-                      <Bookmark className="w-4 h-4" />
+                      <Bookmark
+                        className={`w-4 h-4 transition-transform ${
+                          selectedVacancy.status === "saved"
+                            ? "fill-violet-400 text-violet-400 scale-110"
+                            : ""
+                        }`}
+                      />
                     </button>
                     <button
+                      type="button"
                       onClick={() => handleHide(selectedVacancy.id)}
-                      className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-rose-400 border border-zinc-700/60 transition-colors"
+                      className="p-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-rose-400 border border-zinc-700/60 transition-all active:scale-90"
                       title={language === "ru" ? "Скрыть вакансию" : "Hide / Cull Vacancy"}
                     >
                       <EyeOff className="w-4 h-4" />
@@ -699,7 +844,7 @@ export default function VacanciesSplitView({
                   <button
                     onClick={generateLivePitch}
                     disabled={generatingPitch}
-                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-xs font-semibold text-white transition-all shadow-sm"
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-xs font-semibold text-white transition-all shadow-sm active:scale-95"
                   >
                     {generatingPitch ? (
                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -713,8 +858,8 @@ export default function VacanciesSplitView({
                     href={selectedVacancy.url || `https://hh.ru/vacancy/${selectedVacancy.hhId}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    onClick={() => handleStatusChange("applied_manual")}
-                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-xs font-semibold text-white transition-all shadow-sm"
+                    onClick={() => handleStatusChange("applied_manual", selectedVacancy.id)}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-xs font-semibold text-white transition-all shadow-sm active:scale-95"
                   >
                     <Send className="w-3.5 h-3.5" />
                     {t("vacancies.applyHh")}
@@ -723,17 +868,21 @@ export default function VacanciesSplitView({
                   {selectedVacancy.company && (
                     <Link
                       href={`/dashboard/company-intel?company=${encodeURIComponent(selectedVacancy.company)}`}
-                      className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-xs font-medium text-emerald-400 hover:text-emerald-300 transition-all shadow-sm"
-                      title={language === "ru" ? "Проверить компанию в Company Intel" : "Check company in Company Intel"}
+                      className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-emerald-950/40 hover:bg-emerald-900/50 border border-emerald-500/30 hover:border-emerald-500/60 text-xs font-semibold text-emerald-300 hover:text-emerald-200 transition-all shadow-sm active:scale-95"
+                      title={
+                        language === "ru"
+                          ? `Проверить компанию ${selectedVacancy.company} в Company Intel`
+                          : `Inspect ${selectedVacancy.company} in Company Intel`
+                      }
                     >
-                      <Building2 className="w-3.5 h-3.5" />
-                      <span>{language === "ru" ? "Company Intel" : "Company Intel"}</span>
+                      <Building2 className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Company Intel</span>
                     </Link>
                   )}
 
                   <button
                     onClick={() => openRecruiterModal(selectedVacancy)}
-                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-xs font-medium text-zinc-200 transition-all ml-auto"
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-xs font-medium text-zinc-200 transition-all active:scale-95 ml-auto"
                   >
                     <Users className="w-3.5 h-3.5 text-sky-400" />
                     {t("vacancies.findRecruiter")}

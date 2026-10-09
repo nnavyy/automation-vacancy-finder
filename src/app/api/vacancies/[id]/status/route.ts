@@ -28,8 +28,12 @@ export async function PATCH(
     }
 
     const { id } = await params;
-    const vacancy = await getOwnedVacancy(id, user.id);
-    if (!vacancy) {
+    const vacancy = await prisma.vacancy.findUnique({
+      where: { id },
+      select: { id: true, userId: true },
+    });
+
+    if (!vacancy || vacancy.userId !== user.id) {
       return NextResponse.json({ success: false, error: "Vacancy not found" }, { status: 404 });
     }
 
@@ -46,16 +50,17 @@ export async function PATCH(
     const updated = await prisma.vacancy.update({
       where: { id },
       data: { status },
-      include: { analysis: true },
+      select: { id: true, status: true, updatedAt: true },
     });
 
-    await prisma.applicationLog.create({
+    // Non-blocking application log write
+    prisma.applicationLog.create({
       data: {
         vacancyId: id,
         action: `status_change_to_${status}`,
         notes: notes || `Status updated to ${status} via API`,
       },
-    });
+    }).catch(() => {});
 
     return NextResponse.json({
       success: true,

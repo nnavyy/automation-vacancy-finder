@@ -14,6 +14,7 @@ import {
   Sparkles,
   ArrowRight,
   Calendar,
+  Building2,
 } from "lucide-react";
 import RecruiterDossierModal, { RecruiterDossierData } from "@/components/RecruiterDossierModal";
 import { useLanguage } from "@/lib/i18n";
@@ -236,7 +237,7 @@ export default function OverviewTopMatches({ vacancies }: OverviewTopMatchesProp
 
             {/* Action buttons */}
             <div className="flex items-center justify-between gap-2 pt-1 flex-wrap">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <button
                   onClick={() => handleOpenHR(v)}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-medium text-zinc-200 border border-zinc-700/80 transition-colors"
@@ -254,6 +255,21 @@ export default function OverviewTopMatches({ vacancies }: OverviewTopMatchesProp
                   <Send className="w-3.5 h-3.5" />
                   {t("overview.applyViaHh")}
                 </a>
+
+                {v.company && (
+                  <Link
+                    href={`/dashboard/company-intel?company=${encodeURIComponent(v.company)}`}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-medium text-emerald-400 hover:text-emerald-300 border border-zinc-700/80 hover:border-emerald-500/40 transition-colors"
+                    title={
+                      language === "ru"
+                        ? `Проверить компанию ${v.company} в Company Intel`
+                        : `Inspect ${v.company} in Company Intel`
+                    }
+                  >
+                    <Building2 className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Company Intel</span>
+                  </Link>
+                )}
               </div>
 
               <Link
