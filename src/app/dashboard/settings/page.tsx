@@ -958,6 +958,43 @@ export default function SettingsPage() {
           data.coverLetterContext?.portfolioWebsiteUrl ||
           form.portfolioUrl;
 
+        const newExperience =
+          safeArray(data.experience);
+
+        const newWorkFormat =
+          safeArray(data.workFormat || data.work_format);
+
+        const newMinScore =
+          typeof data.scoring?.minimumScoreToNotify === "number"
+            ? data.scoring.minimumScoreToNotify
+            : typeof data.minimumScoreToNotify === "number"
+              ? data.minimumScoreToNotify
+              : null;
+
+        const newMaxNotif =
+          data.scoring?.maxNotificationsPerDay != null
+            ? String(data.scoring.maxNotificationsPerDay)
+            : data.maxNotificationsPerDay != null
+              ? String(data.maxNotificationsPerDay)
+              : null;
+
+        const newSalaryMin =
+          data.scoring?.salaryMinimum != null
+            ? String(data.scoring.salaryMinimum)
+            : data.salaryMinimum != null
+              ? String(data.salaryMinimum)
+              : null;
+
+        const newSalaryCurr =
+          data.scoring?.salaryCurrency ||
+          data.salaryCurrency ||
+          null;
+
+        const newCoverLetterLang =
+          data.coverLetterLanguage ||
+          data.cover_letter_language ||
+          null;
+
         const newAiCustomConfig = data.aiCustomConfig || form.aiCustomConfig;
         const newAiOrder = data.aiCustomConfig?.order || data.aiProviderOrder || form.aiProviderOrder;
 
@@ -971,6 +1008,13 @@ export default function SettingsPage() {
           searchKeywordsRu: newKeywordsRu.length > 0 ? newKeywordsRu : prev.searchKeywordsRu,
           excludeKeywords: newExclude.length > 0 ? newExclude : prev.excludeKeywords,
           redFlagKeywords: newRedFlags.length > 0 ? newRedFlags : prev.redFlagKeywords,
+          experience: newExperience.length > 0 ? newExperience : prev.experience,
+          workFormat: newWorkFormat.length > 0 ? newWorkFormat : prev.workFormat,
+          minimumScoreToNotify: newMinScore !== null ? newMinScore : prev.minimumScoreToNotify,
+          maxNotificationsPerDay: newMaxNotif !== null ? newMaxNotif : prev.maxNotificationsPerDay,
+          salaryMinimum: newSalaryMin !== null ? newSalaryMin : prev.salaryMinimum,
+          salaryCurrency: newSalaryCurr || prev.salaryCurrency,
+          coverLetterLanguage: newCoverLetterLang || prev.coverLetterLanguage,
           aiCustomConfig: newAiCustomConfig,
           aiProviderOrder: Array.isArray(newAiOrder) ? newAiOrder : prev.aiProviderOrder,
           resumeText: newBio,
