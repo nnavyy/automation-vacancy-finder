@@ -14,6 +14,13 @@ import { BRAND_NAME, BRAND_TAGLINE } from "@/lib/brand";
 export const metadata: Metadata = {
   title: `${BRAND_NAME} — ${BRAND_TAGLINE}`,
   description: BRAND_TAGLINE,
+  icons: {
+    icon: [
+      { url: "/favicon.svg", type: "image/svg+xml" },
+      { url: "/favicon.ico", sizes: "any" },
+    ],
+    apple: "/icon-192.png",
+  },
 };
 
 export default function RootLayout({
