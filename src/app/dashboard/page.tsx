@@ -185,7 +185,7 @@ export default async function DashboardPage() {
     company: v.company,
     area: v.area ?? undefined,
     salary: v.salary,
-    url: v.url ?? undefined,
+    url: v.hhId && /^\d+$/.test(v.hhId) ? `https://hh.ru/vacancy/${v.hhId}` : (v.url ?? undefined),
     status: v.status,
     createdAt: v.createdAt.toISOString(),
     analysis: v.analysis

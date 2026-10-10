@@ -245,11 +245,11 @@ export default function VacanciesSplitView({
   // Guaranteed genuine HeadHunter URL (prevents mock, non-existent, or mismatched links)
   const selectedGenuineHhUrl = useMemo(() => {
     if (!selectedVacancy) return null;
-    if (selectedVacancy.url && selectedVacancy.url.startsWith("http")) {
-      return selectedVacancy.url;
-    }
     if (selectedVacancy.hhId && /^\d+$/.test(selectedVacancy.hhId)) {
       return `https://hh.ru/vacancy/${selectedVacancy.hhId}`;
+    }
+    if (selectedVacancy.url && selectedVacancy.url.startsWith("http")) {
+      return selectedVacancy.url;
     }
     return null;
   }, [selectedVacancy]);

@@ -248,10 +248,10 @@ export default function OverviewTopMatches({ vacancies }: OverviewTopMatchesProp
 
                 <a
                   href={
-                    v.url && v.url.startsWith("http")
-                      ? v.url
-                      : v.hhId && /^\d+$/.test(v.hhId)
+                    v.hhId && /^\d+$/.test(v.hhId)
                       ? `https://hh.ru/vacancy/${v.hhId}`
+                      : v.url && v.url.startsWith("http")
+                      ? v.url
                       : "#"
                   }
                   target="_blank"

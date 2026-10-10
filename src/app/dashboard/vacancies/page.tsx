@@ -237,7 +237,7 @@ export default async function VacanciesPage({
       company: v.company,
       area: v.area ?? undefined,
       salary: v.salary,
-      url: v.url ?? undefined,
+      url: v.hhId && /^\d+$/.test(v.hhId) ? `https://hh.ru/vacancy/${v.hhId}` : (v.url ?? undefined),
       status: v.status,
       description: v.description ?? undefined,
       createdAt: v.createdAt.toISOString(),

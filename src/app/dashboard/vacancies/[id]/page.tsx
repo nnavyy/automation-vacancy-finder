@@ -252,10 +252,10 @@ export default async function VacancyDetailPage({
 
           {/* Open on HH.ru */}
           {(() => {
-            const validUrl = vacancy.url && vacancy.url.startsWith("http")
-              ? vacancy.url
-              : vacancy.hhId && /^\d+$/.test(vacancy.hhId)
+            const validUrl = vacancy.hhId && /^\d+$/.test(vacancy.hhId)
               ? `https://hh.ru/vacancy/${vacancy.hhId}`
+              : vacancy.url && vacancy.url.startsWith("http")
+              ? vacancy.url
               : null;
             return validUrl ? (
               <a

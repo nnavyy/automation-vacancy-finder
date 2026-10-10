@@ -116,10 +116,15 @@ export async function GET(req: NextRequest) {
       prisma.vacancy.count({ where }),
     ]);
 
+    const mappedVacancies = vacancies.map((v) => ({
+      ...v,
+      url: v.hhId && /^\d+$/.test(v.hhId) ? `https://hh.ru/vacancy/${v.hhId}` : v.url,
+    }));
+
     return NextResponse.json({
       success: true,
       data: {
-        vacancies,
+        vacancies: mappedVacancies,
         total,
         page,
         totalPages: Math.ceil(total / limit),

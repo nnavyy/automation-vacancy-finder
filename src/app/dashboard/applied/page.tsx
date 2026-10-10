@@ -175,10 +175,10 @@ export default async function AppliedPage({
                       View Details
                     </Link>
                     {(() => {
-                      const validUrl = v.url && v.url.startsWith("http")
-                        ? v.url
-                        : v.hhId && /^\d+$/.test(v.hhId)
+                      const validUrl = v.hhId && /^\d+$/.test(v.hhId)
                         ? `https://hh.ru/vacancy/${v.hhId}`
+                        : v.url && v.url.startsWith("http")
+                        ? v.url
                         : null;
                       return validUrl ? (
                         <a href={validUrl} target="_blank" rel="noopener noreferrer" className="px-3 py-1.5 rounded-lg text-xs font-medium bg-zinc-800 text-zinc-300 border border-zinc-700/80 hover:bg-zinc-700 transition-colors inline-flex items-center justify-center gap-1.5">
