@@ -5,6 +5,7 @@
 
 import * as cheerio from 'cheerio';
 import Groq from 'groq-sdk';
+import { callAI } from '@/lib/aiProviderRouter';
 
 export interface ContactResult {
   name: string;
@@ -76,7 +77,12 @@ export function extractDomain(urlStr: string): string | null {
       'duckduckgo.com', 'apple.com', 'play.google.com', 'github.com', 'glassdoor.com',
       'crunchbase.com', 'microsoft.com', 'support.microsoft.com', 'medium.com',
       'reddit.com', 'tiktok.com', 't.me', 'telegram.org', 'zoominfo.com', 'yandex.ru',
-      'dzen.ru', 'mail.ru', 'habr.com', 'hh.ru', 'zhihu.com', 'baidu.com'
+      'dzen.ru', 'mail.ru', 'habr.com', 'hh.ru', 'zhihu.com', 'baidu.com',
+      'scribd.com', 'tenforums.com', 'detik.com', 'generalblue.com',
+      'kalenderlengkap.id', 'kalenderindo.id', 'kalender-365.nl', 'kalenderfox.nl',
+      'newsweek.com', 'nytimes.com', 'cnn.com', 'cbsnews.com', 'hindustantimes.com',
+      'bbc.com', 'reuters.com', 'bloomberg.com', 'forbes.com', 'tripadvisor.com',
+      'booking.com', 'airbnb.com', 'hotels.com'
     ];
     if (skip.some(s => host === s || host.endsWith('.' + s))) return null;
     return host;
@@ -133,6 +139,79 @@ export async function searchBing(query: string, count = 10): Promise<CrawledSour
 
 // ── Domain & Company Canonical Resolution ────────────────────
 
+export function cleanCompanyName(raw: string): string {
+  if (!raw) return "";
+  let name = raw.trim();
+  // Strip opening/closing quotes and brackets
+  name = name.replace(/^["'«»“„]+|["'«»“„]+$/g, "").trim();
+  // Strip legal prefixes (case-insensitive)
+  name = name.replace(/^(?:ООО|ОАО|ЗАО|ПАО|АО|ИП|LLC|LTD|INC|CORP|CO|GROUP|ГК|КОМПАНИЯ|COMPANY)\s+/i, "");
+  // Strip legal suffixes
+  name = name.replace(/\s+(?:ООО|ОАО|ЗАО|ПАО|АО|ИП|LLC|LTD|INC|CORP|CO|GROUP|ГК)$/i, "");
+  // Strip remaining quotes
+  name = name.replace(/["'«»“„]/g, "").trim();
+  return name || raw.trim();
+}
+
+export const KNOWN_ATS_DOMAINS = [
+  "greenhouse.io",
+  "lever.co",
+  "workable.com",
+  "recruitee.com",
+  "ashbyhq.com",
+  "huntflow.ru",
+  "bamboohr.com",
+  "smartrecruiters.com",
+  "breezy.hr",
+  "applytojob.com",
+  "career.habr.com",
+  "hh.ru",
+];
+
+export function isValidCareersUrl(
+  candidateUrl?: string,
+  domain?: string,
+  cleanName?: string
+): boolean {
+  if (!candidateUrl) return false;
+  try {
+    const parsed = new URL(candidateUrl);
+    const host = parsed.hostname.toLowerCase();
+    const pathname = parsed.pathname.toLowerCase();
+
+    // 1. If corporate domain is known, URL must match domain
+    if (domain) {
+      const normDomain = domain.toLowerCase().replace(/^www\./, "");
+      if (host === normDomain || host.endsWith("." + normDomain)) {
+        return true;
+      }
+    }
+
+    // 2. Recognized ATS platforms
+    const isAts = KNOWN_ATS_DOMAINS.some((ats) => host.includes(ats));
+    if (isAts) {
+      // Must match company slug or name in pathname or subdomain
+      if (cleanName) {
+        const slug = cleanName.toLowerCase().replace(/[^a-z0-9]/g, "");
+        const targetStr = (host + pathname).replace(/[^a-z0-9]/g, "");
+        if (slug.length >= 3 && targetStr.includes(slug)) {
+          return true;
+        }
+      }
+      if (domain) {
+        const domainSlug = domain.split(".")[0]?.toLowerCase();
+        if (domainSlug && domainSlug.length >= 3 && (host + pathname).includes(domainSlug)) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 export async function findCompanyDomain(companyName: string): Promise<{
   domain?: string;
   name?: string;
@@ -144,72 +223,98 @@ export async function findCompanyDomain(companyName: string): Promise<{
 export async function resolveCompanyDomain(
   companyName: string,
   providedDomain?: string
-): Promise<{ domain?: string; officialName?: string }> {
+): Promise<{ domain?: string; officialName?: string; careersUrl?: string }> {
   const trimmed = companyName.trim();
   if (providedDomain?.trim()) {
-    return { domain: providedDomain.trim().toLowerCase(), officialName: trimmed };
+    const d = extractDomain(providedDomain.trim());
+    if (d) return { domain: d, officialName: trimmed };
   }
 
-  // 1. Direct domain check
-  if (trimmed.includes('.') && !trimmed.includes(' ')) {
-    return { domain: trimmed.toLowerCase(), officialName: trimmed };
+  // 1. Direct domain check (e.g. "cian.ru", "pyxl.ai", "hh.ru", "domain.com")
+  const domainPattern = /^(?:https?:\/\/)?([a-zA-Z0-9-]+\.(?:ru|com|net|org|io|ai|dev|app|co|tech|me|by|kz|uz))(?:\/.*)?$/i;
+  const match = trimmed.match(domainPattern);
+  if (match) {
+    const rawHost = match[1].toLowerCase();
+    const d = extractDomain(rawHost) || rawHost;
+    return { domain: d, officialName: trimmed };
   }
 
-  // 2. Clearbit Autocomplete
+  const cleanName = cleanCompanyName(trimmed);
+
+  // 2. High-precision AI domain resolution using unified AI Provider Router
   try {
-    const url = `https://autocomplete.clearbit.com/v1/companies/suggest?query=${encodeURIComponent(trimmed)}`;
-    const res = await fetch(url, { signal: AbortSignal.timeout(4000) });
-    if (res.ok) {
-      const data = await res.json();
-      if (Array.isArray(data) && data[0]?.domain) {
-        return { domain: data[0].domain.toLowerCase(), officialName: data[0].name || trimmed };
+    const aiRes = await callAI({
+      systemPrompt: `You are an expert company intelligence domain resolver.
+Identify the official corporate website domain and careers/jobs portal URL for companies worldwide (US, Europe, Russia, CIS, Asia).
+STRICT RULES:
+1. ONLY return a domain if you are 100% certain it belongs to the exact company specified.
+2. If the company is an obscure Russian entity, private local business, or if you are not completely sure, return null for domain.
+3. NEVER guess, hallucinate, or return an unrelated resort, blog, store, forum, or news site.
+4. For Russian companies (e.g. "Циан", "Техоборонэксперт"), only return their real .ru or .com domain if it actually exists.
+5. Return strictly valid JSON: {"domain": string | null, "officialName": string, "careersUrl": string | null}`,
+      prompt: `Company name: "${trimmed}" (Clean entity name: "${cleanName}")`,
+      requestType: "company_domain_resolve",
+      maxTokens: 150,
+    });
+
+    const cleanJson = aiRes.content.replace(/^```json\s*/i, "").replace(/```\s*$/i, "").trim();
+    const parsed = JSON.parse(cleanJson);
+    if (parsed.domain && typeof parsed.domain === "string") {
+      const candidate = extractDomain(parsed.domain.trim());
+      if (candidate) {
+        const validCareers = isValidCareersUrl(parsed.careersUrl, candidate, cleanName)
+          ? parsed.careersUrl
+          : undefined;
+        return {
+          domain: candidate,
+          officialName: parsed.officialName || trimmed,
+          careersUrl: validCareers,
+        };
       }
     }
-  } catch {}
+  } catch (aiErr) {
+    console.warn("[CompanyIntel] AI domain resolve fallback:", aiErr);
+  }
 
-  // 3. AI Resolution via Groq (Fast, high-precision for international companies)
+  // 3. Clearbit Autocomplete (Strict name matching)
   try {
-    const groqKey = process.env.GROQ_API_KEY;
-    if (groqKey) {
-      const groq = new Groq({ apiKey: groqKey });
-      const comp = await groq.chat.completions.create({
-        model: process.env.AI_MODEL_GROQ || 'openai/gpt-oss-120b',
-        messages: [
-          {
-            role: 'system',
-            content: 'Identify primary domain and English official name for companies worldwide (e.g. Novakid Inc -> novakidschool.com, Циан -> cian.ru, Grab -> grab.com). Return JSON only: {"domain": "string or null", "officialName": "string"}'
-          },
-          {
-            role: 'user',
-            content: `What is the primary official website domain and official name for company: "${trimmed}"?`
+    const url = `https://autocomplete.clearbit.com/v1/companies/suggest?query=${encodeURIComponent(cleanName)}`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(3000) });
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data) && data[0]?.domain && data[0]?.name) {
+        const cbName = data[0].name.toLowerCase();
+        const targetLower = cleanName.toLowerCase();
+        if (cbName.includes(targetLower) || targetLower.includes(cbName)) {
+          const d = extractDomain(data[0].domain);
+          if (d) {
+            return { domain: d, officialName: data[0].name || trimmed };
           }
-        ],
-        response_format: { type: 'json_object' }
-      });
-      const txt = comp.choices[0]?.message?.content;
-      if (txt) {
-        const parsed = JSON.parse(txt);
-        if (parsed.domain && parsed.domain.includes('.')) {
-          return {
-            domain: parsed.domain.toLowerCase().trim().replace(/^https?:\/\//, '').replace(/\/.*$/, ''),
-            officialName: parsed.officialName || trimmed
-          };
         }
       }
     }
   } catch {}
 
-  // 4. Web Search fallback
+  // 4. Web Search fallback with STRICT Relevance Verification
   try {
-    const results = await searchBing(`"${trimmed}" official site OR company`);
+    const results = await searchBing(`"${cleanName}" official site OR company`);
     for (const r of results) {
       const d = extractDomain(r.link);
-      if (d) {
+      if (!d) continue;
+
+      const titleLower = r.title.toLowerCase();
+      const snippetLower = r.snippet.toLowerCase();
+      const targetLower = cleanName.toLowerCase();
+
+      // Search result MUST explicitly mention the company name
+      const mentionsCompany = titleLower.includes(targetLower) || snippetLower.includes(targetLower);
+      if (mentionsCompany) {
         return { domain: d, officialName: trimmed };
       }
     }
   } catch {}
 
+  // No verified domain found - DO NOT GUESS OR HALLUCINATE!
   return { domain: undefined, officialName: trimmed };
 }
 
@@ -268,7 +373,10 @@ export async function crawlCompanyWebsite(
       if (!careersUrl) {
         const careerA = $('a[href*="recruitee.com"], a[href*="greenhouse.io"], a[href*="lever.co"], a[href*="workable.com"], a[href*="/careers"], a[href*="/jobs"]').first().attr('href');
         if (careerA) {
-          careersUrl = careerA.startsWith('http') ? careerA : `${website}${careerA.startsWith('/') ? '' : '/'}${careerA}`;
+          const candidate = careerA.startsWith('http') ? careerA : `${website}${careerA.startsWith('/') ? '' : '/'}${careerA}`;
+          if (isValidCareersUrl(candidate, domain, _companyName)) {
+            careersUrl = candidate;
+          }
         }
       }
 
@@ -600,21 +708,38 @@ export async function crawlDeepCompanyIntel(
   const trimmedName = companyName.trim();
 
   // 1. Resolve canonical domain and company name
-  const { domain, officialName } = await resolveCompanyDomain(trimmedName, providedDomain);
+  const { domain, officialName, careersUrl: resolvedCareersUrl } = await resolveCompanyDomain(trimmedName, providedDomain);
   const canonicalName = officialName || trimmedName;
+  const cleanName = cleanCompanyName(canonicalName);
 
   // 2. Search web for company presence & save crawled sources
   const searchQuery = `"${canonicalName}"`;
   const searchResults = await searchBing(searchQuery, 10);
-  const crawledSources: CrawledSource[] = [...searchResults];
+
+  // Filter crawled sources to only retain sources that explicitly mention the company name or verified domain
+  const cleanLower = cleanName.toLowerCase();
+  const crawledSources: CrawledSource[] = searchResults.filter((r) => {
+    const titleLower = r.title.toLowerCase();
+    const snippetLower = r.snippet.toLowerCase();
+    const linkLower = r.link.toLowerCase();
+    const mentionsName = cleanLower.length > 2 && (titleLower.includes(cleanLower) || snippetLower.includes(cleanLower));
+    const mentionsDomain = domain ? linkLower.includes(domain.toLowerCase()) : false;
+    return mentionsName || mentionsDomain;
+  });
 
   let website: string | undefined = domain ? `https://${domain}` : undefined;
-  let careersUrl: string | undefined;
+  let careersUrl: string | undefined = isValidCareersUrl(resolvedCareersUrl, domain, cleanName)
+    ? resolvedCareersUrl
+    : undefined;
   let linkedinCompanyUrl: string | undefined;
 
   for (const r of searchResults) {
     if (r.link.includes('linkedin.com/company/')) {
-      if (!linkedinCompanyUrl) linkedinCompanyUrl = r.link;
+      const cleanSlug = cleanName.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const linkSlug = r.link.toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (cleanSlug.length >= 3 && linkSlug.includes(cleanSlug)) {
+        if (!linkedinCompanyUrl) linkedinCompanyUrl = r.link;
+      }
     }
     if (
       r.link.includes('recruitee.com') ||
@@ -624,7 +749,9 @@ export async function crawlDeepCompanyIntel(
       r.link.includes('/careers') ||
       r.link.includes('/jobs')
     ) {
-      if (!careersUrl) careersUrl = r.link;
+      if (!careersUrl && isValidCareersUrl(r.link, domain, cleanName)) {
+        careersUrl = r.link;
+      }
     }
   }
 
@@ -642,7 +769,9 @@ export async function crawlDeepCompanyIntel(
   if (siteData) {
     siteContacts = siteData.contacts;
     if (siteData.website && !website) website = siteData.website;
-    if (siteData.careersUrl && !careersUrl) careersUrl = siteData.careersUrl;
+    if (siteData.careersUrl && isValidCareersUrl(siteData.careersUrl, domain, cleanName)) {
+      careersUrl = siteData.careersUrl;
+    }
     if (siteData.linkedinCompanyUrl && !linkedinCompanyUrl) linkedinCompanyUrl = siteData.linkedinCompanyUrl;
     generalEmails.push(...siteData.generalEmails);
   }

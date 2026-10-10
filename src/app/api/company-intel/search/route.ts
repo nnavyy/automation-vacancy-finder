@@ -69,8 +69,8 @@ export async function POST(req: NextRequest) {
       savedIntel = await prisma.companyIntel.update({
         where: { id: existingRecord.id },
         data: {
-          domain: intelResult.domain ?? existingRecord.domain,
-          linkedinUrl: intelResult.linkedinUrl ?? existingRecord.linkedinUrl,
+          domain: intelResult.domain ?? (providedDomain ? existingRecord.domain : null),
+          linkedinUrl: intelResult.linkedinUrl ?? null,
           description: intelResult.description,
           vacancyId: vacancyId ?? existingRecord.vacancyId,
           contacts: {

@@ -81,6 +81,38 @@ function parseIntelMetadata(description?: string): CompanyMetadata {
   return { summary: description };
 }
 
+const KNOWN_ATS_DOMAINS = [
+  "greenhouse.io",
+  "lever.co",
+  "workable.com",
+  "recruitee.com",
+  "ashbyhq.com",
+  "huntflow.ru",
+  "bamboohr.com",
+  "smartrecruiters.com",
+  "breezy.hr",
+  "applytojob.com",
+  "career.habr.com",
+  "hh.ru",
+];
+
+function isSafeCareersUrl(url?: string, domain?: string): boolean {
+  if (!url) return false;
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase();
+    if (domain) {
+      const normDomain = domain.toLowerCase().replace(/^www\./, "");
+      if (host === normDomain || host.endsWith("." + normDomain)) {
+        return true;
+      }
+    }
+    return KNOWN_ATS_DOMAINS.some((ats) => host.includes(ats));
+  } catch {
+    return false;
+  }
+}
+
 // ── Main Content Component ────────────────────────────────────
 
 function CompanyIntelContent() {
@@ -313,7 +345,10 @@ function CompanyIntelContent() {
   const websiteUrl =
     activeMetadata.website ||
     (activeCompany?.domain ? `https://${activeCompany.domain}` : undefined);
-  const careersUrl = activeMetadata.careersUrl;
+  const rawCareersUrl = activeMetadata.careersUrl;
+  const careersUrl = isSafeCareersUrl(rawCareersUrl, activeCompany?.domain)
+    ? rawCareersUrl
+    : undefined;
   const companyLinkedinUrl = activeMetadata.linkedinUrl || activeCompany?.linkedinUrl;
   const crawledSources = activeMetadata.crawledSources ?? [];
 
@@ -568,6 +603,18 @@ function CompanyIntelContent() {
                   >
                     <Briefcase className="w-3 h-3" />
                     {t("intel.careers", "Careers Portal")}
+                  </a>
+                )}
+                {activeCompany && (
+                  <a
+                    href={`https://hh.ru/search/vacancy?text=${encodeURIComponent(activeCompany.companyName)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1 text-[11px] px-2.5 py-1 rounded bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 transition-colors"
+                    title="Search company vacancies on HeadHunter"
+                  >
+                    <Briefcase className="w-3 h-3" />
+                    HeadHunter
                   </a>
                 )}
                 {companyLinkedinUrl && (
