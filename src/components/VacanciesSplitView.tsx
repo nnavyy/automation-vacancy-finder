@@ -7,8 +7,9 @@
 // Fully localized (EN/RU)
 // ============================================================
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Search,
   ExternalLink,
@@ -23,6 +24,7 @@ import {
   MapPin,
   Check,
   ChevronRight,
+  ChevronLeft,
   Loader2,
   Copy,
   CheckCheck,
@@ -63,11 +65,17 @@ export interface VacancyItem {
   };
 }
 
-interface VacanciesSplitViewProps {
+export interface VacanciesSplitViewProps {
   initialVacancies: VacancyItem[];
   totalCount: number;
+  totalActive?: number;
+  totalAll?: number;
+  totalSkipped?: number;
   hasProfile: boolean;
   minScoreThreshold?: number;
+  currentPage?: number;
+  pageSize?: number;
+  currentDateRange?: string;
 }
 
 function formatVacancyDate(dateStr?: string, lang: string = "en"): string {
@@ -101,18 +109,69 @@ function formatSalary(salary: unknown, lang: string = "en"): string {
 export default function VacanciesSplitView({
   initialVacancies,
   totalCount,
+  totalActive,
+  totalAll,
+  totalSkipped,
   minScoreThreshold = 70,
+  currentPage = 1,
+  pageSize = 50,
+  currentDateRange = "7d",
 }: VacanciesSplitViewProps) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const { t, language } = useLanguage();
+
   const [vacancies, setVacancies] = useState<VacancyItem[]>(initialVacancies);
   const [selectedId, setSelectedId] = useState<string>(
     initialVacancies[0]?.id ?? ""
   );
-  const [filterTab, setFilterTab] = useState<string>("all");
+  const [filterTab, setFilterTab] = useState<string>(
+    searchParams?.get("status") === "skip" ? "skip" : "all"
+  );
   const [searchQuery, setSearchQuery] = useState("");
   const [activeDetailTab, setActiveDetailTab] = useState<
     "analysis" | "description" | "tailoring"
   >("analysis");
+  const [isNavigating, setIsNavigating] = useState(false);
+
+  // Synchronize state when initialVacancies changes (e.g. on page or date range change)
+  useEffect(() => {
+    setVacancies(initialVacancies);
+    setIsNavigating(false);
+    if (initialVacancies.length > 0 && !initialVacancies.some((v) => v.id === selectedId)) {
+      setSelectedId(initialVacancies[0]?.id ?? "");
+    }
+  }, [initialVacancies]);
+
+  const handlePageChange = (newPage: number) => {
+    setIsNavigating(true);
+    const params = new URLSearchParams(searchParams?.toString() ?? "");
+    params.set("page", String(newPage));
+    router.push(`/dashboard/vacancies?${params.toString()}`);
+  };
+
+  const handleDateRangeChange = (newRange: string) => {
+    setIsNavigating(true);
+    const params = new URLSearchParams(searchParams?.toString() ?? "");
+    params.set("dateRange", newRange);
+    params.set("page", "1");
+    router.push(`/dashboard/vacancies?${params.toString()}`);
+  };
+
+  const handleTabClick = (tabId: string) => {
+    setFilterTab(tabId);
+    if (tabId === "skip") {
+      const params = new URLSearchParams(searchParams?.toString() ?? "");
+      params.set("status", "skip");
+      params.set("page", "1");
+      router.push(`/dashboard/vacancies?${params.toString()}`);
+    } else if (searchParams?.get("status") === "skip") {
+      const params = new URLSearchParams(searchParams?.toString() ?? "");
+      params.delete("status");
+      params.set("page", "1");
+      router.push(`/dashboard/vacancies?${params.toString()}`);
+    }
+  };
 
   // Pitch state
   const [copiedPitch, setCopiedPitch] = useState(false);
@@ -446,12 +505,16 @@ export default function VacanciesSplitView({
         selectedVacancy.analysis.matchReasons?.length)
   );
 
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+  const showingStart = totalCount > 0 ? (currentPage - 1) * pageSize + 1 : 0;
+  const showingEnd = Math.min(totalCount, currentPage * pageSize);
+
   return (
     <div className="space-y-4">
       {/* ── Top Bar: Search & Filter Tabs ── */}
       <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-2xl p-4 backdrop-blur-sm space-y-3">
-        {/* Search Row */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+        {/* Search & Date Filter Row */}
+        <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
           <div className="relative flex-1">
             <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500" />
             <input
@@ -463,12 +526,48 @@ export default function VacanciesSplitView({
             />
           </div>
 
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-zinc-400 font-mono">
-              {t("vacancies.filteredOf")
-                .replace("{shown}", String(filteredVacancies.length))
-                .replace("{total}", String(totalCount))}
-            </span>
+          <div className="flex items-center gap-2.5 flex-wrap justify-between lg:justify-end">
+            {/* Date Range Selector */}
+            <div className="flex items-center gap-1 bg-zinc-950/70 border border-zinc-800 rounded-lg p-0.5 shrink-0">
+              {[
+                { id: "7d", label: language === "ru" ? "7 дн." : "7 Days" },
+                { id: "14d", label: language === "ru" ? "14 дн." : "14 Days" },
+                { id: "30d", label: language === "ru" ? "30 дн." : "30 Days" },
+                { id: "all", label: language === "ru" ? "Все" : "All Time" },
+              ].map((range) => {
+                const active = currentDateRange === range.id;
+                return (
+                  <button
+                    key={range.id}
+                    type="button"
+                    onClick={() => handleDateRangeChange(range.id)}
+                    disabled={isNavigating}
+                    className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-all ${
+                      active
+                        ? "bg-zinc-800 text-zinc-100 font-semibold shadow-xs"
+                        : "text-zinc-500 hover:text-zinc-300"
+                    }`}
+                  >
+                    {range.label}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Unified Transparent Count */}
+            <div className="text-xs text-zinc-400 font-mono flex items-center gap-1.5 shrink-0 pl-1">
+              <span className="text-zinc-200 font-semibold">
+                {filteredVacancies.length} of {totalCount}
+              </span>
+              <span className="text-zinc-600">·</span>
+              <span className="text-zinc-400" title="Total active matching opportunities">
+                {totalActive ?? totalCount} {language === "ru" ? "активных" : "active"}
+              </span>
+              <span className="text-zinc-600">·</span>
+              <span className="text-zinc-500" title="Total vacancies collected in database">
+                {totalAll ?? totalCount} {language === "ru" ? "в базе" : "in DB"}
+              </span>
+            </div>
           </div>
         </div>
 
@@ -518,14 +617,14 @@ export default function VacanciesSplitView({
             {
               id: "skip",
               label: t("vacancies.tabSkip"),
-              count: vacancies.filter((v) => v.status === "skipped" || v.status === "ignored" || v.status === "low_priority").length,
+              count: totalSkipped ?? vacancies.filter((v) => v.status === "skipped" || v.status === "ignored" || v.status === "low_priority").length,
             },
           ].map((tab) => {
             const active = filterTab === tab.id;
             return (
               <button
                 key={tab.id}
-                onClick={() => setFilterTab(tab.id)}
+                onClick={() => handleTabClick(tab.id)}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
                   active
                     ? "bg-zinc-800 text-zinc-100 border border-zinc-700 font-semibold shadow-sm"
@@ -729,6 +828,40 @@ export default function VacanciesSplitView({
                 </div>
               );
             })
+          )}
+
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between p-3 bg-zinc-900/90 border border-zinc-800 rounded-xl mt-3 text-xs backdrop-blur-sm shadow-sm sticky bottom-0 z-10">
+              <button
+                type="button"
+                onClick={() => handlePageChange(currentPage - 1)}
+                disabled={currentPage <= 1 || isNavigating}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed text-zinc-200 font-medium transition-all active:scale-95 border border-zinc-700/60"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+                <span>{language === "ru" ? "Назад" : "Previous"}</span>
+              </button>
+
+              <div className="flex flex-col items-center">
+                <span className="text-zinc-300 font-mono text-[11px] font-semibold">
+                  {language === "ru" ? "Страница" : "Page"} {currentPage} / {totalPages}
+                </span>
+                <span className="text-zinc-500 text-[10px]">
+                  {showingStart}–{showingEnd} {language === "ru" ? "из" : "of"} {totalCount}
+                </span>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => handlePageChange(currentPage + 1)}
+                disabled={currentPage >= totalPages || isNavigating}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed text-zinc-200 font-medium transition-all active:scale-95 border border-zinc-700/60"
+              >
+                <span>{language === "ru" ? "Далее" : "Next"}</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
           )}
         </div>
 

@@ -159,7 +159,7 @@ export default async function DashboardPage() {
       const count = group._count._all;
       if (group.status === "applied_manual" || group.status === "applied_hh" || group.status === "applied_auto") {
         applied += count;
-      } else if (group.status === "skipped" || group.status === "ignored") {
+      } else if (group.status === "skipped" || group.status === "ignored" || group.status === "low_priority") {
         skipped += count;
       } else if (group.status === "saved") {
         saved += count;

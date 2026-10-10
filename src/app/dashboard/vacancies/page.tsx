@@ -18,8 +18,19 @@ export default async function VacanciesPage({
   const sp = await searchParams;
   const status = (sp.status as string) ?? "";
   const page = Math.max(1, parseInt((sp.page as string) ?? "1", 10));
-  const limit = 50; // Increased limit so user has plenty of items to browse quickly
+  const dateRange = ((sp.dateRange as string) ?? "7d").toLowerCase();
+  const limit = 50;
   const skip = (page - 1) * limit;
+
+  // Date cutoff: default last 7 days as requested
+  let dateCutoff: Date | undefined = undefined;
+  if (dateRange === "7d") {
+    dateCutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  } else if (dateRange === "14d") {
+    dateCutoff = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+  } else if (dateRange === "30d") {
+    dateCutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const where: Record<string, any> = { userId: user.id };
@@ -34,8 +45,15 @@ export default async function VacanciesPage({
     where.status = { notIn: ["ignored", "low_priority", "skipped"] };
   }
 
+  if (dateCutoff) {
+    where.createdAt = { gte: dateCutoff };
+  }
+
   let vacancies: any[] = [];
   let total = 0;
+  let totalActive = 0;
+  let totalAll = 0;
+  let totalSkipped = 0;
   let hasProfile = false;
   let minScoreThreshold = 70;
   let prefData: any = undefined;
@@ -56,7 +74,7 @@ export default async function VacanciesPage({
       minScoreThreshold = profile.minimumScoreToNotify;
     }
 
-    [vacancies, total] = await withRetry(() =>
+    [vacancies, total, totalActive, totalAll, totalSkipped] = await withRetry(() =>
       Promise.all([
         prisma.vacancy.findMany({
           where,
@@ -97,6 +115,19 @@ export default async function VacanciesPage({
           },
         }),
         prisma.vacancy.count({ where }),
+        prisma.vacancy.count({
+          where: {
+            userId: user.id,
+            status: { notIn: ["ignored", "low_priority", "skipped"] },
+          },
+        }),
+        prisma.vacancy.count({ where: { userId: user.id } }),
+        prisma.vacancy.count({
+          where: {
+            userId: user.id,
+            status: { in: ["ignored", "low_priority", "skipped"] },
+          },
+        }),
       ])
     );
   } catch (err) {
@@ -208,6 +239,14 @@ export default async function VacanciesPage({
     };
   });
 
+  // Sort strictly by highest match score first, then newest
+  formattedVacancies.sort((a, b) => {
+    const scoreA = Math.max(a.analysis?.matchScore ?? 0, a.analysis?.ruleScore ?? 0);
+    const scoreB = Math.max(b.analysis?.matchScore ?? 0, b.analysis?.ruleScore ?? 0);
+    if (scoreB !== scoreA) return scoreB - scoreA;
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+  });
+
   return (
     <div className="max-w-7xl space-y-5 pb-12">
       {/* ── Page Header ── */}
@@ -224,8 +263,14 @@ export default async function VacanciesPage({
       <VacanciesSplitView
         initialVacancies={formattedVacancies}
         totalCount={total}
+        totalActive={totalActive}
+        totalAll={totalAll}
+        totalSkipped={totalSkipped}
         hasProfile={hasProfile}
         minScoreThreshold={minScoreThreshold}
+        currentPage={page}
+        pageSize={limit}
+        currentDateRange={dateRange}
       />
     </div>
   );

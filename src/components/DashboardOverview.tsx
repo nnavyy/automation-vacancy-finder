@@ -158,7 +158,9 @@ export default function DashboardOverview({
               </span>
             )}
           </div>
-          <p className="text-[11px] text-zinc-500">{t("overview.parsedFromHh")}</p>
+          <p className="text-[11px] text-zinc-500">
+            {metrics.total - metrics.skipped} {language === "ru" ? "активных вакансий" : "active opportunities"} · {metrics.skipped} {language === "ru" ? "в архиве" : "archived"}
+          </p>
         </div>
 
         {/* Applied */}
