@@ -65,7 +65,10 @@ export async function POST(req: NextRequest) {
         syncedApplications = historyResult.history.length;
         for (const item of historyResult.history) {
           const vacancyIdMatch = item.url ? item.url.match(/vacancy\/(\d+)/) : null;
-          const vacancyId = vacancyIdMatch ? vacancyIdMatch[1] : `manual-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+          // Skip negotiation threads that do not point to a genuine vacancy to avoid mock/dead entries
+          if (!vacancyIdMatch) continue;
+          const vacancyId = vacancyIdMatch[1];
+          const canonicalUrl = `https://hh.ru/vacancy/${vacancyId}`;
 
           const exists = await prisma.vacancy.findFirst({
             where: { hhId: vacancyId, userId: user.id },
@@ -78,7 +81,7 @@ export async function POST(req: NextRequest) {
                 hhId: vacancyId,
                 title: item.title,
                 company: item.company,
-                url: item.url ? (item.url.startsWith("http") ? item.url : `https://hh.ru${item.url}`) : "",
+                url: canonicalUrl,
                 status: "applied_manual",
                 sourceKeyword: "HH.ru Sync",
                 createdAt: item.appliedAt,

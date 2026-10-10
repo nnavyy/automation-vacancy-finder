@@ -291,7 +291,10 @@ function buildVacancyNotificationPayload(
       [
         {
           text: "Open Vacancy",
-          url: vacancy.url ?? `https://hh.ru/vacancy/${vacancy.hhId}`,
+          url:
+            vacancy.url && vacancy.url.startsWith("http")
+              ? vacancy.url
+              : `https://hh.ru/vacancy/${vacancy.hhId.replace(/\D/g, "")}`,
         },
       ],
     ],

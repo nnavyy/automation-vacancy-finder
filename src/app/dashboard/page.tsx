@@ -33,6 +33,12 @@ export default async function DashboardPage() {
     userPref = pref;
     threshold = pref?.minimumScoreToNotify ?? 65;
 
+    const baseGenuineFilter = {
+      userId: user.id,
+      NOT: { hhId: { startsWith: "manual-" } },
+      url: { startsWith: "http" },
+    };
+
     const [
       allCount,
       statusGroups,
@@ -45,37 +51,37 @@ export default async function DashboardPage() {
       filteredTopVacancies,
     ] = await withRetry(() =>
       Promise.all([
-        prisma.vacancy.count({ where: { userId: user.id } }),
+        prisma.vacancy.count({ where: baseGenuineFilter }),
         prisma.vacancy.groupBy({
           by: ["status"],
-          where: { userId: user.id },
+          where: baseGenuineFilter,
           _count: { _all: true },
         }),
         prisma.vacancyAnalysis.aggregate({
-          where: { vacancy: { userId: user.id } },
+          where: { vacancy: baseGenuineFilter },
           _avg: { matchScore: true },
           _count: { matchScore: true },
         }),
         prisma.vacancyAnalysis.count({
-          where: { vacancy: { userId: user.id }, aiStatus: "pending_limit" },
+          where: { vacancy: baseGenuineFilter, aiStatus: "pending_limit" },
         }),
         prisma.vacancyAnalysis.count({
-          where: { vacancy: { userId: user.id }, matchScore: { gte: 75 } },
+          where: { vacancy: baseGenuineFilter, matchScore: { gte: 75 } },
         }),
         prisma.vacancyAnalysis.count({
-          where: { vacancy: { userId: user.id }, matchScore: { gte: 50, lt: 75 } },
+          where: { vacancy: baseGenuineFilter, matchScore: { gte: 50, lt: 75 } },
         }),
         prisma.vacancyAnalysis.count({
-          where: { vacancy: { userId: user.id }, matchScore: { lt: 50 } },
+          where: { vacancy: baseGenuineFilter, matchScore: { lt: 50 } },
         }),
         prisma.vacancy.findFirst({
-          where: { userId: user.id },
+          where: baseGenuineFilter,
           orderBy: { createdAt: "desc" },
           select: { createdAt: true },
         }),
         prisma.vacancy.findMany({
           where: {
-            userId: user.id,
+            ...baseGenuineFilter,
             status: { notIn: ["ignored", "low_priority", "skipped"] },
             analysis: {
               matchScore: { gte: threshold },

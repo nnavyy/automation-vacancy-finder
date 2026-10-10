@@ -33,7 +33,11 @@ export const VacancyService = {
     const { userId, status, page = 1, limit = 20, orderBy = "desc" } = options;
     const skip = Math.max(0, (page - 1) * limit);
 
-    const where: Prisma.VacancyWhereInput = { userId };
+    const where: Prisma.VacancyWhereInput = {
+      userId,
+      NOT: { hhId: { startsWith: "manual-" } },
+      url: { startsWith: "http" },
+    };
     if (Array.isArray(status)) {
       where.status = { in: status };
     } else if (status) {

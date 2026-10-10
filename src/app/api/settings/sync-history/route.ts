@@ -73,9 +73,11 @@ export async function POST(req: NextRequest) {
     // Upsert into Vacancy database
     let newAdded = 0;
     for (const item of result.history) {
-      // Extract ID from URL (e.g. /vacancy/123456)
-      let vacancyIdMatch = item.url.match(/vacancy\/(\d+)/);
-      let vacancyId = vacancyIdMatch ? vacancyIdMatch[1] : `manual-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+      // Extract genuine numeric ID from URL (e.g. /vacancy/123456)
+      const vacancyIdMatch = item.url ? item.url.match(/vacancy\/(\d+)/) : null;
+      if (!vacancyIdMatch) continue;
+      const vacancyId = vacancyIdMatch[1];
+      const canonicalUrl = `https://hh.ru/vacancy/${vacancyId}`;
       
       // Check if already in DB for this user
       const exists = await prisma.vacancy.findFirst({
@@ -89,7 +91,7 @@ export async function POST(req: NextRequest) {
             hhId: vacancyId,
             title: item.title,
             company: item.company,
-            url: item.url ? (item.url.startsWith('http') ? item.url : `https://hh.ru${item.url}`) : "",
+            url: canonicalUrl,
             status: "applied_manual",
             sourceKeyword: "HH.ru Sync",
             createdAt: item.appliedAt,

@@ -518,8 +518,18 @@ export async function syncHHHistory(cookieString: string): Promise<HHSyncHistory
           if (Array.isArray(list)) {
             for (const topic of list) {
               if (topic && typeof topic === "object") {
-                const vacancyId = String(topic.vacancyId || topic.vacancy?.id || topic.id || "");
-                const vacInfo = vacanciesMap.get(vacancyId);
+                // Only accept genuine numeric vacancy IDs. topic.id is a negotiation thread ID and MUST NOT be used!
+                let vacancyId = "";
+                if (topic.vacancyId && /^\d+$/.test(String(topic.vacancyId))) {
+                  vacancyId = String(topic.vacancyId);
+                } else if (topic.vacancy?.id && /^\d+$/.test(String(topic.vacancy.id))) {
+                  vacancyId = String(topic.vacancy.id);
+                } else if (topic.url) {
+                  const m = String(topic.url).match(/vacancy\/(\d+)/);
+                  if (m) vacancyId = m[1];
+                }
+
+                const vacInfo = vacancyId ? vacanciesMap.get(vacancyId) : null;
 
                 const title =
                   vacInfo?.name ||
@@ -536,10 +546,10 @@ export async function syncHHHistory(cookieString: string): Promise<HHSyncHistory
                   topic.companyName ||
                   "Employer";
 
-                const url =
-                  vacInfo?.links?.desktop ||
-                  topic.url ||
-                  (vacancyId ? `https://hh.ru/vacancy/${vacancyId}` : "");
+                // Real canonical URL only if valid vacancyId exists
+                const url = vacancyId
+                  ? `https://hh.ru/vacancy/${vacancyId}`
+                  : (vacInfo?.links?.desktop || (topic.url?.includes("/vacancy/") ? topic.url : ""));
 
                 const appliedAt = topic.creationTime || topic.createdAt
                   ? new Date(topic.creationTime || topic.createdAt)
@@ -547,7 +557,8 @@ export async function syncHHHistory(cookieString: string): Promise<HHSyncHistory
 
                 const status = topic.lastState || topic.state?.name || topic.status || "applied";
 
-                if (!history.some((h) => (url ? h.url === url : h.title === title && h.company === company))) {
+                // Strictly enforce valid vacancy link to prevent broken or displaced links
+                if (url && !history.some((h) => h.url === url)) {
                   history.push({ title, company, status, url, appliedAt });
                   pageFoundCount++;
                 }
@@ -560,13 +571,14 @@ export async function syncHHHistory(cookieString: string): Promise<HHSyncHistory
       // Method B: Fallback directly to vacanciesShort if topicList didn't populate items
       if (pageFoundCount === 0 && vacanciesMap.size > 0) {
         for (const [vId, vac] of vacanciesMap.entries()) {
+          if (!/^\d+$/.test(vId)) continue;
           const title = vac.name || `Vacancy #${vId}`;
           const company = vac.company?.name || vac.company?.visibleName || "Employer";
-          const url = vac.links?.desktop || `https://hh.ru/vacancy/${vId}`;
+          const url = `https://hh.ru/vacancy/${vId}`;
           const appliedAt = vac.creationTime ? new Date(vac.creationTime) : new Date();
           const status = "applied";
 
-          if (!history.some((h) => (url ? h.url === url : h.title === title && h.company === company))) {
+          if (!history.some((h) => h.url === url)) {
             history.push({ title, company, status, url, appliedAt });
             pageFoundCount++;
           }
@@ -591,10 +603,11 @@ export async function syncHHHistory(cookieString: string): Promise<HHSyncHistory
             item.find(".bloko-text_tertiary").text().trim();
           const appliedAt = parseHHDate(dateText);
 
-          let url = item.find('a[href*="/vacancy/"]').attr("href") || "";
-          if (url && !url.startsWith("http")) url = `https://hh.ru${url}`;
+          const rawHref = item.find('a[href*="/vacancy/"]').attr("href") || "";
+          const match = rawHref.match(/vacancy\/(\d+)/);
+          const url = match ? `https://hh.ru/vacancy/${match[1]}` : "";
 
-          if (title && !history.some((h) => (url ? h.url === url : h.title === title && h.company === company))) {
+          if (title && url && !history.some((h) => h.url === url)) {
             history.push({ title, company, status, url, appliedAt });
             pageFoundCount++;
           }

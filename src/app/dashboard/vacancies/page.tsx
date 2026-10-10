@@ -32,8 +32,15 @@ export default async function VacanciesPage({
     dateCutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
   }
 
+  // Base filter guarantees strictly genuine HH vacancies with valid working URLs
+  const baseGenuineFilter = {
+    userId: user.id,
+    NOT: { hhId: { startsWith: "manual-" } },
+    url: { startsWith: "http" },
+  };
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const where: Record<string, any> = { userId: user.id };
+  const where: Record<string, any> = { ...baseGenuineFilter };
   if (status === "applied_manual") {
     where.status = { in: ["applied_manual", "applied_hh"] };
   } else if (status === "skip" || status === "ignored") {
@@ -117,14 +124,14 @@ export default async function VacanciesPage({
         prisma.vacancy.count({ where }),
         prisma.vacancy.count({
           where: {
-            userId: user.id,
+            ...baseGenuineFilter,
             status: { notIn: ["ignored", "low_priority", "skipped"] },
           },
         }),
-        prisma.vacancy.count({ where: { userId: user.id } }),
+        prisma.vacancy.count({ where: baseGenuineFilter }),
         prisma.vacancy.count({
           where: {
-            userId: user.id,
+            ...baseGenuineFilter,
             status: { in: ["ignored", "low_priority", "skipped"] },
           },
         }),

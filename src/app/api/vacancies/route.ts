@@ -57,7 +57,11 @@ export async function GET(req: NextRequest) {
 
     // ── Build Prisma where clause ─────────────────────────
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const where: Record<string, any> = { userId: user.id };
+    const where: Record<string, any> = {
+      userId: user.id,
+      NOT: { hhId: { startsWith: "manual-" } },
+      url: { startsWith: "http" },
+    };
 
     if (status) {
       where.status = status;

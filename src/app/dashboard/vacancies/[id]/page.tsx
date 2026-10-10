@@ -251,17 +251,24 @@ export default async function VacancyDetailPage({
           </div>
 
           {/* Open on HH.ru */}
-          {vacancy.url && (
-            <a
-              href={vacancy.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700/80 border border-zinc-700/80 text-zinc-200 text-xs font-medium transition-colors shrink-0"
-            >
-              <ExternalLink size={13} />
-              Open Vacancy
-            </a>
-          )}
+          {(() => {
+            const validUrl = vacancy.url && vacancy.url.startsWith("http")
+              ? vacancy.url
+              : vacancy.hhId && /^\d+$/.test(vacancy.hhId)
+              ? `https://hh.ru/vacancy/${vacancy.hhId}`
+              : null;
+            return validUrl ? (
+              <a
+                href={validUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700/80 border border-zinc-700/80 text-zinc-200 text-xs font-medium transition-colors shrink-0"
+              >
+                <ExternalLink size={13} />
+                Open Vacancy
+              </a>
+            ) : null;
+          })()}
         </div>
 
         {/* Company Intel Banner */}

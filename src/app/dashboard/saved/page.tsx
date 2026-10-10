@@ -39,10 +39,17 @@ export default async function SavedPage({
   let vacancies: any[] = [];
   let total = 0;
 
+  const savedWhere = {
+    userId: user.id,
+    status: "saved",
+    NOT: { hhId: { startsWith: "manual-" } },
+    url: { startsWith: "http" },
+  };
+
   try {
     [vacancies, total] = await Promise.all([
       prisma.vacancy.findMany({
-        where: { userId: user.id, status: "saved" },
+        where: savedWhere,
         skip,
         take: limit,
         orderBy: { updatedAt: "desc" },
@@ -52,7 +59,7 @@ export default async function SavedPage({
           analysis: { select: { matchScore: true, recommendation: true, aiStatus: true, redFlags: true, coverLetter: true } },
         },
       }),
-      prisma.vacancy.count({ where: { userId: user.id, status: "saved" } }),
+      prisma.vacancy.count({ where: savedWhere }),
     ]);
   } catch (err) {
     console.error("[Saved Page]", err);
@@ -141,12 +148,19 @@ export default async function SavedPage({
                     <Link href={`/dashboard/vacancies/${v.id}`} className="px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 transition-colors text-center">
                       View Details
                     </Link>
-                    {v.url && (
-                      <a href={v.url} target="_blank" rel="noopener noreferrer" className="px-3 py-1.5 rounded-lg text-xs font-medium bg-zinc-800 text-zinc-300 border border-zinc-700/80 hover:bg-zinc-700 transition-colors inline-flex items-center justify-center gap-1.5">
-                        <ExternalLink size={11} />
-                        Open on HH
-                      </a>
-                    )}
+                    {(() => {
+                      const validUrl = v.url && v.url.startsWith("http")
+                        ? v.url
+                        : v.hhId && /^\d+$/.test(v.hhId)
+                        ? `https://hh.ru/vacancy/${v.hhId}`
+                        : null;
+                      return validUrl ? (
+                        <a href={validUrl} target="_blank" rel="noopener noreferrer" className="px-3 py-1.5 rounded-lg text-xs font-medium bg-zinc-800 text-zinc-300 border border-zinc-700/80 hover:bg-zinc-700 transition-colors inline-flex items-center justify-center gap-1.5">
+                          <ExternalLink size={11} />
+                          Open on HH
+                        </a>
+                      ) : null;
+                    })()}
                   </div>
                 </div>
               </div>

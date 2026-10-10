@@ -35,8 +35,10 @@ export async function GET(req: Request) {
 
         if (result.history.length > 0) {
           for (const item of result.history) {
-            let vacancyIdMatch = item.url.match(/vacancy\/(\d+)/);
-            let vacancyId = vacancyIdMatch ? vacancyIdMatch[1] : `manual-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+            const vacancyIdMatch = item.url ? item.url.match(/vacancy\/(\d+)/) : null;
+            if (!vacancyIdMatch) continue;
+            const vacancyId = vacancyIdMatch[1];
+            const canonicalUrl = `https://hh.ru/vacancy/${vacancyId}`;
             
             const exists = await prisma.vacancy.findFirst({
               where: { hhId: vacancyId, userId: pref.userId }
@@ -49,7 +51,7 @@ export async function GET(req: Request) {
                   hhId: vacancyId,
                   title: item.title,
                   company: item.company,
-                  url: item.url ? (item.url.startsWith('http') ? item.url : `https://hh.ru${item.url}`) : "",
+                  url: canonicalUrl,
                   status: "applied_manual",
                   sourceKeyword: "HH.ru Cron Sync",
                   createdAt: item.appliedAt,

@@ -247,7 +247,13 @@ export default function OverviewTopMatches({ vacancies }: OverviewTopMatchesProp
                 </button>
 
                 <a
-                  href={v.url || `https://hh.ru/vacancy/${v.hhId}`}
+                  href={
+                    v.url && v.url.startsWith("http")
+                      ? v.url
+                      : v.hhId && /^\d+$/.test(v.hhId)
+                      ? `https://hh.ru/vacancy/${v.hhId}`
+                      : "#"
+                  }
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-400 border border-emerald-500/20 text-xs font-semibold transition-colors"

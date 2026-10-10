@@ -242,6 +242,18 @@ export default function VacanciesSplitView({
     return found ?? filteredVacancies[0] ?? null;
   }, [filteredVacancies, selectedId]);
 
+  // Guaranteed genuine HeadHunter URL (prevents mock, non-existent, or mismatched links)
+  const selectedGenuineHhUrl = useMemo(() => {
+    if (!selectedVacancy) return null;
+    if (selectedVacancy.url && selectedVacancy.url.startsWith("http")) {
+      return selectedVacancy.url;
+    }
+    if (selectedVacancy.hhId && /^\d+$/.test(selectedVacancy.hhId)) {
+      return `https://hh.ru/vacancy/${selectedVacancy.hhId}`;
+    }
+    return null;
+  }, [selectedVacancy]);
+
   const handleToggleSave = async (vacancyId: string) => {
     const target = vacancies.find((v) => v.id === vacancyId);
     if (!target) return;
@@ -887,9 +899,22 @@ export default function VacanciesSplitView({
                           {selectedVacancy.company || "Unknown"}
                         </span>
                       </div>
-                      <h2 className="text-lg font-bold text-zinc-100 mt-1 leading-snug">
-                        {selectedVacancy.title}
-                      </h2>
+                      <div className="flex items-center gap-2 mt-1">
+                        <h2 className="text-lg font-bold text-zinc-100 leading-snug">
+                          {selectedVacancy.title}
+                        </h2>
+                        {selectedGenuineHhUrl && (
+                          <a
+                            href={selectedGenuineHhUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-zinc-500 hover:text-emerald-400 transition-colors p-0.5 rounded"
+                            title={language === "ru" ? "Открыть вакансию на HeadHunter" : "Open vacancy on HeadHunter"}
+                          >
+                            <ExternalLink className="w-4 h-4" />
+                          </a>
+                        )}
+                      </div>
                     </div>
                   </div>
 
@@ -980,11 +1005,21 @@ export default function VacanciesSplitView({
                   </button>
 
                   <a
-                    href={selectedVacancy.url || `https://hh.ru/vacancy/${selectedVacancy.hhId}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={() => handleStatusChange("applied_manual", selectedVacancy.id)}
-                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-xs font-semibold text-white transition-all shadow-sm active:scale-95"
+                    href={selectedGenuineHhUrl || "#"}
+                    target={selectedGenuineHhUrl ? "_blank" : undefined}
+                    rel={selectedGenuineHhUrl ? "noopener noreferrer" : undefined}
+                    onClick={(e) => {
+                      if (!selectedGenuineHhUrl) {
+                        e.preventDefault();
+                        return;
+                      }
+                      handleStatusChange("applied_manual", selectedVacancy.id);
+                    }}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold text-white transition-all shadow-sm active:scale-95 ${
+                      selectedGenuineHhUrl
+                        ? "bg-emerald-600 hover:bg-emerald-500 cursor-pointer"
+                        : "bg-zinc-700/60 text-zinc-400 cursor-not-allowed pointer-events-none"
+                    }`}
                   >
                     <Send className="w-3.5 h-3.5" />
                     {t("vacancies.applyHh")}

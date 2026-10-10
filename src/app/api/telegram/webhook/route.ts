@@ -379,7 +379,8 @@ export async function POST(req: NextRequest) {
           } else {
             const lines = saved.map((v, i) => {
               const score = v.analysis?.matchScore ?? "—";
-              return `${i + 1}. <b>${v.title}</b>\n   ${v.company ?? "—"} • Score: ${score}\n   ${v.url ?? `https://hh.ru/vacancy/${v.hhId}`}`;
+              const url = v.url && v.url.startsWith("http") ? v.url : `https://hh.ru/vacancy/${v.hhId.replace(/\D/g, "")}`;
+              return `${i + 1}. <b>${v.title}</b>\n   ${v.company ?? "—"} • Score: ${score}\n   ${url}`;
             });
             await tgSend(chatId, `<b>[Saved]</b> (${saved.length})\n\n${lines.join("\n\n")}`);
           }
@@ -405,7 +406,8 @@ export async function POST(req: NextRequest) {
           } else {
             const lines = applied.map((v, i) => {
               const score = v.analysis?.matchScore ?? "—";
-              return `${i + 1}. <b>${v.title}</b>\n   ${v.company ?? "—"} • Score: ${score}\n   ${v.url ?? `https://hh.ru/vacancy/${v.hhId}`}`;
+              const url = v.url && v.url.startsWith("http") ? v.url : `https://hh.ru/vacancy/${v.hhId.replace(/\D/g, "")}`;
+              return `${i + 1}. <b>${v.title}</b>\n   ${v.company ?? "—"} • Score: ${score}\n   ${url}`;
             });
             await tgSend(chatId, `<b>[Applied]</b> (${applied.length})\n\n${lines.join("\n\n")}`);
           }
