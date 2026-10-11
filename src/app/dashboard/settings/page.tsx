@@ -280,7 +280,34 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [lastSavedTime, setLastSavedTime] = useState<string>("just now");
   const [autoSaveStatus, setAutoSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
-  const [msg, setMsg] = useState<Msg | null>(null);
+  const [msg, setMsgState] = useState<Msg | null>(null);
+  const [isToastExiting, setIsToastExiting] = useState(false);
+  const toastTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const dismissToast = useCallback(() => {
+    setIsToastExiting(true);
+    setTimeout(() => {
+      setMsgState(null);
+      setIsToastExiting(false);
+    }, 240);
+  }, []);
+
+  const setMsg = useCallback((newMsg: Msg | null) => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    if (!newMsg) {
+      dismissToast();
+      return;
+    }
+    setIsToastExiting(false);
+    setMsgState(newMsg);
+    toastTimerRef.current = setTimeout(() => {
+      setIsToastExiting(true);
+      setTimeout(() => {
+        setMsgState(null);
+        setIsToastExiting(false);
+      }, 240);
+    }, 5500);
+  }, [dismissToast]);
 
   // Profile JSON Upload / Translate state
   const [translatingJson, setTranslatingJson] = useState(false);
@@ -306,15 +333,20 @@ export default function SettingsPage() {
   const [generatingTg, setGeneratingTg] = useState(false);
   const [copiedTg, setCopiedTg] = useState(false);
   const [showRegenerateConfirm, setShowRegenerateConfirm] = useState(false);
+  const [isModalClosing, setIsModalClosing] = useState(false);
 
-  // Auto-dismiss floating top toast notification after 6 seconds
-  useEffect(() => {
-    if (!msg) return;
-    const timer = setTimeout(() => {
-      setMsg(null);
-    }, 6000);
-    return () => clearTimeout(timer);
-  }, [msg]);
+  const openRegenerateModal = () => {
+    setIsModalClosing(false);
+    setShowRegenerateConfirm(true);
+  };
+
+  const closeRegenerateModal = () => {
+    setIsModalClosing(true);
+    setTimeout(() => {
+      setShowRegenerateConfirm(false);
+      setIsModalClosing(false);
+    }, 220);
+  };
 
   // Live telemetry stats loaded from backend
   const [stats, setStats] = useState({
@@ -529,6 +561,13 @@ export default function SettingsPage() {
               setLanguage(d.language);
             }
 
+            if (json.telegramLink && isMounted) {
+              if (json.telegramLink.token) setTgToken(json.telegramLink.token);
+              setTgLinked(Boolean(json.telegramLink.linked));
+              if (json.telegramLink.username) setTgUsername(json.telegramLink.username);
+              if (json.telegramLink.botUsername) setTgBotUsername(json.telegramLink.botUsername);
+            }
+
             setForm({
               id: d.id,
               name: d.name ?? DEFAULT_FORM.name,
@@ -581,19 +620,6 @@ export default function SettingsPage() {
         }
       }
     };
-
-    // Load Telegram Link status
-    fetch("/api/telegram/link")
-      .then((r) => r.json())
-      .then((json) => {
-        if (json.success && json.data && isMounted) {
-          if (json.data.token) setTgToken(json.data.token);
-          setTgLinked(Boolean(json.data.linked));
-          if (json.data.username) setTgUsername(json.data.username);
-          if (json.data.botUsername) setTgBotUsername(json.data.botUsername);
-        }
-      })
-      .catch(() => {});
 
     load();
 
@@ -944,56 +970,37 @@ export default function SettingsPage() {
       return;
     }
     setTestingPortfolio(true);
-    setMsg(null);
     try {
       const res = await fetch("/api/dashboard/test-crawl", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: form.portfolioUrl }),
+        body: JSON.stringify({
+          url: form.portfolioUrl,
+          currentContext: form.resumeText,
+          clientHash: lastCrawlHash,
+          language,
+        }),
       });
       const json = await res.json();
-      if (json.success && json.extractedText) {
+      if (json.unchanged) {
+        setMsg({
+          text: json.message || (language === "ru"
+            ? "Изменений в портфолио не обнаружено. Контекст кандидата уже актуален."
+            : "No new updates detected on your portfolio. Candidate Context is already up-to-date."),
+          type: "success",
+        });
+      } else if (json.success && json.extractedText) {
         const incomingHash = json.contentHash || "";
-        const currentText = form.resumeText || "";
-
-        if (
-          lastCrawlHash === incomingHash ||
-          (currentText && incomingHash && currentText.includes(json.extractedText.slice(0, 100)))
-        ) {
-          // Identical link & content -> no modification, confirm context is already fresh
-          setMsg({
-            text: language === "ru"
-              ? "Изменений в портфолио не обнаружено. Контекст кандидата уже актуален."
-              : "No new updates detected on your portfolio. Candidate Context is already up-to-date.",
-            type: "success",
-          });
-        } else if (!currentText.trim()) {
-          // Empty candidate context -> initialize with crawled content
-          const updatedForm = { ...form, resumeText: json.extractedText };
-          setForm(updatedForm);
-          setLastCrawlHash(incomingHash);
-          setMsg({
-            text: language === "ru"
-              ? "Контекст кандидата успешно заполнен данными из вашего портфолио!"
-              : "Candidate Context initialized with highlights from your portfolio!",
-            type: "success",
-          });
-          executeSave(updatedForm, false);
-        } else {
-          // Existing candidate context has text -> smart incremental append only (do not overwrite existing)
-          const newHighlights = `\n\n[Portfolio Updates - ${new Date().toLocaleDateString()}]:\n${json.extractedText}`;
-          const updatedResumeText = `${currentText.trim()}${newHighlights}`;
-          const updatedForm = { ...form, resumeText: updatedResumeText };
-          setForm(updatedForm);
-          setLastCrawlHash(incomingHash);
-          setMsg({
-            text: language === "ru"
-              ? "Обнаружены обновления в портфолио! Новые проекты добавлены в контекст кандидата."
-              : "New portfolio updates detected! Appended new project highlights to Candidate Context.",
-            type: "success",
-          });
-          executeSave(updatedForm, false);
-        }
+        const updatedForm = { ...form, resumeText: json.extractedText };
+        setForm(updatedForm);
+        setLastCrawlHash(incomingHash);
+        setMsg({
+          text: json.message || (language === "ru"
+            ? "Портфолио успешно проанализировано ИИ и сохранено в контекст кандидата!"
+            : "Portfolio synthesized by AI into structured Candidate Context!"),
+          type: "success",
+        });
+        executeSave(updatedForm, false);
       } else {
         setMsg({ text: json.error ?? "Crawl test failed.", type: "error" });
       }
@@ -1203,7 +1210,7 @@ export default function SettingsPage() {
   };
 
   const handleGenerateTgToken = async () => {
-    setShowRegenerateConfirm(false);
+    closeRegenerateModal();
     setGeneratingTg(true);
     try {
       const res = await fetch("/api/telegram/link", { method: "POST" });
@@ -1239,18 +1246,6 @@ export default function SettingsPage() {
     }
   };
 
-  // ── Loading Skeleton ──────────────────────────────────────
-  if (loading) {
-    return (
-      <div className="max-w-7xl mx-auto py-10 px-4 space-y-6">
-        <div className="flex items-center gap-3">
-          <RefreshCw size={18} className="animate-spin text-emerald-400" />
-          <span className="text-zinc-400 text-sm">Loading configuration pipelines...</span>
-        </div>
-      </div>
-    );
-  }
-
   // ── Render ────────────────────────────────────────────────
   return (
     <div className="max-w-7xl mx-auto pb-16 px-4 sm:px-6">
@@ -1268,6 +1263,12 @@ export default function SettingsPage() {
         </div>
 
         <div className="flex items-center gap-3">
+          {loading && (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded bg-zinc-900 border border-zinc-800 text-[11px] text-zinc-400 font-mono">
+              <RefreshCw size={11} className="animate-spin text-emerald-400" />
+              <span>{language === "ru" ? "Синхронизация..." : "Syncing..."}</span>
+            </div>
+          )}
           <button
             type="button"
             onClick={() => executeSave(form, true)}
@@ -1315,7 +1316,7 @@ export default function SettingsPage() {
 
       {/* ── Fixed Floating Top Toast (Slides down from top viewport, visible anywhere when scrolled) ── */}
       {msg && (
-        <div className="fixed top-5 left-1/2 -translate-x-1/2 z-50 max-w-lg w-[calc(100%-2rem)] pointer-events-auto animate-in slide-in-from-top-6 fade-in duration-200">
+        <div className={`fixed top-5 left-1/2 -translate-x-1/2 z-50 max-w-lg w-[calc(100%-2rem)] pointer-events-auto ${isToastExiting ? "toast-animate-out" : "toast-animate-in"}`}>
           <div
             className={`p-3.5 rounded-xl text-xs border shadow-2xl backdrop-blur-md flex items-center justify-between gap-3 ${
               msg.type === "success"
@@ -1333,7 +1334,7 @@ export default function SettingsPage() {
             </div>
             <button
               type="button"
-              onClick={() => setMsg(null)}
+              onClick={dismissToast}
               className="text-zinc-400 hover:text-zinc-200 p-1 rounded-md hover:bg-zinc-800/80 transition-colors shrink-0"
               title="Close notification"
             >
@@ -1564,15 +1565,14 @@ export default function SettingsPage() {
               <div className="bg-zinc-950 border border-zinc-800/80 rounded-lg p-3.5 space-y-3">
                 {hhConnectMode === "console" && (
                   <div className="space-y-2.5">
-                    {/* Extension Required Banner */}
-                    <div className="bg-emerald-950/30 border border-emerald-500/30 rounded-xl p-3.5 space-y-2.5">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-mono uppercase font-bold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
-                            {language === "ru" ? "Расширение обязательно для 1-Click Sync" : "Extension Required for 1-Click Sync"}
-                          </span>
+                    {/* Extension & Token Guide */}
+                    <div className="bg-zinc-900/80 border border-zinc-800 rounded-xl p-3.5 space-y-2.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 text-xs font-semibold text-zinc-200">
+                          <Globe size={14} className="text-emerald-400" />
+                          <span>{language === "ru" ? "Синхронизация токена hh.ru" : "HeadHunter Session Synchronization"}</span>
                         </div>
-                        <span className="text-[10px] font-mono text-emerald-400/90 font-medium">
+                        <span className="text-[10px] text-zinc-500 font-mono">
                           {language === "ru" ? "Защита HttpOnly на hh.ru" : "hh.ru HttpOnly Protection"}
                         </span>
                       </div>
@@ -2523,7 +2523,7 @@ export default function SettingsPage() {
                   type="button"
                   onClick={() => {
                     if (tgToken || tgLinked) {
-                      setShowRegenerateConfirm(true);
+                      openRegenerateModal();
                     } else {
                       handleGenerateTgToken();
                     }
@@ -2769,8 +2769,8 @@ export default function SettingsPage() {
 
       {/* ── Regenerate Telegram Token Confirmation Modal (Lively, Clean & Sleek) ── */}
       {showRegenerateConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-300">
-          <div className="bg-zinc-900 border border-zinc-700/80 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-in zoom-in-95 slide-in-from-bottom-3 duration-300 ease-out">
+        <div className={`fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md ${isModalClosing ? "backdrop-animate-out" : "backdrop-animate-in"}`}>
+          <div className={`bg-zinc-900 border border-zinc-700/80 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 ${isModalClosing ? "modal-animate-out" : "modal-animate-in"}`}>
             <div className="flex items-start gap-3.5">
               <div className="p-3 rounded-2xl bg-sky-500/10 border border-sky-500/25 text-sky-400 shrink-0 shadow-lg shadow-sky-500/10">
                 <Send size={22} className="text-sky-400" />
@@ -2801,7 +2801,7 @@ export default function SettingsPage() {
             <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-zinc-800/60">
               <button
                 type="button"
-                onClick={() => setShowRegenerateConfirm(false)}
+                onClick={closeRegenerateModal}
                 className="px-3.5 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-medium border border-zinc-700/70 transition-colors"
               >
                 {language === "ru" ? "Отмена" : "Cancel"}

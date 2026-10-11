@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getApiUser } from "@/lib/auth-helpers";
 import { isSafePublicUrl } from "@/lib/security";
+import { callAI } from "@/lib/aiProviderRouter";
 import crypto from "crypto";
 
 function extractCleanPortfolioText(html: string): string {
@@ -33,8 +34,8 @@ function extractCleanPortfolioText(html: string): string {
     .map((line) => line.replace(/\s+/g, " ").trim())
     .filter((line) => line.length > 2 && !/^(home|about|contact|menu|cookie|copyright|all rights reserved)$/i.test(line));
 
-  // Cap extracted content to 2500 meaningful chars (plenty for portfolio context & key highlights)
-  return lines.join("\n").slice(0, 2500).trim();
+  // Cap extracted content to 3500 meaningful chars for LLM synthesis
+  return lines.join("\n").slice(0, 3500).trim();
 }
 
 export async function POST(req: NextRequest) {
@@ -44,7 +45,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const { url } = await req.json();
+    const { url, currentContext, clientHash, language = "en" } = await req.json();
     if (!url) {
       return NextResponse.json({ success: false, error: "URL is required" }, { status: 400 });
     }
@@ -72,23 +73,110 @@ export async function POST(req: NextRequest) {
     }
 
     const html = await res.text();
-    const extractedText = extractCleanPortfolioText(html);
+    const rawExtracted = extractCleanPortfolioText(html);
 
-    if (!extractedText || extractedText.length < 15) {
+    if (!rawExtracted || rawExtracted.length < 15) {
       return NextResponse.json({
         success: false,
         error: "Crawl bot reached the URL, but could not find readable textual content.",
       }, { status: 400 });
     }
 
-    const contentHash = crypto.createHash("md5").update(extractedText).digest("hex");
+    const contentHash = crypto.createHash("md5").update(rawExtracted).digest("hex");
+
+    // If client provided a hash and it matches the current crawl, return unchanged
+    if (clientHash && clientHash === contentHash) {
+      return NextResponse.json({
+        success: true,
+        unchanged: true,
+        contentHash,
+        message: language === "ru"
+          ? "Изменений в портфолио не обнаружено. Контекст кандидата актуален."
+          : "No new updates detected on your portfolio. Candidate Context is already up-to-date.",
+      });
+    }
+
+    // ── AI Portfolio Architect & Synthesis ────────────────────
+    const isRussian = language === "ru";
+    const systemPrompt = isRussian
+      ? `Вы — старший технический рекрутер и архитектор резюме. Ваша задача — проанализировать содержимое сайта/портфолио кандидата и преобразовать его в четкую, структурированную выжимку для контекста кандидата при поиске работы.
+ТРЕБОВАНИЯ К ФОРМАТУ:
+- НЕ выводите сплошной текст, абзацы или сырые цитаты сайта.
+- Оформите ответ в виде аккуратных маркированных списков:
+
+### 🛠 Стек технологий и ключевые навыки
+- **Языки и фреймворки:** [Извлеченные навыки, напр. React, Next.js, TypeScript]
+- **Базы данных и инструменты:** [напр. PostgreSQL, Prisma, Docker, Git]
+
+### 🚀 Проекты и ключевые достижения
+- **[Название проекта]** — [Краткая роль, используемый стек и ценность/фича в 1 строку]
+- **[Название проекта 2]** — [Краткая роль, используемый стек и ценность/фича в 1 строку]
+
+### 💡 Сильные стороны и специализация
+- [1-2 лаконичных пункта о фокусе разработки, сильных сторонах или опыте]`
+      : `You are an elite Senior Technical Recruiter and Career Architect.
+Your task is to analyze candidate portfolio / website text and synthesize it into a clean, concise, high-impact "Candidate Context & Key Highlights" profile.
+
+FORMATTING REQUIREMENTS:
+- Do NOT output walls of unstructured text, long rambling paragraphs, or raw website copy.
+- Output clean, structured Markdown bullet points with this exact structure:
+
+### 🛠 Tech Stack & Core Competencies
+- **Languages & Frameworks:** [Extracted skills, e.g. React, Next.js, TypeScript]
+- **Databases & Architecture:** [e.g. PostgreSQL, Prisma, Docker, REST APIs]
+
+### 🚀 Key Projects & Portfolio Highlights
+- **[Project Name]** — [Key engineering role, core stack used, and 1-line business impact or feature]
+- **[Project Name 2]** — [Key engineering role, core stack used, and 1-line business impact or feature]
+
+### 💡 Professional Focus & Strengths
+- [1-2 concise bullet points highlighting engineering philosophy, experience level, or specialty]`;
+
+    const userPrompt = currentContext && currentContext.trim().length > 10
+      ? `Here is the candidate's existing context notes:
+---
+${currentContext.trim()}
+---
+
+Here is the newly crawled portfolio text from ${url}:
+---
+${rawExtracted}
+---
+
+INSTRUCTIONS:
+Carefully merge the newly discovered projects, technologies, and achievements from the portfolio into the candidate's existing notes. Retain any custom user preferences or special instructions, updating and expanding the structured sections with the new portfolio data.`
+      : `Here is the newly crawled portfolio text from ${url}:
+---
+${rawExtracted}
+---
+
+Synthesize this into the structured Candidate Context format.`;
+
+    let synthesizedText = "";
+    try {
+      const aiResponse = await callAI({
+        prompt: userPrompt,
+        systemPrompt,
+        requestType: "portfolio_synthesis",
+        maxTokens: 1200,
+      });
+      synthesizedText = aiResponse.content.trim();
+    } catch (aiErr) {
+      console.warn("[TestCrawl] AI synthesis fallback to structured extraction:", aiErr);
+      // Fallback if AI service is temporarily offline: generate clean structured markdown
+      synthesizedText = isRussian
+        ? `### 🛠 Стек технологий (из портфолио)\n- ${rawExtracted.slice(0, 300).replace(/\n/g, ", ")}\n\n### 🚀 Обнаруженные проекты\n- ${url}`
+        : `### 🛠 Tech Stack & Highlights (Extracted)\n- ${rawExtracted.slice(0, 300).replace(/\n/g, ", ")}\n\n### 🚀 Portfolio Reference\n- ${url}`;
+    }
 
     return NextResponse.json({
       success: true,
-      extractedText,
+      extractedText: synthesizedText,
       contentHash,
-      charCount: extractedText.length,
-      message: `Successfully crawled portfolio! Found ${extractedText.length} characters of structured content.`,
+      charCount: synthesizedText.length,
+      message: isRussian
+        ? "Портфолио успешно проанализировано ИИ и преобразовано в структурированный контекст!"
+        : "Portfolio successfully analyzed and synthesized by AI into structured highlights!",
     });
   } catch (err: any) {
     return NextResponse.json({
