@@ -1,5 +1,19 @@
 # HH Job Copilot
 
+<div align="center">
+
+![Status: Private Beta](https://img.shields.io/badge/Status-Private_Beta_Testing-yellow?style=for-the-badge)
+![Public Release](https://img.shields.io/badge/Public_Release-Oct_24--26,_2026-blue?style=for-the-badge)
+![License](https://img.shields.io/badge/License-MIT-emerald?style=for-the-badge)
+
+**English** • [Русский](./README.ru.md)
+
+</div>
+
+> [!NOTE]
+> **Pre-Launch Beta Testing (Official Public Release: Oct 24–26, 2026):**  
+> The project is currently under active private testing and polishing. All beta testers can connect directly to our central Telegram bot **[@Wongkiisbot](https://t.me/Wongkiisbot)** without any custom bot setup.
+
 A self-hosted, multi-user AI job search copilot engineered for the HeadHunter (HH.ru) ecosystem and international tech markets. HH Job Copilot continuously collects vacancies matching customizable candidate profiles, screens them with deterministic filters and multi-provider AI reasoning (DeepSeek, Gemini, OpenAI, Claude, Groq, OpenRouter, and local Ollama models), delivers instant interactive Telegram notifications, and features company OSINT intelligence for direct recruiter outreach.
 
 ---
@@ -445,27 +459,35 @@ Users can interact with the bot at any time using standard slash commands:
 | `/saved` | Lists your top 10 saved vacancies with direct links and match scores. |
 | `/applied` | Lists your 10 most recently applied vacancies. |
 
----
+### Telegram Bot Connection (Zero-Setup via @Wongkiisbot)
 
-### Webhook Setup for Deployers
+> [!TIP]
+> **No Bot Creation or Webhook Setup Needed!**  
+> You do **not** need to create your own bot via BotFather or manage bot tokens. All users and beta testers connect directly to the pre-configured central bot: **[@Wongkiisbot](https://t.me/Wongkiisbot)**.
 
-For administrators deploying the application to production:
+#### How to Connect in 30 Seconds:
+1. Open your dashboard at **Settings** (`/dashboard/settings`) and scroll down to the **Telegram Bot Notifications** section.
+2. Click **Generate Token** to get your unique 6-character linking code (e.g., `7AF044`).
+3. Open **[@Wongkiisbot](https://t.me/Wongkiisbot)** on Telegram and send `/start <TOKEN>` (or click the 1-click **Connect in Telegram** button).
+4. That's it! Your account is connected, and you'll immediately receive high-scoring vacancy alerts with 1-click apply buttons.
 
-1. **Configure Environment Variables:**
+<details>
+<summary><b>(Optional) Advanced: Self-Hosting a Custom Telegram Bot</b></summary>
+
+If you are deploying for an organization and want your own custom bot token instead of the shared `@Wongkiisbot`:
+
+1. Obtain a bot token from [@BotFather](https://t.me/BotFather).
+2. Set the environment variables in your `.env`:
    ```ini
    TELEGRAM_BOT_TOKEN="your-bot-token-from-botfather"
-   TELEGRAM_BOT_USERNAME="Wongkiisbot" # (Optional: matches your bot username)
+   TELEGRAM_BOT_USERNAME="YourCustomBot"
    APP_BASE_URL="https://your-domain.com"
    ```
-2. **Register the Webhook:**
-   Trigger the automated setup endpoint:
+3. Register the webhook:
    ```bash
    curl -X POST https://your-domain.com/api/telegram/setup-webhook
    ```
-   Or set the webhook directly via Telegram Bot API:
-   ```bash
-   curl -X POST "https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/setWebhook?url=https://your-domain.com/api/telegram/webhook"
-   ```
+</details>
 
 ## Automation & Scheduled Background Jobs
 
