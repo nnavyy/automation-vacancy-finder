@@ -1,12 +1,12 @@
 import React from "react";
 
 export function Skeleton({
-  className,
+  className = "",
   ...props
 }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={`animate-pulse rounded-md bg-gray-800/60 ${className}`}
+      className={`shimmer-skeleton rounded-md ${className}`}
       {...props}
     />
   );

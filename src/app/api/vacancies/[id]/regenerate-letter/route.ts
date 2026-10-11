@@ -9,6 +9,7 @@ import { buildAnalysisPrompt, parseAIResponse } from "@/lib/aiAnalyzer";
 import { callAI } from "@/lib/aiProviderRouter";
 import { getSimilarFeedbackExamples } from "@/lib/feedbackLearning";
 import { getApiUser, getOwnedVacancy } from "@/lib/auth-helpers";
+import { sanitizeUntrustedPromptText } from "@/lib/security";
 import type { NormalizedVacancy, HHSalary } from "@/types";
 
 function toNormalizedVacancy(v: {
@@ -92,9 +93,10 @@ export async function POST(
     let prompt = await buildAnalysisPrompt(vacancy, similarFeedback, pref);
 
     if (instruction && instruction.trim()) {
+      const sanitizedInstruction = sanitizeUntrustedPromptText(instruction.trim());
       prompt +=
-        `\n\n---\nAdditional instruction for the cover letter: ` +
-        `${instruction.trim()}\n` +
+        `\n\n---\nAdditional candidate preference for the cover letter: ` +
+        `${sanitizedInstruction}\n` +
         `Please update the "cover_letter" field in your JSON response ` +
         `to reflect this instruction while keeping all other fields accurate.`;
     }

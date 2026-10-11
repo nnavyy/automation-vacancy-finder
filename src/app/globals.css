@@ -127,3 +127,30 @@ body {
 .backdrop-animate-out {
   animation: backdropFadeOut 0.2s ease-in forwards;
 }
+
+/* ── Modern Fluid Shimmer Skeleton Wave ── */
+@keyframes shimmerWave {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.shimmer-skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(39, 39, 42, 0.45) 0%,
+    rgba(63, 63, 70, 0.85) 50%,
+    rgba(39, 39, 42, 0.45) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmerWave 1.7s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.shimmer-card {
+  background: rgba(24, 24, 27, 0.6);
+  border: 1px solid rgba(39, 39, 42, 0.8);
+  backdrop-filter: blur(8px);
+}

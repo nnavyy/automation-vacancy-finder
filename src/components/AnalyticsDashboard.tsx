@@ -206,66 +206,66 @@ export default function AnalyticsDashboard({
           </p>
         </div>
 
-        {/* AI Evaluated */}
+        {/* Average Match Synergy */}
         <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-2xl p-5 backdrop-blur-sm space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
-              {t("analytics.aiEvaluated")}
+              {t("analytics.avgSynergy")}
             </span>
-            <Bot className="w-4 h-4 text-violet-400" />
+            <Sparkles className="w-4 h-4 text-violet-400" />
           </div>
           <div className="flex items-baseline gap-2">
             <span className="text-3xl font-black text-violet-400 tabular-nums">
-              {analyzed}
+              {avgScore}%
             </span>
             <span className="text-xs text-zinc-400 font-mono">
-              {analyzedPct}%
+              {analyzed} {t("analytics.totalEvaluated")}
             </span>
           </div>
           <p className="text-xs text-zinc-500">
-            {activeTotal - analyzed} {t("analytics.pendingQueue")}
+            {t("analytics.avgSynergyDesc")}
           </p>
         </div>
 
-        {/* Dispatched Apps */}
+        {/* Active Dialogues */}
         <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-2xl p-5 backdrop-blur-sm space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
-              {t("analytics.dispatchedApps")}
+              {t("analytics.activeDialogues")}
             </span>
-            <Send className="w-4 h-4 text-emerald-400" />
+            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
           </div>
           <div className="flex items-baseline gap-2">
             <span className="text-3xl font-black text-emerald-400 tabular-nums">
-              {applied}
+              {responded}
             </span>
             <span className="text-xs text-zinc-400 font-mono">
-              {appliedRate}% {t("analytics.dispatchedRate")}
+              {applied} {t("analytics.dispatchedApps").toLowerCase()}
             </span>
           </div>
           <p className="text-xs text-zinc-500">
-            {t("analytics.dispatchedDesc")}
+            {t("analytics.activeDialoguesDesc")}
           </p>
         </div>
 
-        {/* Qualified Fit Rate */}
+        {/* Response Yield Rate */}
         <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-2xl p-5 backdrop-blur-sm space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
-              {t("analytics.qualifiedFit")}
+              {t("analytics.responseYield")}
             </span>
-            <CheckCircle2 className="w-4 h-4 text-sky-400" />
+            <BarChart3 className="w-4 h-4 text-sky-400" />
           </div>
           <div className="flex items-baseline gap-2">
             <span className="text-3xl font-black text-sky-400 tabular-nums">
-              {qualified}
+              {applied > 0 ? ((responded / applied) * 100).toFixed(1) : "0.0"}%
             </span>
             <span className="text-xs text-zinc-400 font-mono">
-              {qualifiedPct}%
+              {qualified} {t("analytics.qualifiedFit").toLowerCase()}
             </span>
           </div>
           <p className="text-xs text-zinc-500">
-            {t("analytics.qualifiedDesc")}
+            {t("analytics.responseYieldDesc")}
           </p>
         </div>
       </div>

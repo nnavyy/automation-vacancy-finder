@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getApiUser } from "@/lib/auth-helpers";
-import { isSafePublicUrl } from "@/lib/security";
+import {
+  isSafePublicUrl,
+  wrapUntrustedPromptBlock,
+  PROMPT_INJECTION_DEFENSE_DIRECTIVE,
+} from "@/lib/security";
 import { callAI } from "@/lib/aiProviderRouter";
 import crypto from "crypto";
 
@@ -132,31 +136,21 @@ FORMATTING REQUIREMENTS:
 ### 💡 Professional Focus & Strengths
 - [1-2 concise bullet points highlighting engineering philosophy, experience level, or specialty]`;
 
-    const userPrompt = currentContext && currentContext.trim().length > 10
-      ? `Here is the candidate's existing context notes:
----
-${currentContext.trim()}
----
+    const defensiveSystemPrompt = `${systemPrompt}\n\n${PROMPT_INJECTION_DEFENSE_DIRECTIVE}`;
+    const wrappedCrawledText = wrapUntrustedPromptBlock("crawled_portfolio_site", rawExtracted);
+    const wrappedCurrentNotes = currentContext && currentContext.trim().length > 10
+      ? wrapUntrustedPromptBlock("candidate_current_notes", currentContext.trim())
+      : "";
 
-Here is the newly crawled portfolio text from ${url}:
----
-${rawExtracted}
----
-
-INSTRUCTIONS:
-Carefully merge the newly discovered projects, technologies, and achievements from the portfolio into the candidate's existing notes. Retain any custom user preferences or special instructions, updating and expanding the structured sections with the new portfolio data.`
-      : `Here is the newly crawled portfolio text from ${url}:
----
-${rawExtracted}
----
-
-Synthesize this into the structured Candidate Context format.`;
+    const userPrompt = wrappedCurrentNotes
+      ? `Here are the candidate's existing context notes:\n${wrappedCurrentNotes}\n\nHere is the newly crawled portfolio text from ${url}:\n${wrappedCrawledText}\n\nINSTRUCTIONS:\nCarefully merge the newly discovered projects, technologies, and achievements from the portfolio into the candidate's existing notes. Retain any custom user preferences or special instructions, updating and expanding the structured sections with the new portfolio data.`
+      : `Here is the newly crawled portfolio text from ${url}:\n${wrappedCrawledText}\n\nSynthesize this into the structured Candidate Context format.`;
 
     let synthesizedText = "";
     try {
       const aiResponse = await callAI({
         prompt: userPrompt,
-        systemPrompt,
+        systemPrompt: defensiveSystemPrompt,
         requestType: "portfolio_synthesis",
         maxTokens: 1200,
       });
