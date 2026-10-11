@@ -21,6 +21,8 @@
 > The project is currently undergoing final real-world testing and UI polishing.
 > **The complete source code will be officially unlocked and made public here on October 24–26, 2026.**
 > 
+> **Beta Testing:** All beta testers can connect directly to our central Telegram bot **[@Wongkiisbot](https://t.me/Wongkiisbot)** without any custom bot setup.
+> 
 > **Star this repository** or hit **Watch** to be notified immediately when the codebase drops.
 
 ---
