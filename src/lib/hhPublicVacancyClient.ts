@@ -220,16 +220,10 @@ async function fetchRSSPage(
   // Add area filter (defaults to nationwide 113)
   params.area = (pref as any).area ? Number((pref as any).area) : 113;
 
-  // Add schedule filter
-  if (pref.workFormat && pref.workFormat.includes("remote")) {
-    params.schedule = "remote";
-  }
-
-  // Add experience filter (RSS supports single value)
-  if (pref.experience && pref.experience.length > 0) {
-    // Use the most permissive experience level
-    params.experience = pref.experience[0];
-  }
+  // Note: We do NOT force strict params.schedule or single params.experience here,
+  // because HH.ru's RSS search would prematurely exclude hybrid/flexible jobs or vacancies
+  // with alternate experience tiers that match the candidate. The pipeline filters and
+  // evaluates work format and experience accurately with full AI & rule heuristics.
 
   try {
     const response = await axios.get(HH_RSS_BASE, {

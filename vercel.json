@@ -3,7 +3,7 @@
   "crons": [
     {
       "path": "/api/cron/collect-vacancies",
-      "schedule": "0 0 * * *"
+      "schedule": "0 */5 * * *"
     }
   ]
 }

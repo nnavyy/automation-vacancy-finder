@@ -39,6 +39,7 @@ import {
   Cpu,
   Zap,
   Play,
+  X,
 } from "lucide-react";
 import { AIProvider, CustomAiProviderConfig, AiPreferenceConfig } from "@/types";
 import TagInput from "@/components/ui/TagInput";
@@ -295,6 +296,7 @@ export default function SettingsPage() {
 
   // Portfolio crawling test state
   const [testingPortfolio, setTestingPortfolio] = useState(false);
+  const [lastCrawlHash, setLastCrawlHash] = useState<string>("");
 
   // Telegram Link state
   const [tgToken, setTgToken] = useState<string | null>(null);
@@ -304,6 +306,15 @@ export default function SettingsPage() {
   const [generatingTg, setGeneratingTg] = useState(false);
   const [copiedTg, setCopiedTg] = useState(false);
   const [showRegenerateConfirm, setShowRegenerateConfirm] = useState(false);
+
+  // Auto-dismiss floating top toast notification after 6 seconds
+  useEffect(() => {
+    if (!msg) return;
+    const timer = setTimeout(() => {
+      setMsg(null);
+    }, 6000);
+    return () => clearTimeout(timer);
+  }, [msg]);
 
   // Live telemetry stats loaded from backend
   const [stats, setStats] = useState({
@@ -926,7 +937,10 @@ export default function SettingsPage() {
 
   const handleTestPortfolio = async () => {
     if (!form.portfolioUrl) {
-      setMsg({ text: "Please enter a Portfolio URL first.", type: "warn" });
+      setMsg({
+        text: language === "ru" ? "Сначала укажите ссылку на портфолио или GitHub." : "Please enter a Portfolio or GitHub URL first.",
+        type: "warn",
+      });
       return;
     }
     setTestingPortfolio(true);
@@ -938,8 +952,48 @@ export default function SettingsPage() {
         body: JSON.stringify({ url: form.portfolioUrl }),
       });
       const json = await res.json();
-      if (json.success) {
-        setMsg({ text: json.message || "Crawl bot successfully validated portfolio link!", type: "success" });
+      if (json.success && json.extractedText) {
+        const incomingHash = json.contentHash || "";
+        const currentText = form.resumeText || "";
+
+        if (
+          lastCrawlHash === incomingHash ||
+          (currentText && incomingHash && currentText.includes(json.extractedText.slice(0, 100)))
+        ) {
+          // Identical link & content -> no modification, confirm context is already fresh
+          setMsg({
+            text: language === "ru"
+              ? "Изменений в портфолио не обнаружено. Контекст кандидата уже актуален."
+              : "No new updates detected on your portfolio. Candidate Context is already up-to-date.",
+            type: "success",
+          });
+        } else if (!currentText.trim()) {
+          // Empty candidate context -> initialize with crawled content
+          const updatedForm = { ...form, resumeText: json.extractedText };
+          setForm(updatedForm);
+          setLastCrawlHash(incomingHash);
+          setMsg({
+            text: language === "ru"
+              ? "Контекст кандидата успешно заполнен данными из вашего портфолио!"
+              : "Candidate Context initialized with highlights from your portfolio!",
+            type: "success",
+          });
+          executeSave(updatedForm, false);
+        } else {
+          // Existing candidate context has text -> smart incremental append only (do not overwrite existing)
+          const newHighlights = `\n\n[Portfolio Updates - ${new Date().toLocaleDateString()}]:\n${json.extractedText}`;
+          const updatedResumeText = `${currentText.trim()}${newHighlights}`;
+          const updatedForm = { ...form, resumeText: updatedResumeText };
+          setForm(updatedForm);
+          setLastCrawlHash(incomingHash);
+          setMsg({
+            text: language === "ru"
+              ? "Обнаружены обновления в портфолио! Новые проекты добавлены в контекст кандидата."
+              : "New portfolio updates detected! Appended new project highlights to Candidate Context.",
+            type: "success",
+          });
+          executeSave(updatedForm, false);
+        }
       } else {
         setMsg({ text: json.error ?? "Crawl test failed.", type: "error" });
       }
@@ -1259,18 +1313,33 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {/* ── Toast message if any ── */}
+      {/* ── Fixed Floating Top Toast (Slides down from top viewport, visible anywhere when scrolled) ── */}
       {msg && (
-        <div
-          className={`mt-4 p-3.5 rounded-lg text-xs border transition-all ${
-            msg.type === "success"
-              ? "bg-emerald-950/30 border-emerald-500/40 text-emerald-300"
-              : msg.type === "warn"
-              ? "bg-amber-950/30 border-amber-500/40 text-amber-300"
-              : "bg-red-950/30 border-red-500/40 text-red-300"
-          }`}
-        >
-          {msg.text}
+        <div className="fixed top-5 left-1/2 -translate-x-1/2 z-50 max-w-lg w-[calc(100%-2rem)] pointer-events-auto animate-in slide-in-from-top-6 fade-in duration-200">
+          <div
+            className={`p-3.5 rounded-xl text-xs border shadow-2xl backdrop-blur-md flex items-center justify-between gap-3 ${
+              msg.type === "success"
+                ? "bg-zinc-900/95 border-emerald-500/50 text-emerald-300 shadow-emerald-950/40"
+                : msg.type === "warn"
+                ? "bg-zinc-900/95 border-amber-500/50 text-amber-300 shadow-amber-950/40"
+                : "bg-zinc-900/95 border-rose-500/50 text-rose-300 shadow-rose-950/40"
+            }`}
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              {msg.type === "success" && <Check size={16} className="text-emerald-400 shrink-0" />}
+              {msg.type === "warn" && <Activity size={16} className="text-amber-400 shrink-0" />}
+              {msg.type === "error" && <AlertTriangle size={16} className="text-rose-400 shrink-0" />}
+              <span className="font-medium leading-snug break-words">{msg.text}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setMsg(null)}
+              className="text-zinc-400 hover:text-zinc-200 p-1 rounded-md hover:bg-zinc-800/80 transition-colors shrink-0"
+              title="Close notification"
+            >
+              <X size={14} />
+            </button>
+          </div>
         </div>
       )}
 
@@ -1495,27 +1564,49 @@ export default function SettingsPage() {
               <div className="bg-zinc-950 border border-zinc-800/80 rounded-lg p-3.5 space-y-3">
                 {hhConnectMode === "console" && (
                   <div className="space-y-2.5">
-                    <div className="flex items-center justify-between text-[11px] text-zinc-400">
-                      <span className="font-mono text-zinc-400">
-                        Method: DevTools (F12) Network/Application OR 1-Click Chrome Extension
-                      </span>
-                      <span className="text-[9px] font-mono uppercase px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
-                        {t("hh.cloudCompatible", "100% Cloud Compatible")}
-                      </span>
-                    </div>
-
-                    <div className="bg-zinc-900/90 border border-zinc-800 rounded-lg p-2.5 space-y-1.5 text-xs text-zinc-300">
-                      <div className="text-[11px] text-zinc-300 leading-relaxed whitespace-pre-line">
-                        {t(
-                          "hh.consoleInstructions",
-                          "1. In F12 DevTools on hh.ru, go to Application > Cookies > https://hh.ru (or Network tab > Request Headers > Cookie).\n2. Copy the hhtoken value or the full cookie string (hhtoken, _xsrf, hhuid), paste below, and click Connect."
-                        )}
+                    {/* Extension Required Banner */}
+                    <div className="bg-emerald-950/30 border border-emerald-500/30 rounded-xl p-3.5 space-y-2.5">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-mono uppercase font-bold px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                            {language === "ru" ? "Расширение обязательно для 1-Click Sync" : "Extension Required for 1-Click Sync"}
+                          </span>
+                        </div>
+                        <span className="text-[10px] font-mono text-emerald-400/90 font-medium">
+                          {language === "ru" ? "Защита HttpOnly на hh.ru" : "hh.ru HttpOnly Protection"}
+                        </span>
                       </div>
-                      <div className="text-[10px] text-zinc-500 font-mono">
-                        {t(
-                          "hh.consoleNote",
-                          "Note: hh.ru protects hhtoken with HttpOnly flag, which prevents document.cookie in Console. Extracting from Application tab, Network tab, or the 1-Click Sync Chrome Extension captures all session cookies."
-                        )}
+
+                      <div className="text-xs text-zinc-300 space-y-2 leading-relaxed">
+                        <p className="text-[11px] text-zinc-300">
+                          {language === "ru"
+                            ? "Сайт hh.ru защищает авторизационный токен флагом HttpOnly, поэтому скрипты в консоли браузера не могут прочитать его напрямую. Для мгновенной синхронизации используйте наше расширение:"
+                            : "hh.ru protects session tokens with HttpOnly flags, meaning console scripts cannot read it directly. For seamless 1-click sync, use our companion extension:"}
+                        </p>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px]">
+                          <div className="bg-zinc-950/70 border border-zinc-800 rounded-lg p-2.5 space-y-1">
+                            <div className="font-semibold text-emerald-400 flex items-center gap-1.5">
+                              <span>1. {language === "ru" ? "Через расширение (Рекомендуется)" : "Via Chrome Extension (Recommended)"}</span>
+                            </div>
+                            <p className="text-zinc-400 text-[10px] leading-normal">
+                              {language === "ru"
+                                ? "В Chrome откройте chrome://extensions → включите «Режим разработчика» → «Загрузить распакованное» → выберите папку /extension. Затем на hh.ru нажмите иконку расширения."
+                                : "In Chrome, open chrome://extensions → enable 'Developer mode' → 'Load unpacked' → select the /extension directory. Then open hh.ru and click the extension icon to copy token."}
+                            </p>
+                          </div>
+
+                          <div className="bg-zinc-950/70 border border-zinc-800 rounded-lg p-2.5 space-y-1">
+                            <div className="font-semibold text-zinc-300 flex items-center gap-1.5">
+                              <span>2. {language === "ru" ? "Вручную через DevTools F12" : "Manual Alternative via DevTools F12"}</span>
+                            </div>
+                            <p className="text-zinc-400 text-[10px] leading-normal">
+                              {language === "ru"
+                                ? "Нажмите F12 на hh.ru → вкладка Application (Приложение) → Cookies → https://hh.ru → скопируйте значение hhtoken и вставьте в поле ниже."
+                                : "Press F12 on hh.ru → Application tab → Cookies → https://hh.ru → copy the hhtoken cookie value and paste below."}
+                            </p>
+                          </div>
+                        </div>
                       </div>
                     </div>
 
@@ -1914,10 +2005,15 @@ export default function SettingsPage() {
             </div>
 
             <div>
-              <label className="block text-[11px] font-semibold text-zinc-400 uppercase tracking-wider mb-1.5">
-                {language === "ru" ? "URL ПОРТФОЛИО / GITHUB ДЛЯ АНАЛИЗА" : "PORTFOLIO / GITHUB CRAWL URL"}
-              </label>
-              <div className="flex gap-2">
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">
+                  {language === "ru" ? "URL ПОРТФОЛИО / GITHUB ДЛЯ АНАЛИЗА" : "PORTFOLIO / GITHUB CRAWL URL"}
+                </label>
+                <span className="text-[10px] font-mono text-emerald-400/90">
+                  {language === "ru" ? "Smart Incremental Merge" : "Smart Incremental Merge"}
+                </span>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-2">
                 <input
                   type="url"
                   value={form.portfolioUrl}
@@ -1929,12 +2025,22 @@ export default function SettingsPage() {
                   type="button"
                   onClick={handleTestPortfolio}
                   disabled={testingPortfolio}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium border border-zinc-700 transition-colors disabled:opacity-50"
+                  className="flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 text-xs font-semibold border border-emerald-500/30 transition-all disabled:opacity-50 shrink-0 shadow-sm"
+                  title="Crawl portfolio and incrementally merge highlights to Candidate Context"
                 >
-                  {testingPortfolio ? <RefreshCw size={13} className="animate-spin text-emerald-400" /> : <Bot size={13} />}
-                  <span>{language === "ru" ? "Проверить краулер" : "Test Crawl Bot"}</span>
+                  {testingPortfolio ? <RefreshCw size={13} className="animate-spin text-emerald-400" /> : <Bot size={13} className="text-emerald-400" />}
+                  <span>
+                    {testingPortfolio
+                      ? (language === "ru" ? "Анализируем..." : "Crawling...")
+                      : (language === "ru" ? "Синхронизировать контекст" : "Crawl & Sync Context")}
+                  </span>
                 </button>
               </div>
+              <p className="text-[10px] text-zinc-500 mt-1.5 leading-relaxed">
+                {language === "ru"
+                  ? "Краулер извлекает проекты и технологии с вашего сайта и дополняет «Контекст кандидата» выше. Если ссылка не изменилась, существующий текст остается нетронутым. При обнаружении новых проектов они добавляются инкрементально без удаления ваших заметок."
+                  : "The crawler extracts key projects and skills from your link to enrich 'Candidate Context' above. Re-crawling with no changes leaves your text untouched. If new projects or updates are detected, they are incrementally merged without deleting your existing notes."}
+              </p>
             </div>
           </section>
 
@@ -2661,35 +2767,35 @@ export default function SettingsPage() {
 
       </div>
 
-      {/* ── Regenerate Telegram Token Confirmation Modal ── */}
+      {/* ── Regenerate Telegram Token Confirmation Modal (Lively, Clean & Sleek) ── */}
       {showRegenerateConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-in zoom-in-95 duration-150">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-300">
+          <div className="bg-zinc-900 border border-zinc-700/80 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-in zoom-in-95 slide-in-from-bottom-3 duration-300 ease-out">
             <div className="flex items-start gap-3.5">
-              <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 shrink-0">
-                <AlertTriangle size={22} />
+              <div className="p-3 rounded-2xl bg-sky-500/10 border border-sky-500/25 text-sky-400 shrink-0 shadow-lg shadow-sky-500/10">
+                <Send size={22} className="text-sky-400" />
               </div>
               <div className="space-y-1">
                 <h3 className="text-base font-semibold text-zinc-100">
-                  {language === "ru" ? "Пересоздать токен Telegram?" : "Regenerate Telegram Token?"}
+                  {language === "ru" ? "Обновить токен привязки Telegram?" : "Regenerate Telegram Token?"}
                 </h3>
                 <p className="text-xs text-zinc-400 leading-relaxed">
                   {tgLinked
                     ? (language === "ru"
-                        ? `Ваш аккаунт в настоящее время привязан к @${tgUsername || "Telegram"}. Создание нового токена отвяжет текущую сессию бота, и вам потребуется заново привязать его.`
-                        : `Your account is currently linked to @${tgUsername || "Telegram"}. Generating a new token will disconnect this active bot session, and you will need to reconnect it with the new token.`)
+                        ? `Ваш аккаунт привязан к @${tgUsername || "Telegram"}. Создание нового токена обновит привязку бота для безопасного повторного подключения.`
+                        : `Your account is linked to @${tgUsername || "Telegram"}. Generating a new token will refresh your bot link for secure reconnection.`)
                     : (language === "ru"
-                        ? "У вас уже сгенерирован токен синхронизации. Создание нового токена аннулирует предыдущий."
-                        : "You already have an active sync token. Generating a new token will invalidate your previous token.")}
+                        ? "У вас уже сгенерирован токен синхронизации. Создание нового токена безопасно заменит предыдущий."
+                        : "You already have an active sync token. Generating a new token will safely replace the previous one.")}
                 </p>
               </div>
             </div>
 
-            <div className="bg-zinc-950/70 border border-zinc-850 rounded-lg p-3 text-[11px] text-zinc-400">
-              <span className="text-amber-400 font-semibold">{language === "ru" ? "Внимание: " : "Warning: "}</span>
+            <div className="bg-zinc-950/70 border border-zinc-800 rounded-xl p-3 text-[11px] text-zinc-400 leading-relaxed">
+              <span className="text-sky-400 font-semibold">{language === "ru" ? "Примечание: " : "Note: "}</span>
               {language === "ru"
-                ? "Уведомления о вакансиях в старом чате будут приостановлены до отправки команды /start с новым токеном."
-                : "Vacancy notifications to the previous chat will be paused until you send /start with the new token."}
+                ? "Уведомления о вакансиях в старом чате будут обновлены сразу после отправки /start с новым токеном."
+                : "Vacancy notifications to the previous chat will resume automatically once you send /start with the new token."}
             </div>
 
             <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-zinc-800/60">
@@ -2704,10 +2810,10 @@ export default function SettingsPage() {
                 type="button"
                 onClick={handleGenerateTgToken}
                 disabled={generatingTg}
-                className="px-3.5 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-semibold shadow-sm transition-all flex items-center gap-1.5"
+                className="px-4 py-2 rounded-lg bg-sky-500 hover:bg-sky-400 text-zinc-950 text-xs font-semibold shadow-lg shadow-sky-500/20 transition-all flex items-center gap-1.5"
               >
                 <RotateCw size={13} className={generatingTg ? "animate-spin" : ""} />
-                <span>{language === "ru" ? "Да, пересоздать" : "Yes, Regenerate"}</span>
+                <span>{language === "ru" ? "Да, обновить токен" : "Yes, Regenerate"}</span>
               </button>
             </div>
           </div>

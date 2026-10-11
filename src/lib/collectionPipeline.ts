@@ -280,7 +280,7 @@ export async function runCollectionPipeline(
 
         // ── Rule score pre-check on basic snippet/title ────────
         const preScore = calculateRuleScore(vacancy, pref);
-        if (preScore.score < 25) {
+        if (preScore.score < 10) {
           await prisma.vacancy.update({
             where: { id: dbVacancyId },
             data: { status: "low_priority" },
@@ -302,9 +302,9 @@ export async function runCollectionPipeline(
           }
         }
 
-        // ── Rule score check ───────────────────────────────────
+        // ── Rule score check after enrichment ──────────────────
         const ruleScore = calculateRuleScore(vacancy, pref);
-        if (ruleScore.score < 30) {
+        if (ruleScore.score < 20) {
           await prisma.vacancy.update({ where: { id: dbVacancyId }, data: { status: "low_priority" } });
           await reportProgress();
           return;
