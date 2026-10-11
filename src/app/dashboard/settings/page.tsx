@@ -303,6 +303,7 @@ export default function SettingsPage() {
   const [tgBotUsername, setTgBotUsername] = useState<string>("Wongkiisbot");
   const [generatingTg, setGeneratingTg] = useState(false);
   const [copiedTg, setCopiedTg] = useState(false);
+  const [showRegenerateConfirm, setShowRegenerateConfirm] = useState(false);
 
   // Live telemetry stats loaded from backend
   const [stats, setStats] = useState({
@@ -1148,6 +1149,7 @@ export default function SettingsPage() {
   };
 
   const handleGenerateTgToken = async () => {
+    setShowRegenerateConfirm(false);
     setGeneratingTg(true);
     try {
       const res = await fetch("/api/telegram/link", { method: "POST" });
@@ -1155,7 +1157,14 @@ export default function SettingsPage() {
       if (json.success && json.data) {
         setTgToken(json.data.token);
         setTgLinked(false);
+        setTgUsername(null);
         if (json.data.botUsername) setTgBotUsername(json.data.botUsername);
+        setMsg({
+          text: language === "ru"
+            ? "Новый токен привязки Telegram сгенерирован. Предыдущая привязка сброшена — подключите бота заново."
+            : "New Telegram sync token generated. Previous link reset — please reconnect your bot.",
+          type: "warn",
+        });
       }
     } finally {
       setGeneratingTg(false);
@@ -2406,11 +2415,37 @@ export default function SettingsPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={handleGenerateTgToken}
+                  onClick={() => {
+                    if (tgToken || tgLinked) {
+                      setShowRegenerateConfirm(true);
+                    } else {
+                      handleGenerateTgToken();
+                    }
+                  }}
                   disabled={generatingTg}
-                  className="px-3 py-2 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 text-xs font-medium border border-emerald-500/20 transition-colors disabled:opacity-50"
+                  className={`px-3 py-2 rounded-lg text-xs font-medium border transition-colors disabled:opacity-50 flex items-center gap-1.5 ${
+                    tgToken || tgLinked
+                      ? "bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border-amber-500/30"
+                      : "bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border-emerald-500/20"
+                  }`}
+                  title={
+                    tgToken || tgLinked
+                      ? (language === "ru" ? "Пересоздать токен привязки" : "Regenerate sync token")
+                      : (language === "ru" ? "Создать токен" : "Generate token")
+                  }
                 >
-                  {generatingTg ? "..." : (language === "ru" ? "Создать" : "Generate")}
+                  {generatingTg ? (
+                    <RefreshCw size={13} className="animate-spin" />
+                  ) : tgToken || tgLinked ? (
+                    <RotateCw size={13} />
+                  ) : null}
+                  <span>
+                    {generatingTg
+                      ? "..."
+                      : tgToken || tgLinked
+                      ? (language === "ru" ? "Пересоздать" : "Regenerate")
+                      : (language === "ru" ? "Создать" : "Generate")}
+                  </span>
                 </button>
               </div>
               <div className="text-[10px] text-zinc-400 mt-2.5 space-y-1 bg-zinc-950/60 border border-zinc-800/80 p-2.5 rounded-lg">
@@ -2625,6 +2660,59 @@ export default function SettingsPage() {
         </div>
 
       </div>
+
+      {/* ── Regenerate Telegram Token Confirmation Modal ── */}
+      {showRegenerateConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-in zoom-in-95 duration-150">
+            <div className="flex items-start gap-3.5">
+              <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 shrink-0">
+                <AlertTriangle size={22} />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-base font-semibold text-zinc-100">
+                  {language === "ru" ? "Пересоздать токен Telegram?" : "Regenerate Telegram Token?"}
+                </h3>
+                <p className="text-xs text-zinc-400 leading-relaxed">
+                  {tgLinked
+                    ? (language === "ru"
+                        ? `Ваш аккаунт в настоящее время привязан к @${tgUsername || "Telegram"}. Создание нового токена отвяжет текущую сессию бота, и вам потребуется заново привязать его.`
+                        : `Your account is currently linked to @${tgUsername || "Telegram"}. Generating a new token will disconnect this active bot session, and you will need to reconnect it with the new token.`)
+                    : (language === "ru"
+                        ? "У вас уже сгенерирован токен синхронизации. Создание нового токена аннулирует предыдущий."
+                        : "You already have an active sync token. Generating a new token will invalidate your previous token.")}
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-zinc-950/70 border border-zinc-850 rounded-lg p-3 text-[11px] text-zinc-400">
+              <span className="text-amber-400 font-semibold">{language === "ru" ? "Внимание: " : "Warning: "}</span>
+              {language === "ru"
+                ? "Уведомления о вакансиях в старом чате будут приостановлены до отправки команды /start с новым токеном."
+                : "Vacancy notifications to the previous chat will be paused until you send /start with the new token."}
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-zinc-800/60">
+              <button
+                type="button"
+                onClick={() => setShowRegenerateConfirm(false)}
+                className="px-3.5 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-medium border border-zinc-700/70 transition-colors"
+              >
+                {language === "ru" ? "Отмена" : "Cancel"}
+              </button>
+              <button
+                type="button"
+                onClick={handleGenerateTgToken}
+                disabled={generatingTg}
+                className="px-3.5 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-semibold shadow-sm transition-all flex items-center gap-1.5"
+              >
+                <RotateCw size={13} className={generatingTg ? "animate-spin" : ""} />
+                <span>{language === "ru" ? "Да, пересоздать" : "Yes, Regenerate"}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
