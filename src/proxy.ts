@@ -16,6 +16,14 @@ const proxyHandler = auth((req) => {
     return NextResponse.next();
   }
 
+  // Allow Telegram webhook and background cron triggers
+  if (
+    pathname.startsWith("/api/telegram") ||
+    pathname.startsWith("/api/cron")
+  ) {
+    return NextResponse.next();
+  }
+
   const userEmail = req.auth?.user?.email?.toLowerCase();
   const isLoggedIn = !!req.auth?.user;
   const isWhitelisted = isEmailWhitelisted(userEmail);
