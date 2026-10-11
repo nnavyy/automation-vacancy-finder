@@ -273,10 +273,13 @@ function getWorkFormatLabel(value: string, lang: string): string {
 // ── Main Page Component ───────────────────────────────────────
 
 
+const SETTINGS_CACHE_KEY = "hh_settings_cache_v2";
+
 export default function SettingsPage() {
   const { language, setLanguage, t } = useLanguage();
   const [form, setForm] = useState<FormState>(DEFAULT_FORM);
   const [loading, setLoading] = useState(true);
+  const [hasLoadedFromCache, setHasLoadedFromCache] = useState(false);
   const [saving, setSaving] = useState(false);
   const [lastSavedTime, setLastSavedTime] = useState<string>("just now");
   const [autoSaveStatus, setAutoSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
@@ -512,9 +515,31 @@ export default function SettingsPage() {
   const isLoadedRef = useRef(false);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // ── Load Settings on Mount ────────────────────────────────
+  // ── Load Settings on Mount (with instant 0ms cache hydration) ────
   useEffect(() => {
     let isMounted = true;
+
+    // Fast instant hydration from client cache
+    try {
+      const cached = localStorage.getItem(SETTINGS_CACHE_KEY);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed?.form && parsed.form.id) {
+          setForm(parsed.form);
+          setHasLoadedFromCache(true);
+        }
+        if (parsed?.stats) {
+          setStats(parsed.stats);
+        }
+        if (parsed?.telegramLink) {
+          if (parsed.telegramLink.token) setTgToken(parsed.telegramLink.token);
+          setTgLinked(Boolean(parsed.telegramLink.linked));
+          if (parsed.telegramLink.username) setTgUsername(parsed.telegramLink.username);
+          if (parsed.telegramLink.botUsername) setTgBotUsername(parsed.telegramLink.botUsername);
+        }
+      }
+    } catch {}
+
     const load = async () => {
       try {
         const res = await fetch("/api/settings");
@@ -568,7 +593,7 @@ export default function SettingsPage() {
               if (json.telegramLink.botUsername) setTgBotUsername(json.telegramLink.botUsername);
             }
 
-            setForm({
+            const updatedForm: FormState = {
               id: d.id,
               name: d.name ?? DEFAULT_FORM.name,
               targetRoles: Array.isArray(d.targetRoles) ? d.targetRoles : [],
@@ -605,7 +630,22 @@ export default function SettingsPage() {
               hhSessionStatus: d.hhSessionStatus ?? (d.hasHhToken ? "active" : "disconnected"),
               hhLastVerifiedAt: d.hhLastVerifiedAt ? String(d.hhLastVerifiedAt) : "",
               hhExpiresAt: d.hhExpiresAt ? String(d.hhExpiresAt) : "",
-            });
+            };
+
+            setForm(updatedForm);
+            setHasLoadedFromCache(true);
+
+            // Persist to local cache for 0ms loads in future visits
+            try {
+              localStorage.setItem(
+                SETTINGS_CACHE_KEY,
+                JSON.stringify({
+                  form: updatedForm,
+                  stats: json.stats || stats,
+                  telegramLink: json.telegramLink,
+                })
+              );
+            } catch {}
           }
         }
       } catch (err) {
@@ -738,6 +778,16 @@ export default function SettingsPage() {
           setAutoSaveStatus("saved");
           const nowStr = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
           setLastSavedTime(nowStr);
+          try {
+            localStorage.setItem(
+              SETTINGS_CACHE_KEY,
+              JSON.stringify({
+                form: formData,
+                stats,
+                telegramLink: { token: tgToken, linked: tgLinked, username: tgUsername, botUsername: tgBotUsername },
+              })
+            );
+          } catch {}
           if (isManual) {
             setMsg({ text: "Settings saved successfully!", type: "success" });
             setTimeout(() => setMsg(null), 3000);
@@ -1314,32 +1364,36 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {/* ── Fixed Floating Top Toast (Slides down from top viewport, visible anywhere when scrolled) ── */}
+      {/* ── Fixed Floating Top Toast (Slides down from top viewport, perfectly centered across any screen) ── */}
       {msg && (
-        <div className={`fixed top-5 left-1/2 -translate-x-1/2 z-50 max-w-lg w-[calc(100%-2rem)] pointer-events-auto ${isToastExiting ? "toast-animate-out" : "toast-animate-in"}`}>
+        <div className="fixed top-5 inset-x-0 z-50 flex justify-center pointer-events-none px-4">
           <div
-            className={`p-3.5 rounded-xl text-xs border shadow-2xl backdrop-blur-md flex items-center justify-between gap-3 ${
-              msg.type === "success"
-                ? "bg-zinc-900/95 border-emerald-500/50 text-emerald-300 shadow-emerald-950/40"
-                : msg.type === "warn"
-                ? "bg-zinc-900/95 border-amber-500/50 text-amber-300 shadow-amber-950/40"
-                : "bg-zinc-900/95 border-rose-500/50 text-rose-300 shadow-rose-950/40"
-            }`}
+            className={`max-w-lg w-full pointer-events-auto ${isToastExiting ? "toast-animate-out" : "toast-animate-in"}`}
           >
-            <div className="flex items-center gap-2.5 min-w-0">
-              {msg.type === "success" && <Check size={16} className="text-emerald-400 shrink-0" />}
-              {msg.type === "warn" && <Activity size={16} className="text-amber-400 shrink-0" />}
-              {msg.type === "error" && <AlertTriangle size={16} className="text-rose-400 shrink-0" />}
-              <span className="font-medium leading-snug break-words">{msg.text}</span>
-            </div>
-            <button
-              type="button"
-              onClick={dismissToast}
-              className="text-zinc-400 hover:text-zinc-200 p-1 rounded-md hover:bg-zinc-800/80 transition-colors shrink-0"
-              title="Close notification"
+            <div
+              className={`p-3.5 rounded-xl text-xs border shadow-2xl backdrop-blur-md flex items-center justify-between gap-3 ${
+                msg.type === "success"
+                  ? "bg-zinc-900/95 border-emerald-500/50 text-emerald-300 shadow-emerald-950/40"
+                  : msg.type === "warn"
+                  ? "bg-zinc-900/95 border-amber-500/50 text-amber-300 shadow-amber-950/40"
+                  : "bg-zinc-900/95 border-rose-500/50 text-rose-300 shadow-rose-950/40"
+              }`}
             >
-              <X size={14} />
-            </button>
+              <div className="flex items-center gap-2.5 min-w-0">
+                {msg.type === "success" && <Check size={16} className="text-emerald-400 shrink-0" />}
+                {msg.type === "warn" && <Activity size={16} className="text-amber-400 shrink-0" />}
+                {msg.type === "error" && <AlertTriangle size={16} className="text-rose-400 shrink-0" />}
+                <span className="font-medium leading-snug break-words">{msg.text}</span>
+              </div>
+              <button
+                type="button"
+                onClick={dismissToast}
+                className="text-zinc-400 hover:text-zinc-200 p-1 rounded-md hover:bg-zinc-800/80 transition-colors shrink-0"
+                title="Close notification"
+              >
+                <X size={14} />
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -1429,10 +1483,15 @@ export default function SettingsPage() {
                 </label>
                 <input
                   type="text"
-                  value={form.name}
+                  value={loading && !hasLoadedFromCache ? "" : form.name}
                   onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
-                  placeholder={language === "ru" ? "например, Full Stack Разработчик" : "e.g. Full Stack Developer"}
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-100 placeholder-zinc-600 focus:border-emerald-500/60 focus:outline-none transition-colors"
+                  placeholder={
+                    loading && !hasLoadedFromCache
+                      ? (language === "ru" ? "Загрузка профиля..." : "Loading profile...")
+                      : (language === "ru" ? "например, Full Stack Разработчик" : "e.g. Full Stack Developer")
+                  }
+                  disabled={loading && !hasLoadedFromCache}
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-lg px-3 py-2 text-xs text-zinc-100 placeholder-zinc-600 focus:border-emerald-500/60 focus:outline-none transition-colors disabled:opacity-60"
                 />
               </div>
 
@@ -1440,7 +1499,7 @@ export default function SettingsPage() {
                 <TagInput
                   id="target-roles"
                   label={language === "ru" ? "ЦЕЛЕВЫЕ ДОЛЖНОСТИ" : "TARGET ROLES"}
-                  value={form.targetRoles}
+                  value={loading && !hasLoadedFromCache ? [] : form.targetRoles}
                   onChange={(roles) => setForm((p) => ({ ...p, targetRoles: roles }))}
                   placeholder={language === "ru" ? "Введите должность (напр. 'фронт') & Enter..." : "Type role (e.g. 'fron') & Enter..."}
                   catalog={ROLES}
@@ -2586,7 +2645,9 @@ export default function SettingsPage() {
             <div className="flex items-start justify-between">
               {/* Avatar Photo / Initial with gradient */}
               <div className="relative w-12 h-12 rounded-xl overflow-hidden border border-emerald-500/30 shadow-sm shrink-0 bg-gradient-to-br from-emerald-600 to-teal-800 flex items-center justify-center text-white font-bold text-lg">
-                {form.hhProfileAvatar ? (
+                {loading && !hasLoadedFromCache ? (
+                  <div className="absolute inset-0 bg-zinc-800 animate-pulse" />
+                ) : form.hhProfileAvatar ? (
                   <img
                     src={form.hhProfileAvatar}
                     alt={form.hhProfileName || form.name}
@@ -2596,18 +2657,20 @@ export default function SettingsPage() {
                     }}
                   />
                 ) : null}
-                <span className="select-none">
-                  {form.hhProfileName
-                    ? form.hhProfileName
-                        .split(" ")
-                        .map((s) => s[0])
-                        .join("")
-                        .slice(0, 2)
-                        .toUpperCase()
-                    : form.name
-                    ? form.name.slice(0, 2).toUpperCase()
-                    : "CV"}
-                </span>
+                {(!loading || hasLoadedFromCache) && !form.hhProfileAvatar && (
+                  <span className="select-none">
+                    {form.hhProfileName
+                      ? form.hhProfileName
+                          .split(" ")
+                          .map((s) => s[0])
+                          .join("")
+                          .slice(0, 2)
+                          .toUpperCase()
+                      : form.name
+                      ? form.name.slice(0, 2).toUpperCase()
+                      : "CV"}
+                  </span>
+                )}
               </div>
 
               <div className="flex items-center">
@@ -2627,32 +2690,53 @@ export default function SettingsPage() {
             </div>
 
             <div>
-              <h3 className="text-base font-bold text-zinc-100">
-                {form.hhProfileName || form.name || (language === "ru" ? "Профиль соискателя" : "Candidate Profile")}
-              </h3>
-              <p className="text-xs text-zinc-400 mt-0.5">
-                {form.hhResumeTitle
-                  ? (language === "ru" ? `Активное резюме: ${form.hhResumeTitle}` : `Active CV: ${form.hhResumeTitle}`)
-                  : (language === "ru" ? "Подключите HeadHunter для синхронизации резюме" : "Connect your HeadHunter account to sync resumes")}
-              </p>
+              {loading && !hasLoadedFromCache ? (
+                <div className="space-y-1.5">
+                  <div className="h-5 w-36 bg-zinc-800 rounded animate-pulse" />
+                  <div className="h-3 w-48 bg-zinc-800/60 rounded animate-pulse" />
+                </div>
+              ) : (
+                <>
+                  <h3 className="text-base font-bold text-zinc-100">
+                    {form.hhProfileName || form.name || (language === "ru" ? "Профиль соискателя" : "Candidate Profile")}
+                  </h3>
+                  <p className="text-xs text-zinc-400 mt-0.5">
+                    {form.hhResumeTitle
+                      ? (language === "ru" ? `Активное резюме: ${form.hhResumeTitle}` : `Active CV: ${form.hhResumeTitle}`)
+                      : (language === "ru" ? "Подключите HeadHunter для синхронизации резюме" : "Connect your HeadHunter account to sync resumes")}
+                  </p>
+                </>
+              )}
             </div>
 
             {/* 3 Stats Row */}
             <div className="grid grid-cols-3 gap-2 pt-2 border-t border-zinc-800/80 text-center">
               <div>
-                <div className="text-lg font-bold font-mono text-zinc-100">{stats.appliedCount || form.hhTotalApplications || 0}</div>
+                {loading && !hasLoadedFromCache ? (
+                  <div className="h-6 w-10 mx-auto bg-zinc-800/80 rounded animate-pulse" />
+                ) : (
+                  <div className="text-lg font-bold font-mono text-zinc-100">{stats.appliedCount || form.hhTotalApplications || 0}</div>
+                )}
                 <div className="text-[9px] font-semibold text-zinc-500 uppercase tracking-wider mt-0.5">
                   {language === "ru" ? "ОТКЛИКИ" : "RESPONSES"}
                 </div>
               </div>
               <div>
-                <div className="text-lg font-bold font-mono text-zinc-100">{form.hhResumeTitle ? 1 : 0}</div>
+                {loading && !hasLoadedFromCache ? (
+                  <div className="h-6 w-8 mx-auto bg-zinc-800/80 rounded animate-pulse" />
+                ) : (
+                  <div className="text-lg font-bold font-mono text-zinc-100">{form.hhResumeTitle ? 1 : 0}</div>
+                )}
                 <div className="text-[9px] font-semibold text-zinc-500 uppercase tracking-wider mt-0.5">
                   {language === "ru" ? "АКТИВНЫХ РЕЗЮМЕ" : "ACTIVE CV"}
                 </div>
               </div>
               <div>
-                <div className="text-lg font-bold font-mono text-emerald-400">{stats.avgScore || 0}%</div>
+                {loading && !hasLoadedFromCache ? (
+                  <div className="h-6 w-10 mx-auto bg-zinc-800/80 rounded animate-pulse" />
+                ) : (
+                  <div className="text-lg font-bold font-mono text-emerald-400">{stats.avgScore || 0}%</div>
+                )}
                 <div className="text-[9px] font-semibold text-zinc-500 uppercase tracking-wider mt-0.5">
                   {language === "ru" ? "СРЕДНИЙ МЭТЧ" : "AVG MATCH"}
                 </div>
