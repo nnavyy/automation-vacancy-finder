@@ -46,9 +46,10 @@ export function rateLimit(identifier: string, limit: number, windowMs: number) {
   }
 
   if (record.count >= limit) {
-    return { success: false, remaining: 0 };
+    const retryAfter = Math.ceil((record.resetAt - now) / 1000);
+    return { success: false, remaining: 0, retryAfter: Math.max(1, retryAfter) };
   }
 
   record.count += 1;
-  return { success: true, remaining: limit - record.count };
+  return { success: true, remaining: limit - record.count, retryAfter: 0 };
 }

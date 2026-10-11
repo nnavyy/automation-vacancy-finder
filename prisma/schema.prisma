@@ -243,6 +243,24 @@ model PasswordResetToken {
 }
 
 // ============================================================
+// Verification Code — 6-digit OTP for Email Sign In & Password Reset
+// ============================================================
+model VerificationCode {
+  id        String    @id @default(cuid())
+  email     String
+  code      String    // 6-digit numeric OTP code
+  purpose   String    // "sign_in" | "reset_password"
+  expiresAt DateTime
+  usedAt    DateTime?
+  attempts  Int       @default(0)
+
+  createdAt DateTime  @default(now())
+
+  @@index([email, purpose])
+  @@map("verification_codes")
+}
+
+// ============================================================
 // Company Intel — hasil pencarian struktur org perusahaan
 // ============================================================
 model CompanyIntel {

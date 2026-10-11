@@ -24,12 +24,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       credentials: {
         email:    { label: "Email",    type: "email"    },
         password: { label: "Password", type: "password" },
+        code:     { label: "Code",     type: "text"     },
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null;
 
+        const email = (credentials.email as string).trim().toLowerCase();
         const user = await prisma.user.findUnique({
-          where: { email: credentials.email as string },
+          where: { email },
         });
 
         if (!user) return null;
@@ -40,6 +42,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         );
 
         if (!passwordMatch) return null;
+
+        // Verify OTP code if submitted
+        const code = credentials.code as string | undefined;
+        if (code) {
+          const { verifySubmittedCode } = await import("@/lib/verificationCode");
+          const verifyResult = await verifySubmittedCode(email, code, "sign_in");
+          if (!verifyResult.success) {
+            throw new Error(verifyResult.error || "Invalid verification code.");
+          }
+        }
 
         return {
           id:    user.id,
