@@ -41,8 +41,9 @@ function escapeHtml(text: string): string {
  * @param salary - Optional HH salary object
  * @returns Formatted salary string
  */
-export function formatSalary(salary?: HHSalary): string {
-  if (!salary || (!salary.from && !salary.to)) return "Not specified";
+export function formatSalary(salary?: HHSalary, lang: string = "en"): string {
+  const isRu = lang === "ru" || lang === "Russian";
+  if (!salary || (!salary.from && !salary.to)) return isRu ? "Не указано" : "Not specified";
 
   const parts: string[] = [];
   if (salary.from) parts.push(salary.from.toLocaleString("en-US"));
@@ -50,7 +51,7 @@ export function formatSalary(salary?: HHSalary): string {
 
   const range = parts.join("–");
   const currency = salary.currency ?? "RUB";
-  const grossTag = salary.gross ? " (gross)" : "";
+  const grossTag = salary.gross ? (isRu ? " (до вычета)" : " (gross)") : "";
 
   return `${range} ${currency}${grossTag}`;
 }
@@ -169,14 +170,16 @@ export async function sendMessage(
 function buildVacancyNotificationPayload(
   vacancy: NormalizedVacancy,
   rawAnalysis: AIAnalysisResult | Record<string, unknown> | null | undefined,
-  vacancyId: string
+  vacancyId: string,
+  lang: string = "en"
 ): { message: string; replyMarkup: object } {
+  const isRu = lang === "ru" || lang === "Russian";
   const analysis = rawAnalysis || {};
   const recRaw = ((analysis as any).recommendation || "apply").toString().toLowerCase();
   const recTag: Record<string, string> = {
-    apply: "[APPLY]",
-    maybe: "[MAYBE]",
-    skip: "[SKIP]",
+    apply: isRu ? "[ОТКЛИК]" : "[APPLY]",
+    maybe: isRu ? "[ПОДУМАТЬ]" : "[MAYBE]",
+    skip:  isRu ? "[ПРОПУСТИТЬ]" : "[SKIP]",
   };
   const recommendationIcon = recTag[recRaw] ?? `[${recRaw.toUpperCase()}]`;
 
@@ -189,7 +192,7 @@ function buildVacancyNotificationPayload(
   const matchReasonsText =
     matchReasonsList.length > 0
       ? matchReasonsList.map((r) => `  - ${r}`).join("\n")
-      : "  (none detected)";
+      : (isRu ? "  (не выявлено)" : "  (none detected)");
 
   // ── Format missing requirements ───────────────────────────
   const missingRaw =
@@ -200,16 +203,16 @@ function buildVacancyNotificationPayload(
   const missingText =
     missingList.length > 0
       ? missingList.map((m) => `  - ${m}`).join("\n")
-      : "  (none)";
+      : (isRu ? "  (нет)" : "  (none)");
 
   // ── Format red flags ──────────────────────────────────────
   const redFlagsRaw =
     (analysis as any).red_flags ?? (analysis as any).redFlags;
   const redFlagsList: any[] = Array.isArray(redFlagsRaw) ? redFlagsRaw : [];
   const redFlagTag: Record<string, string> = {
-    high: "[HIGH]",
-    medium: "[MEDIUM]",
-    low: "[LOW]",
+    high: isRu ? "[ВЫСОКИЙ]" : "[HIGH]",
+    medium: isRu ? "[СРЕДНИЙ]" : "[MEDIUM]",
+    low: isRu ? "[НИЗКИЙ]" : "[LOW]",
   };
   const redFlagsText =
     redFlagsList.length > 0
@@ -219,10 +222,10 @@ function buildVacancyNotificationPayload(
             const tag = redFlagTag[sev] ?? "[ALERT]";
             const trigger = f.trigger_text ? `${f.trigger_text}: ` : "";
             const reason = f.reason || "";
-            return `  ${tag} [${sev.toUpperCase()}] ${trigger}${reason}`;
+            return `  ${tag} ${trigger}${reason}`;
           })
           .join("\n")
-      : "  None detected";
+      : (isRu ? "  Не обнаружено" : "  None detected");
 
   // ── Cover letter preview (max 200 chars) ─────────────────
   const coverLetterRaw =
@@ -232,40 +235,40 @@ function buildVacancyNotificationPayload(
   const coverPreview =
     coverLetterStr.length > 200
       ? `${coverLetterStr.slice(0, 200)}…`
-      : coverLetterStr || "Cover letter available in dashboard";
+      : coverLetterStr || (isRu ? "Сопроводительное письмо в панели" : "Cover letter available in dashboard");
 
   const score =
     (analysis as any).match_score ?? (analysis as any).matchScore ?? 0;
   const confidence = (analysis as any).confidence ?? 100;
   const bestLang =
-    (analysis as any).best_language ?? (analysis as any).bestLanguage ?? "Russian";
+    (analysis as any).best_language ?? (analysis as any).bestLanguage ?? (isRu ? "Русский" : "Russian");
 
   // ── Compose the full message ──────────────────────────────
   let message = [
-    `<b>[Job Match] HeadHunter</b>`,
+    `<b>${isRu ? "[Подходящая вакансия] HeadHunter" : "[Job Match] HeadHunter"}</b>`,
     ``,
-    `<b>Role:</b> ${escapeHtml(vacancy.title || "Untitled Vacancy")}`,
-    `<b>Company:</b> ${escapeHtml(vacancy.company ?? "Not specified")}`,
-    `<b>Location:</b> ${escapeHtml(vacancy.area ?? "Remote / Not specified")}`,
-    `<b>Salary:</b> ${formatSalary(vacancy.salary)}`,
-    `<b>Experience:</b> ${escapeHtml(vacancy.experience ?? "Not specified")}`,
-    `<b>Format:</b> ${escapeHtml(vacancy.schedule ?? "Not specified")}`,
+    `<b>${isRu ? "Должность:" : "Role:"}</b> ${escapeHtml(vacancy.title || (isRu ? "Без названия" : "Untitled Vacancy"))}`,
+    `<b>${isRu ? "Компания:" : "Company:"}</b> ${escapeHtml(vacancy.company ?? (isRu ? "Не указано" : "Not specified"))}`,
+    `<b>${isRu ? "Локация:" : "Location:"}</b> ${escapeHtml(vacancy.area ?? (isRu ? "Удалённо / Не указано" : "Remote / Not specified"))}`,
+    `<b>${isRu ? "Зарплата:" : "Salary:"}</b> ${formatSalary(vacancy.salary, lang)}`,
+    `<b>${isRu ? "Опыт:" : "Experience:"}</b> ${escapeHtml(vacancy.experience ?? (isRu ? "Не указано" : "Not specified"))}`,
+    `<b>${isRu ? "Формат:" : "Format:"}</b> ${escapeHtml(vacancy.schedule ?? (isRu ? "Не указано" : "Not specified"))}`,
     ``,
-    `<b>Score:</b> ${score}/100  |  <b>Confidence:</b> ${confidence}%`,
-    `<b>Recommendation:</b> ${recommendationIcon} <b>${recRaw.toUpperCase()}</b>`,
+    `<b>${isRu ? "Совместимость:" : "Score:"}</b> ${score}/100  |  <b>${isRu ? "Уверенность:" : "Confidence:"}</b> ${confidence}%`,
+    `<b>${isRu ? "Рекомендация:" : "Recommendation:"}</b> ${recommendationIcon} <b>${recRaw.toUpperCase()}</b>`,
     ``,
-    `<b>Why it matches:</b>`,
+    `<b>${isRu ? "Почему подходит:" : "Why it matches:"}</b>`,
     escapeHtml(matchReasonsText),
     ``,
-    `<b>Missing requirements:</b>`,
+    `<b>${isRu ? "Чего не хватает:" : "Missing requirements:"}</b>`,
     escapeHtml(missingText),
     ``,
-    `<b>Red flags:</b>`,
+    `<b>${isRu ? "Редфлаги / Риски:" : "Red flags:"}</b>`,
     escapeHtml(redFlagsText),
     ``,
-    `<b>Suggested language:</b> ${escapeHtml(bestLang)}`,
+    `<b>${isRu ? "Язык отклика:" : "Suggested language:"}</b> ${escapeHtml(bestLang)}`,
     ``,
-    `<b>Cover letter preview:</b>`,
+    `<b>${isRu ? "Превью письма:" : "Cover letter preview:"}</b>`,
     `<i>${escapeHtml(coverPreview)}</i>`,
   ].join("\n");
 
@@ -278,19 +281,19 @@ function buildVacancyNotificationPayload(
   const replyMarkup = {
     inline_keyboard: [
       [
-        { text: "Mark Applied", callback_data: `approve:${vacancyId}` },
-        { text: "Skip",         callback_data: `skip:${vacancyId}` },
+        { text: isRu ? "Откликнуться" : "Mark Applied", callback_data: `approve:${vacancyId}` },
+        { text: isRu ? "Пропустить" : "Skip",         callback_data: `skip:${vacancyId}` },
       ],
       [
-        { text: "Save",         callback_data: `save:${vacancyId}` },
-        { text: "Regenerate",   callback_data: `edit:${vacancyId}` },
+        { text: isRu ? "Сохранить" : "Save",         callback_data: `save:${vacancyId}` },
+        { text: isRu ? "Пересоздать" : "Regenerate",   callback_data: `edit:${vacancyId}` },
       ],
       [
-        { text: "Type Manual",  callback_data: `edit_man:${vacancyId}` },
+        { text: isRu ? "Написать вручную" : "Type Manual",  callback_data: `edit_man:${vacancyId}` },
       ],
       [
         {
-          text: "Open Vacancy",
+          text: isRu ? "Открыть на HH.ru" : "Open Vacancy",
           url:
             vacancy.url && vacancy.url.startsWith("http")
               ? vacancy.url
@@ -310,12 +313,14 @@ function buildVacancyNotificationPayload(
 export async function sendVacancyNotification(
   vacancy: NormalizedVacancy,
   analysis: AIAnalysisResult | any,
-  vacancyId: string
+  vacancyId: string,
+  lang: string = "en"
 ): Promise<boolean> {
   const { message, replyMarkup } = buildVacancyNotificationPayload(
     vacancy,
     analysis,
-    vacancyId
+    vacancyId,
+    lang
   );
   return sendMessage(message, replyMarkup);
 }
@@ -328,12 +333,14 @@ export async function sendVacancyNotificationToUser(
   vacancy: NormalizedVacancy,
   analysis: AIAnalysisResult | any,
   vacancyId: string,
-  chatId: string
+  chatId: string,
+  lang: string = "en"
 ): Promise<boolean> {
   const { message, replyMarkup } = buildVacancyNotificationPayload(
     vacancy,
     analysis,
-    vacancyId
+    vacancyId,
+    lang
   );
   return sendMessage(message, replyMarkup, chatId);
 }

@@ -513,6 +513,10 @@ export default function SettingsPage() {
               ? (rawCover as AIProvider)
               : (parsedOrder[0] as AIProvider || "groq");
 
+            if (d.language && (d.language === "ru" || d.language === "en")) {
+              setLanguage(d.language);
+            }
+
             setForm({
               id: d.id,
               name: d.name ?? DEFAULT_FORM.name,
@@ -670,6 +674,7 @@ export default function SettingsPage() {
           aiProviderOrder: formData.aiProviderOrder,
           aiCustomConfig: formData.aiCustomConfig,
           coverLetterLanguage: formData.coverLetterLanguage,
+          language: language,
           resumeText: formData.resumeText,
           portfolioUrl: formData.portfolioUrl,
           // Only send hhToken on manual save or explicit disconnect to prevent typing in the input box from overwriting active token

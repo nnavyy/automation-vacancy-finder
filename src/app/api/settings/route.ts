@@ -31,6 +31,7 @@ const PREF_DEFAULTS = {
   maxNotificationsPerDay: 20,
   aiProviderOrder:       ["groq", "gemini", "openrouter"],
   coverLetterLanguage:   "English",
+  language:              "en",
   resumeText:            "",
   isActive:              true,
 };
@@ -185,11 +186,15 @@ export async function POST(req: NextRequest) {
     const scalarFields = pick(body, [
       "name", "salaryMinimum", "salaryCurrency",
       "minimumScoreToNotify", "maxNotificationsPerDay",
-      "coverLetterLanguage", "resumeText", "isActive", "portfolioUrl",
+      "coverLetterLanguage", "language", "resumeText", "isActive", "portfolioUrl",
       "hhResumeId", "hhResumeTitle",
       "hhProfileName", "hhProfileAvatar", "hhTotalApplications",
       "hhSessionStatus", "hhLastVerifiedAt", "hhExpiresAt",
     ]);
+
+    if (typeof scalarFields.language !== "string" || !scalarFields.language) {
+      delete scalarFields.language;
+    }
 
     // Encrypt and persist hhToken if provided
     if (typeof body.hhToken === "string") {
@@ -245,6 +250,13 @@ export async function POST(req: NextRequest) {
         where: { id: existing.id },
         data:  { ...safeData, userId: user.id },
       });
+      if (scalarFields.language || scalarFields.coverLetterLanguage) {
+        const langToSync = scalarFields.language || (scalarFields.coverLetterLanguage === "Russian" ? "ru" : "en");
+        await prisma.telegramLink.updateMany({
+          where: { userId: user.id },
+          data: { language: langToSync },
+        });
+      }
       void recordPreferenceCatalogTerms(jsonFields);
       return NextResponse.json({ success: true, data: serializePref(updated) });
     }
@@ -253,6 +265,13 @@ export async function POST(req: NextRequest) {
     const created = await prisma.searchPreference.create({
       data: { ...PREF_DEFAULTS, ...safeData, userId: user.id, isActive: true },
     });
+    if (scalarFields.language || scalarFields.coverLetterLanguage) {
+      const langToSync = scalarFields.language || (scalarFields.coverLetterLanguage === "Russian" ? "ru" : "en");
+      await prisma.telegramLink.updateMany({
+        where: { userId: user.id },
+        data: { language: langToSync },
+      });
+    }
     void recordPreferenceCatalogTerms(jsonFields);
     return NextResponse.json({ success: true, data: serializePref(created) });
   } catch (err) {

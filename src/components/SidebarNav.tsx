@@ -178,7 +178,14 @@ export default function SidebarNav({ onNavigate }: { onNavigate?: () => void }) 
               <button
                 key={code}
                 type="button"
-                onClick={() => setLanguage(code)}
+                onClick={() => {
+                  setLanguage(code);
+                  fetch("/api/settings", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ language: code }),
+                  }).catch(() => {});
+                }}
                 className={`px-2 py-0.5 rounded font-mono text-[10px] uppercase font-semibold transition-all ${
                   language === code
                     ? "bg-zinc-800 text-emerald-400 border border-zinc-700/80"

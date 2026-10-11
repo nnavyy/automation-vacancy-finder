@@ -368,7 +368,8 @@ export async function runCollectionPipeline(
           todayNotifiedCount < pref.maxNotificationsPerDay;
 
         if (shouldNotify && chatId) {
-          const sent = await sendVacancyNotificationToUser(vacancy, analysis, dbVacancyId, chatId);
+          const userLang = telegramLink?.language || (pref as any).language || (pref.coverLetterLanguage === "Russian" ? "ru" : "en");
+          const sent = await sendVacancyNotificationToUser(vacancy, analysis, dbVacancyId, chatId, userLang);
           if (sent) {
             await prisma.vacancy.update({ where: { id: dbVacancyId }, data: { status: "notified" } });
             await prisma.applicationLog.create({

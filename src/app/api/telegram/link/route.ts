@@ -80,9 +80,15 @@ export async function POST() {
       data:  { isActive: false },
     });
 
+    const pref = await prisma.searchPreference.findFirst({
+      where: { userId: user.id, isActive: true },
+      select: { language: true, coverLetterLanguage: true },
+    });
+    const userLang = (pref as any)?.language || (pref?.coverLetterLanguage === "Russian" ? "ru" : "en") || "en";
+
     const token = generateToken();
     const link  = await prisma.telegramLink.create({
-      data: { userId: user.id, token, isActive: true },
+      data: { userId: user.id, token, isActive: true, language: userLang },
     });
 
     const botUsername = getBotUsername();

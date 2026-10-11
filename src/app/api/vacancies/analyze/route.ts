@@ -135,7 +135,8 @@ export async function POST(req: NextRequest) {
           vacancy,
           analysis,
           vacancyId,
-          chatId
+          chatId,
+          link?.language || (pref as any)?.language || "en"
         );
         if (sent) {
           finalStatus = "notified";

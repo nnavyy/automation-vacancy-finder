@@ -90,7 +90,8 @@ export async function POST(
       toNormalizedVacancy(dbVacancy),
       aiAnalysis,
       id,
-      chatId
+      chatId,
+      link?.language || "en"
     );
 
     if (success) {

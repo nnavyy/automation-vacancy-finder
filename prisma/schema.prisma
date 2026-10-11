@@ -57,6 +57,7 @@ model SearchPreference {
   maxNotificationsPerDay Int     @default(20)
   aiProviderOrder        Json    // string[]
   coverLetterLanguage    String  @default("English")
+  language               String  @default("en") // "en" | "ru"
   resumeText             String?
   portfolioUrl           String?
 
@@ -219,6 +220,7 @@ model TelegramLink {
   telegramUsername String?
   linkedAt         DateTime?
   isActive         Boolean   @default(true)
+  language         String    @default("en") // "en" | "ru"
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
