@@ -21,6 +21,8 @@ import prisma from "@/lib/db";
 import { sendVacancyNotificationToUser } from "@/lib/telegram";
 import { checkVacancyStillOpen } from "@/lib/hhPublicVacancyClient";
 import { safeEqual } from "@/lib/timingSafe";
+import { retryPendingAnalyses, PENDING_AI_STATUSES } from "@/lib/pendingAiRetry";
+import { toSearchPrefData } from "@/lib/collectionPipeline";
 import type { NormalizedVacancy, HHSalary, AIAnalysisResult } from "@/types";
 
 export const maxDuration = 120;
@@ -62,6 +64,9 @@ export async function GET(req: NextRequest) {
     usersProcessed: 0,
     notificationsSent: 0,
     vacanciesMarkedClosed: 0,
+    aiRetried: 0,
+    aiCompleted: 0,
+    aiExpired: 0,
     errors: 0,
   };
 
@@ -91,10 +96,20 @@ export async function GET(req: NextRequest) {
       try {
         const pref = await prisma.searchPreference.findFirst({
           where: { userId, isActive: true },
-          select: { minimumScoreToNotify: true, maxNotificationsPerDay: true, coverLetterLanguage: true, language: true },
         });
 
         if (!pref) continue;
+
+        // Re-run AI for vacancies that hit a provider failure earlier, so they can be notified below.
+        const retry = await retryPendingAnalyses({
+          userId,
+          pref: toSearchPrefData(pref),
+          deadline,
+        });
+        summary.aiRetried += retry.retried;
+        summary.aiCompleted += retry.completed;
+        summary.aiExpired += retry.expired;
+        summary.errors += retry.errors;
 
         const scoreThreshold = pref.minimumScoreToNotify ?? 70;
         const maxPerDay = pref.maxNotificationsPerDay ?? 20;
@@ -114,7 +129,11 @@ export async function GET(req: NextRequest) {
             userId,
             status: "analyzed",
             NOT: { hhId: { startsWith: "manual-" } },
-            analysis: { matchScore: { gte: scoreThreshold } },
+            analysis: {
+              matchScore: { gte: scoreThreshold },
+              // Rows still waiting for AI keep a provisional rule score; never alert on those.
+              aiStatus: { notIn: PENDING_AI_STATUSES },
+            },
           },
           orderBy: { createdAt: "desc" },
           take: maxPerDay - todayNotifiedCount,

@@ -146,7 +146,7 @@ export const VacancyService = {
       const applied = all.filter((v) => v.status === "applied_manual" || v.status === "applied_hh").length;
       const skipped = all.filter((v) => v.status === "skipped").length;
       const saved = all.filter((v) => v.status === "saved").length;
-      const pendingAi = all.filter((v) => v.analysis?.aiStatus === "pending_limit").length;
+      const pendingAi = all.filter((v) => v.analysis?.aiStatus === "pending_limit" || v.analysis?.aiStatus === "pending_ai").length;
 
       const scores = all
         .filter((v) => v.analysis?.matchScore !== undefined && v.analysis.matchScore !== null)

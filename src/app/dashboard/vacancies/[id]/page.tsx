@@ -131,7 +131,7 @@ function recVariant(rec: string): "green" | "yellow" | "red" {
 function aiStatusVariant(s: string): "green" | "yellow" | "red" | "blue" | "gray" {
   if (s === "completed")       return "green";
   if (s === "rule_based_only") return "blue";
-  if (s === "pending_limit")   return "yellow";
+  if (s === "pending_limit" || s === "pending_ai") return "yellow";
   return "red";
 }
 

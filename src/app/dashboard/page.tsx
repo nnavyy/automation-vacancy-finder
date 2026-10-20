@@ -63,7 +63,7 @@ export default async function DashboardPage() {
           _count: { matchScore: true },
         }),
         prisma.vacancyAnalysis.count({
-          where: { vacancy: baseGenuineFilter, aiStatus: "pending_limit" },
+          where: { vacancy: baseGenuineFilter, aiStatus: { in: ["pending_limit", "pending_ai"] } },
         }),
         prisma.vacancyAnalysis.count({
           where: { vacancy: baseGenuineFilter, matchScore: { gte: 75 } },

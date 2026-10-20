@@ -296,11 +296,17 @@ AI_PROVIDER_FALLBACK_2="openrouter"
 # Telegram Bot Integration (Optional)
 TELEGRAM_BOT_TOKEN="123456789:ABC..."
 TELEGRAM_CHAT_ID="your-telegram-chat-id"
+TELEGRAM_WEBHOOK_SECRET="random-secret-for-webhook-validation"
+# Set to "true" only in single-tenant local dev to send unlinked alerts to TELEGRAM_CHAT_ID:
+ALLOW_SINGLE_USER_TELEGRAM_FALLBACK="false"
 
-# HeadHunter Client Identification
+# HeadHunter Client Identification & Official OAuth (Optional)
 # ============================================================
 # HeadHunter public API requires a descriptive User-Agent header
 HH_USER_AGENT="HHJobCopilot/1.0 (contact@yourdomain.com)"
+# Official HH.ru OAuth app credentials (leave blank for Zero-Key browser cookie/session mode)
+HH_CLIENT_ID=""
+HH_CLIENT_SECRET=""
 
 # Recruiter OSINT (Optional)
 HUNTER_API_KEY=""
@@ -491,17 +497,21 @@ If you are deploying for an organization and want your own custom bot token inst
 
 ## Automation & Scheduled Background Jobs
 
-HH Job Copilot includes background API routes that can be triggered by self-hosted workflow engines (such as n8n), GitHub Actions, or system cron schedulers:
+HH Job Copilot includes background API routes that can be triggered by Vercel Cron, self-hosted workflow engines (such as n8n), GitHub Actions, or system cron schedulers:
 
 ### Webhook Endpoints
 
 All webhook endpoints require the `Authorization: Bearer <CRON_SECRET>` header:
 
-| Endpoint | Frequency | Description |
+| Endpoint | Recommended Schedule | Description |
 |---|---|---|
-| `POST /api/cron/collect-vacancies` | Every 30 minutes | Collects new vacancies matching all active profiles |
-| `POST /api/cron/analyze-pending` | Every 15 minutes | Evaluates unscored vacancies with AI and dispatches Telegram notifications |
-| `POST /api/cron/sync-negotiations` | Every 4 hours | Synchronizes HeadHunter application status updates |
+| `POST /api/cron/collect-vacancies` | Daily (or every 30 min) | Collects new vacancies matching all active profiles |
+| `POST /api/cron/notify-pending` | Daily (or every 15-30 min) | Retries pending AI evaluations and dispatches Telegram notifications |
+| `POST /api/cron/sync-negotiations` | Daily (or every 4 hours) | Synchronizes HeadHunter application status updates |
+
+> [!NOTE]
+> **Vercel Hobby Schedule Limit:**  
+> Vercel Hobby accounts enforce a limit of once-per-day for scheduled crons configured in `vercel.json` (`0 0 * * *`, `0 6 * * *`, `0 12 * * *`). For sub-daily frequencies (e.g., every 15–30 minutes), trigger these endpoints from an external runner such as GitHub Actions, n8n, cron-job.org, or a standard Linux crontab with `Authorization: Bearer <CRON_SECRET>`.
 
 ### Trigger Example via cURL
 

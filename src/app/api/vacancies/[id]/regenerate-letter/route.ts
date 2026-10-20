@@ -2,15 +2,15 @@
 // Nanda AI Job Assistant — Regenerate Cover Letter
 // ============================================================
 // POST /api/vacancies/[id]/regenerate-letter
+//
+// Stage 2 only: regenerates the letter text for an already analyzed vacancy.
+// Scoring is not touched. Uses the caller's own active profile only.
 
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/db";
-import { buildAnalysisPrompt, parseAIResponse } from "@/lib/aiAnalyzer";
-import { callAI } from "@/lib/aiProviderRouter";
-import { getSimilarFeedbackExamples } from "@/lib/feedbackLearning";
+import { generateCoverLetter } from "@/lib/aiAnalyzer";
 import { getApiUser, getOwnedVacancy } from "@/lib/auth-helpers";
-import { sanitizeUntrustedPromptText } from "@/lib/security";
-import type { NormalizedVacancy, HHSalary } from "@/types";
+import type { NormalizedVacancy, HHSalary, AIAnalysisResult } from "@/types";
 
 function toNormalizedVacancy(v: {
   hhId: string;
@@ -64,10 +64,8 @@ export async function POST(
     }
 
     const { id } = await params;
-    const body = await req.json().catch(() => ({})) as {
-      instruction?: string;
-    };
-    const { instruction } = body;
+    const body = await req.json().catch(() => ({})) as { instruction?: string };
+    const instruction = body.instruction?.trim() || undefined;
 
     const dbVacancy = await getOwnedVacancy(id, user.id);
     if (!dbVacancy) {
@@ -77,106 +75,48 @@ export async function POST(
       );
     }
 
-    // Fetch user's active search preference
+    // Tenant isolation: only the caller's own active profile, never another user's.
     const pref = await prisma.searchPreference.findFirst({
       where: { userId: user.id, isActive: true },
-    }) || await prisma.searchPreference.findFirst({
-      where: { isActive: true },
     });
+    if (!pref) {
+      return NextResponse.json(
+        { success: false, error: "No active search profile. Create one in Settings first." },
+        { status: 400 }
+      );
+    }
+
+    if (!dbVacancy.analysis) {
+      return NextResponse.json(
+        { success: false, error: "Analyze this vacancy first, then regenerate the letter." },
+        { status: 409 }
+      );
+    }
 
     const vacancy = toNormalizedVacancy(dbVacancy);
+    const stored: Partial<AIAnalysisResult> = {
+      best_language: (dbVacancy.analysis.bestLanguage as "english" | "russian" | undefined) ?? undefined,
+      match_reasons: (dbVacancy.analysis.matchReasons as string[]) ?? [],
+    };
 
-    // Retrieve personalised feedback context isolated to this user
-    const { positive, negative } = await getSimilarFeedbackExamples(vacancy, user.id);
-    const similarFeedback = [...positive, ...negative];
+    const coverLetter = await generateCoverLetter(vacancy, stored, pref, { instruction });
 
-    let prompt = await buildAnalysisPrompt(vacancy, similarFeedback, pref);
-
-    if (instruction && instruction.trim()) {
-      const sanitizedInstruction = sanitizeUntrustedPromptText(instruction.trim());
-      prompt +=
-        `\n\n---\nAdditional candidate preference for the cover letter: ` +
-        `${sanitizedInstruction}\n` +
-        `Please update the "cover_letter" field in your JSON response ` +
-        `to reflect this instruction while keeping all other fields accurate.`;
-    }
-
-    const customConfig =
-      (pref as any)?.aiCustomConfig ??
-      (typeof pref?.aiProviderOrder === "object" && !Array.isArray(pref?.aiProviderOrder)
-        ? (pref?.aiProviderOrder as any)
-        : undefined);
-
-    const aiResult = await callAI({
-      prompt,
-      requestType: "cover_letter",
-      maxTokens: 2048,
-      providerOrder: Array.isArray(pref?.aiProviderOrder) ? (pref.aiProviderOrder as string[]) : customConfig?.order,
-      customConfig,
+    await prisma.vacancyAnalysis.update({
+      where: { vacancyId: id },
+      data: { coverLetter },
     });
-
-    let newCoverLetter = "";
-    let fullAnalysis: any = null;
-
-    if (aiResult.isRateLimited || !aiResult.content.trim()) {
-      newCoverLetter = dbVacancy.analysis?.coverLetter ?? "";
-      console.warn(`[RegenerateLetter] AI unavailable, keeping existing cover letter.`);
-    } else {
-      try {
-        fullAnalysis = parseAIResponse(aiResult.content);
-        newCoverLetter = fullAnalysis.cover_letter;
-      } catch (parseErr) {
-        console.error(`[RegenerateLetter] Parse failed:`, parseErr);
-        newCoverLetter = dbVacancy.analysis?.coverLetter ?? "";
-      }
-    }
-
-    if (fullAnalysis) {
-      await prisma.vacancyAnalysis.upsert({
-        where: { vacancyId: id },
-        update: { coverLetter: newCoverLetter },
-        create: {
-          vacancyId: id,
-          coverLetter: newCoverLetter,
-          matchScore: fullAnalysis.match_score,
-          recommendation: fullAnalysis.recommendation,
-          bestLanguage: fullAnalysis.best_language,
-          aiStatus: "completed",
-          summary: fullAnalysis.summary,
-          matchReasons: fullAnalysis.match_reasons,
-          missingRequirements: fullAnalysis.missing_requirements,
-          redFlags: fullAnalysis.red_flags,
-          questions: fullAnalysis.questions_to_recruiter,
-          confidence: fullAnalysis.confidence,
-          providerUsed: aiResult.provider,
-          modelUsed: aiResult.model,
-        },
-      });
-    } else if (dbVacancy.analysis) {
-      await prisma.vacancyAnalysis.update({
-        where: { vacancyId: id },
-        data: { coverLetter: newCoverLetter },
-      });
-    }
 
     await prisma.applicationLog.create({
       data: {
         vacancyId: id,
         action: "regenerate_letter",
         notes: instruction
-          ? `Cover letter regenerated with custom instruction: "${instruction}". Provider: ${aiResult.provider}`
-          : `Cover letter regenerated. Provider: ${aiResult.provider}`,
+          ? `Cover letter regenerated with custom instruction: "${instruction}"`
+          : "Cover letter regenerated.",
       },
     });
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        coverLetter: newCoverLetter,
-        provider: aiResult.provider,
-        model: aiResult.model,
-      },
-    });
+    return NextResponse.json({ success: true, data: { coverLetter } });
   } catch (err) {
     console.error("[POST /api/vacancies/[id]/regenerate-letter]", err);
     return NextResponse.json(

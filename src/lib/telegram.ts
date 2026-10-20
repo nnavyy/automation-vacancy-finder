@@ -263,41 +263,48 @@ export function buildVacancyNotificationPayload(
   const cleanExp = truncateString(vacancy.experience ?? (isRu ? "Не указано" : "Not specified"), 50);
   const cleanSchedule = truncateString(vacancy.schedule ?? (isRu ? "Не указано" : "Not specified"), 50);
 
-  // ── Compose the full message ──────────────────────────────
-  let message = [
-    `<b>${isRu ? "[Подходящая вакансия] HeadHunter" : "[Job Match] HeadHunter"}</b>`,
-    ``,
-    `<b>${isRu ? "Должность:" : "Role:"}</b> ${escapeHtml(cleanTitle)}`,
-    `<b>${isRu ? "Компания:" : "Company:"}</b> ${escapeHtml(cleanCompany)}`,
-    `<b>${isRu ? "Локация:" : "Location:"}</b> ${escapeHtml(cleanArea)}`,
-    `<b>${isRu ? "Зарплата:" : "Salary:"}</b> ${escapeHtml(cleanSalary)}`,
-    `<b>${isRu ? "Опыт:" : "Experience:"}</b> ${escapeHtml(cleanExp)}`,
-    `<b>${isRu ? "Формат:" : "Format:"}</b> ${escapeHtml(cleanSchedule)}`,
-    ``,
-    `<b>${isRu ? "Совместимость:" : "Score:"}</b> ${score}/100  |  <b>${isRu ? "Уверенность:" : "Confidence:"}</b> ${confidence}%`,
-    `<b>${isRu ? "Рекомендация:" : "Recommendation:"}</b> ${recommendationIcon} <b>${recRaw.toUpperCase()}</b>`,
-    ``,
-    `<b>${isRu ? "Почему подходит:" : "Why it matches:"}</b>`,
-    escapeHtml(matchReasonsText),
-    ``,
-    `<b>${isRu ? "Чего не хватает:" : "Missing requirements:"}</b>`,
-    escapeHtml(missingText),
-    ``,
-    `<b>${isRu ? "Редфлаги / Риски:" : "Red flags:"}</b>`,
-    escapeHtml(redFlagsText),
-    ``,
-    `<b>${isRu ? "Язык отклика:" : "Suggested language:"}</b> ${escapeHtml(bestLang)}`,
-    ``,
-    `<b>${isRu ? "Превью письма:" : "Cover letter preview:"}</b>`,
-    `<i>${escapeHtml(coverPreview)}</i>`,
-  ].join("\n");
+  // ── Compose the message from blocks ───────────────────────
+  // Required blocks always stay. Optional blocks are dropped (last first) only if
+  // the escaped message would exceed Telegram's 4096-char limit. We never slice
+  // the final string, so tags and entities are never cut in half.
+  const recUpper = escapeHtml(recRaw.toUpperCase());
+  const requiredBlocks: string[] = [
+    [
+      `<b>${isRu ? "[Подходящая вакансия] HeadHunter" : "[Job Match] HeadHunter"}</b>`,
+      ``,
+      `<b>${isRu ? "Должность:" : "Role:"}</b> ${escapeHtml(cleanTitle)}`,
+      `<b>${isRu ? "Компания:" : "Company:"}</b> ${escapeHtml(cleanCompany)}`,
+      `<b>${isRu ? "Локация:" : "Location:"}</b> ${escapeHtml(cleanArea)}`,
+      `<b>${isRu ? "Зарплата:" : "Salary:"}</b> ${escapeHtml(cleanSalary)}`,
+      `<b>${isRu ? "Опыт:" : "Experience:"}</b> ${escapeHtml(cleanExp)}`,
+      `<b>${isRu ? "Формат:" : "Format:"}</b> ${escapeHtml(cleanSchedule)}`,
+    ].join("\n"),
+    [
+      `<b>${isRu ? "Совместимость:" : "Score:"}</b> ${score}/100  |  <b>${isRu ? "Уверенность:" : "Confidence:"}</b> ${confidence}%`,
+      `<b>${isRu ? "Рекомендация:" : "Recommendation:"}</b> ${escapeHtml(recommendationIcon)} <b>${recUpper}</b>`,
+    ].join("\n"),
+    `<b>${isRu ? "Почему подходит:" : "Why it matches:"}</b>\n${escapeHtml(matchReasonsText)}`,
+    `<b>${isRu ? "Редфлаги / Риски:" : "Red flags:"}</b>\n${escapeHtml(redFlagsText)}`,
+  ];
+  const optionalBlocks: string[] = [
+    `<b>${isRu ? "Чего не хватает:" : "Missing requirements:"}</b>\n${escapeHtml(missingText)}`,
+    `<b>${isRu ? "Язык отклика:" : "Suggested language:"}</b> ${escapeHtml(String(bestLang))}`,
+    `<b>${isRu ? "Превью письма:" : "Cover letter preview:"}</b>\n<i>${escapeHtml(coverPreview)}</i>`,
+  ];
 
-  // Non-destructive fallback if message ever approaches Telegram limit
-  if (message.length > 3900) {
-    message = message.replace(
-      /<i>[\s\S]*?<\/i>/,
-      `<i>${escapeHtml(isRu ? "(Текст письма доступен в панели управления)" : "(Cover letter viewable in dashboard)")}</i>`
-    );
+  const MESSAGE_LIMIT = 4000;
+  const build = () => [...requiredBlocks, ...optionalBlocks].join("\n\n");
+  let message = build();
+  while (message.length > MESSAGE_LIMIT && optionalBlocks.length > 0) {
+    optionalBlocks.pop();
+    message = build();
+  }
+  if (message.length > MESSAGE_LIMIT) {
+    // Last resort (e.g. text full of "&" that expands to "&amp;"): shorten the two list blocks.
+    // Truncate plain text first, then escape, so entities stay intact.
+    requiredBlocks[2] = `<b>${isRu ? "Почему подходит:" : "Why it matches:"}</b>\n${escapeHtml(truncateString(matchReasonsText, 120))}`;
+    requiredBlocks[3] = `<b>${isRu ? "Редфлаги / Риски:" : "Red flags:"}</b>\n${escapeHtml(truncateString(redFlagsText, 120))}`;
+    message = build();
   }
 
   // ── Inline keyboard ───────────────────────────────────────

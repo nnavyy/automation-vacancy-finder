@@ -94,6 +94,52 @@ describe("telegram.ts - Entity Safety & Formatting", () => {
     expect(keyboard[1][0].callback_data).toBe("save:db-vacancy-123");
     expect(keyboard[3][0].url).toBe("https://hh.ru/vacancy/12345678");
   });
+
+  it("enforces Telegram hard limit and preserves entity balance under extreme payloads", () => {
+    const hugeAmps = "&".repeat(1000);
+    const mockVacancy: NormalizedVacancy = {
+      hhId: "99999999",
+      title: "Lead Architect " + hugeAmps,
+      company: "MegaCorp " + hugeAmps,
+      area: "Everywhere " + hugeAmps,
+      experience: "Many years " + hugeAmps,
+      schedule: "Full time " + hugeAmps,
+      url: "https://hh.ru/vacancy/99999999",
+    };
+
+    const mockAnalysis = {
+      match_score: 95,
+      confidence: 99,
+      recommendation: "apply",
+      best_language: "english",
+      match_reasons: Array(10).fill("Reason " + hugeAmps),
+      missing_requirements: Array(10).fill("Missing " + hugeAmps),
+      red_flags: Array(10).fill({
+        severity: "high",
+        trigger_text: "Flag " + hugeAmps,
+        reason: "Extreme flag " + hugeAmps,
+      }),
+      cover_letter: "Cover letter " + hugeAmps,
+    };
+
+    const { message } = buildVacancyNotificationPayload(
+      mockVacancy,
+      mockAnalysis as any,
+      "id-extreme",
+      "en"
+    );
+
+    expect(message.length).toBeLessThanOrEqual(4096);
+    expect(message.replace(/&(?:amp|lt|gt);/g, "")).not.toContain("&");
+
+    const countTag = (tag: string) => (message.match(new RegExp(`<${tag}>`, "g")) || []).length;
+    const countCloseTag = (tag: string) => (message.match(new RegExp(`</${tag}>`, "g")) || []).length;
+
+    expect(countTag("b")).toBe(countCloseTag("b"));
+    expect(countTag("i")).toBe(countCloseTag("i"));
+    expect(message).toContain("Job Match");
+    expect(message).toContain("Score:");
+  });
 });
 
 describe("telegram.ts - Multi-Tenant Isolation in sendMessage", () => {

@@ -1623,7 +1623,7 @@ export default function SettingsPage() {
                   <span>{t("hh.modeOAuth", "Official OAuth")}</span>
                   {!hasOfficialHhOAuth && (
                     <span className="ml-1 px-1.5 py-0.5 text-[9px] rounded font-mono uppercase bg-zinc-900 border border-zinc-700/60 text-zinc-400">
-                      Self-Hosted
+                      {language === "ru" ? "Свой сервер" : "Self-Hosted"}
                     </span>
                   )}
                 </button>
@@ -1749,9 +1749,9 @@ export default function SettingsPage() {
                           <div className="text-emerald-400 font-sans font-medium text-[11px]">
                             {language === "ru" ? "Инструкция для собственного сервера:" : "Self-Hoster Setup Guide:"}
                           </div>
-                          <div>1. Register app at <span className="text-zinc-200">dev.hh.ru/admin</span></div>
-                          <div>2. Add <span className="text-zinc-200">HH_CLIENT_ID</span> & <span className="text-zinc-200">HH_CLIENT_SECRET</span> to your <span className="text-zinc-200">.env</span></div>
-                          <div>3. Set redirect URI to <span className="text-zinc-200">https://your-domain/api/auth/hh/callback</span></div>
+                          <div>{language === "ru" ? "1. Зарегистрируйте приложение на" : "1. Register app at"} <span className="text-zinc-200">dev.hh.ru/admin</span></div>
+                          <div>{language === "ru" ? "2. Добавьте" : "2. Add"} <span className="text-zinc-200">HH_CLIENT_ID</span> & <span className="text-zinc-200">HH_CLIENT_SECRET</span> {language === "ru" ? "в" : "to your"} <span className="text-zinc-200">.env</span></div>
+                          <div>{language === "ru" ? "3. Укажите redirect URI:" : "3. Set redirect URI to"} <span className="text-zinc-200">https://your-domain/api/auth/hh/callback</span></div>
                         </div>
                       </div>
                       <button

@@ -29,11 +29,9 @@ export async function POST(
       );
     }
 
-    // Get the user's active search preference
+    // Get the caller's own active search preference (never another user's)
     const pref = await prisma.searchPreference.findFirst({
       where: { userId: user.id, isActive: true },
-    }) || await prisma.searchPreference.findFirst({
-      where: { isActive: true },
     });
 
     if (pref) {

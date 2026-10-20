@@ -40,7 +40,7 @@ export async function GET() {
         _count: { matchScore: true },
       }),
       prisma.vacancyAnalysis.count({
-        where: { vacancy: { userId: user.id }, aiStatus: "pending_limit" },
+        where: { vacancy: { userId: user.id }, aiStatus: { in: ["pending_limit", "pending_ai"] } },
       }),
       prisma.vacancyAnalysis.count({
         where: { vacancy: { userId: user.id }, matchScore: { gte: 75 } },

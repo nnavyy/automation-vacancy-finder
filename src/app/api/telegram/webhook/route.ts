@@ -8,9 +8,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { saveFeedback } from "@/lib/feedbackLearning";
-import { buildAnalysisPrompt, parseAIResponse } from "@/lib/aiAnalyzer";
-import { callAI } from "@/lib/aiProviderRouter";
-import { getSimilarFeedbackExamples } from "@/lib/feedbackLearning";
+import { generateCoverLetter } from "@/lib/aiAnalyzer";
+import { escapeHtml, truncateString } from "@/lib/telegram";
 import { BRAND_NAME } from "@/lib/brand";
 import { safeEqual } from "@/lib/timingSafe";
 import type { NormalizedVacancy, HHSalary } from "@/types";
@@ -184,9 +183,9 @@ async function handleApprove(vacancyId: string, userId: string, lang: string = "
   if (!v) return isRu ? "[Ошибка] Вакансия не найдена или доступ ограничен." : "[Error] Vacancy not found or access denied.";
   await saveFeedback(vacancyId, "apply");
   if (isRu) {
-    return `<b>[Отклик зарегистрирован]</b>\n\n<b>Вакансия:</b> ${v.title}\n<b>Компания:</b> ${v.company ?? "Не указана"}\n\nУдачи на собеседовании!`;
+    return `<b>[Отклик зарегистрирован]</b>\n\n<b>Вакансия:</b> ${escapeHtml(v.title)}\n<b>Компания:</b> ${escapeHtml(v.company ?? "Не указана")}\n\nУдачи на собеседовании!`;
   }
-  return `<b>[Marked as Applied]</b>\n\n<b>Role:</b> ${v.title}\n<b>Company:</b> ${v.company ?? "N/A"}\n\nGood luck!`;
+  return `<b>[Marked as Applied]</b>\n\n<b>Role:</b> ${escapeHtml(v.title)}\n<b>Company:</b> ${escapeHtml(v.company ?? "N/A")}\n\nGood luck!`;
 }
 
 async function handleSkip(vacancyId: string, userId: string, lang: string = "en"): Promise<string> {
@@ -195,9 +194,9 @@ async function handleSkip(vacancyId: string, userId: string, lang: string = "en"
   if (!v) return isRu ? "[Ошибка] Вакансия не найдена или доступ ограничен." : "[Error] Vacancy not found or access denied.";
   await saveFeedback(vacancyId, "skip");
   if (isRu) {
-    return `<b>[Вакансия пропущена]</b>\n\n<b>Вакансия:</b> ${v.title}\n<b>Компания:</b> ${v.company ?? "Не указана"}\n\nОбратная связь учтена в обучении модели.`;
+    return `<b>[Вакансия пропущена]</b>\n\n<b>Вакансия:</b> ${escapeHtml(v.title)}\n<b>Компания:</b> ${escapeHtml(v.company ?? "Не указана")}\n\nОбратная связь учтена в обучении модели.`;
   }
-  return `<b>[Vacancy Skipped]</b>\n\n<b>Role:</b> ${v.title}\n<b>Company:</b> ${v.company ?? "N/A"}\n\nFeedback saved.`;
+  return `<b>[Vacancy Skipped]</b>\n\n<b>Role:</b> ${escapeHtml(v.title)}\n<b>Company:</b> ${escapeHtml(v.company ?? "N/A")}\n\nFeedback saved.`;
 }
 
 async function handleSave(vacancyId: string, userId: string, lang: string = "en"): Promise<string> {
@@ -206,58 +205,44 @@ async function handleSave(vacancyId: string, userId: string, lang: string = "en"
   if (!v) return isRu ? "[Ошибка] Вакансия не найдена или доступ ограничен." : "[Error] Vacancy not found or access denied.";
   await saveFeedback(vacancyId, "save");
   if (isRu) {
-    return `<b>[Сохранено в избранное]</b>\n\n<b>Вакансия:</b> ${v.title}\n<b>Компания:</b> ${v.company ?? "Не указана"}`;
+    return `<b>[Сохранено в избранное]</b>\n\n<b>Вакансия:</b> ${escapeHtml(v.title)}\n<b>Компания:</b> ${escapeHtml(v.company ?? "Не указана")}`;
   }
-  return `<b>[Saved for Later]</b>\n\n<b>Role:</b> ${v.title}\n<b>Company:</b> ${v.company ?? "N/A"}`;
+  return `<b>[Saved for Later]</b>\n\n<b>Role:</b> ${escapeHtml(v.title)}\n<b>Company:</b> ${escapeHtml(v.company ?? "N/A")}`;
 }
 
 async function handleEdit(vacancyId: string, userId: string, lang: string = "en"): Promise<string> {
   const isRu = lang === "ru";
   const dbVac = await prisma.vacancy.findFirst({ where: { id: vacancyId, userId }, include: { analysis: true } });
   if (!dbVac) return isRu ? "[Ошибка] Вакансия не найдена или доступ ограничен." : "[Error] Vacancy not found or access denied.";
-  const vacancy = toNormalizedVacancy(dbVac);
-  const { positive, negative } = await getSimilarFeedbackExamples(vacancy, userId);
-  const similarFeedback = [...positive, ...negative];
+  if (!dbVac.analysis) {
+    return isRu ? "[Ошибка] Сначала нужно проанализировать вакансию." : "[Error] Analyze this vacancy first.";
+  }
   const pref = await prisma.searchPreference.findFirst({ where: { userId, isActive: true } });
-  const prompt = await buildAnalysisPrompt(vacancy, similarFeedback, pref);
-  const customConfig =
-    (pref as any)?.aiCustomConfig ??
-    (typeof pref?.aiProviderOrder === "object" && !Array.isArray(pref?.aiProviderOrder)
-      ? (pref?.aiProviderOrder as any)
-      : undefined);
-  const aiResult = await callAI({
-    prompt,
-    requestType: "cover_letter",
-    maxTokens: 2048,
-    providerOrder: Array.isArray(pref?.aiProviderOrder) ? (pref.aiProviderOrder as string[]) : customConfig?.order,
-    customConfig,
-  });
-
-  let coverLetter: string;
-  if (aiResult.isRateLimited || !aiResult.content.trim()) {
-    coverLetter = dbVac.analysis?.coverLetter ?? (isRu ? "Сопроводительное письмо недоступно." : "Cover letter not available.");
-  } else {
-    try {
-      const parsed = parseAIResponse(aiResult.content);
-      coverLetter = parsed.cover_letter || aiResult.content.trim();
-    } catch {
-      coverLetter = aiResult.content.trim();
-    }
-
-    if (dbVac.analysis) {
-      await prisma.vacancyAnalysis.update({ where: { vacancyId }, data: { coverLetter } });
-    }
+  if (!pref) {
+    return isRu ? "[Ошибка] Нет активного профиля поиска." : "[Error] No active search profile.";
   }
 
+  const coverLetter = await generateCoverLetter(
+    toNormalizedVacancy(dbVac),
+    {
+      best_language: (dbVac.analysis.bestLanguage as "english" | "russian" | undefined) ?? undefined,
+      match_reasons: (dbVac.analysis.matchReasons as string[]) ?? [],
+    },
+    pref
+  );
+
+  await prisma.vacancyAnalysis.update({ where: { vacancyId }, data: { coverLetter } });
   await prisma.applicationLog.create({
-    data: { vacancyId, action: "regenerate_letter", notes: `Provider: ${aiResult.provider}` },
+    data: { vacancyId, action: "regenerate_letter", notes: "Regenerated from Telegram" },
   });
 
-  const truncated = coverLetter.length > 3500 ? `${coverLetter.slice(0, 3500)}…\n\n<i>${isRu ? "(сокращено)" : "(truncated)"}</i>` : coverLetter;
+  // Truncate plain text first, then escape, so entities are never cut in half.
+  const shown = escapeHtml(truncateString(coverLetter, 3500));
+  const title = escapeHtml(dbVac.title);
   if (isRu) {
-    return `<b>[Новое сопроводительное письмо] "${dbVac.title}"</b>\n\n<i>${truncated}</i>\n\n<b>Провайдер ИИ:</b> ${aiResult.provider}`;
+    return `<b>[Новое сопроводительное письмо] "${title}"</b>\n\n<i>${shown}</i>`;
   }
-  return `<b>[New Cover Letter] "${dbVac.title}"</b>\n\n<i>${truncated}</i>\n\n<b>Provider:</b> ${aiResult.provider}`;
+  return `<b>[New Cover Letter] "${title}"</b>\n\n<i>${shown}</i>`;
 }
 
 // ── GET: Health check ─────────────────────────────────────────
@@ -350,8 +335,8 @@ export async function POST(req: NextRequest) {
                 await tgSend(
                   chatId,
                   isRu
-                    ? `<b>[Сопроводительное письмо сохранено]</b>\nВаш отредактированный текст для «${dbVac.title}» успешно сохранён.`
-                    : `<b>[Cover Letter Saved]</b>\nYour manual edit for "${dbVac.title}" has been saved successfully.`
+                    ? `<b>[Сопроводительное письмо сохранено]</b>\nВаш отредактированный текст для «${escapeHtml(dbVac.title)}» успешно сохранён.`
+                    : `<b>[Cover Letter Saved]</b>\nYour manual edit for "${escapeHtml(dbVac.title)}" has been saved successfully.`
                 );
                 return NextResponse.json({ ok: true });
               }
@@ -551,7 +536,7 @@ export async function POST(req: NextRequest) {
             const lines = saved.map((v, i) => {
               const score = v.analysis?.matchScore ?? "—";
               const url = v.url && v.url.startsWith("http") ? v.url : `https://hh.ru/vacancy/${v.hhId.replace(/\D/g, "")}`;
-              return `${i + 1}. <b>${v.title}</b>\n   ${v.company ?? "—"} • ${isRu ? "Оценка" : "Score"}: ${score}\n   ${url}`;
+              return `${i + 1}. <b>${escapeHtml(v.title)}</b>\n   ${escapeHtml(v.company ?? "—")} • ${isRu ? "Оценка" : "Score"}: ${score}\n   ${url}`;
             });
             await tgSend(chatId, `<b>[${isRu ? "Сохранённые вакансии" : "Saved"}]</b> (${saved.length})\n\n${lines.join("\n\n")}`);
           }
@@ -581,7 +566,7 @@ export async function POST(req: NextRequest) {
             const lines = applied.map((v, i) => {
               const score = v.analysis?.matchScore ?? "—";
               const url = v.url && v.url.startsWith("http") ? v.url : `https://hh.ru/vacancy/${v.hhId.replace(/\D/g, "")}`;
-              return `${i + 1}. <b>${v.title}</b>\n   ${v.company ?? "—"} • ${isRu ? "Оценка" : "Score"}: ${score}\n   ${url}`;
+              return `${i + 1}. <b>${escapeHtml(v.title)}</b>\n   ${escapeHtml(v.company ?? "—")} • ${isRu ? "Оценка" : "Score"}: ${score}\n   ${url}`;
             });
             await tgSend(chatId, `<b>[${isRu ? "Отправленные отклики" : "Applied"}]</b> (${applied.length})\n\n${lines.join("\n\n")}`);
           }
