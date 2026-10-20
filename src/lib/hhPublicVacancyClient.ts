@@ -27,11 +27,14 @@ const HH_RSS_BASE = "https://hh.ru/search/vacancy/rss";
 const USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
-/** Polite delay between different query strings */
+/** Polite delay between different query strings (with jitter applied) */
 const QUERY_DELAY_MS = 800;
 
 /** Max RSS pages to fetch per query (RSS returns ~20 items per page) */
 const MAX_PAGES_PER_QUERY = 3;
+
+/** Max vacancies the system will store per user at any one time */
+export const MAX_VACANCIES_PER_USER = 100;
 
 // ── Utility Helpers ───────────────────────────────────────────
 
@@ -40,6 +43,15 @@ const MAX_PAGES_PER_QUERY = 3;
  */
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Sleeps for QUERY_DELAY_MS with ±30% random jitter to spread load
+ * when multiple users run collection concurrently.
+ */
+function delayWithJitter(): Promise<void> {
+  const jitter = (Math.random() - 0.5) * 0.6 * QUERY_DELAY_MS; // ±30%
+  return sleep(Math.max(200, QUERY_DELAY_MS + jitter));
 }
 
 /**
@@ -225,29 +237,49 @@ async function fetchRSSPage(
   // with alternate experience tiers that match the candidate. The pipeline filters and
   // evaluates work format and experience accurately with full AI & rule heuristics.
 
-  try {
-    const response = await axios.get(HH_RSS_BASE, {
-      params,
-      headers: { "User-Agent": USER_AGENT },
-      timeout: 15000,
-      validateStatus: () => true,
-    });
+  const MAX_RETRIES = 2;
+  let lastError: unknown;
 
-    if (response.status !== 200) {
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const response = await axios.get(HH_RSS_BASE, {
+        params,
+        headers: { "User-Agent": USER_AGENT },
+        timeout: 15000,
+        validateStatus: () => true,
+      });
+
+      if (response.status === 200) {
+        return parseRSSItems(String(response.data));
+      }
+
+      // Rate-limited or server error — backoff and retry
+      if (response.status === 429 || response.status === 503) {
+        const backoffMs = 1500 * Math.pow(2, attempt) + Math.random() * 500;
+        console.warn(
+          `[HH RSS] ${response.status} on query "${query}" page ${page} — backoff ${Math.round(backoffMs)}ms (attempt ${attempt + 1}/${MAX_RETRIES + 1})`
+        );
+        await sleep(backoffMs);
+        continue;
+      }
+
       console.warn(
         `[HH RSS] Non-200 status ${response.status} for query "${query}" page ${page}`
       );
       return [];
+    } catch (error) {
+      lastError = error;
+      if (attempt < MAX_RETRIES) {
+        await sleep(800 * (attempt + 1));
+      }
     }
-
-    return parseRSSItems(String(response.data));
-  } catch (error) {
-    console.error(
-      `[HH RSS] Error fetching query "${query}" page ${page}:`,
-      error instanceof Error ? error.message : error
-    );
-    return [];
   }
+
+  console.error(
+    `[HH RSS] Error fetching query "${query}" page ${page} after ${MAX_RETRIES + 1} attempts:`,
+    lastError instanceof Error ? lastError.message : lastError
+  );
+  return [];
 }
 
 // ── Normalize ─────────────────────────────────────────────────
@@ -367,7 +399,9 @@ export async function collectAllVacancies(
 
         await sleep(150);
       }
-      await sleep(200);
+
+      // Apply QUERY_DELAY_MS with jitter between queries (was previously just sleep(200))
+      await delayWithJitter();
     }
   };
 
@@ -380,4 +414,41 @@ export async function collectAllVacancies(
   );
 
   return allVacancies;
+}
+
+// ── Vacancy Validity Probe ────────────────────────────────────
+
+/**
+ * Checks whether a vacancy is still open on HH.ru by sending a lightweight
+ * HEAD request. Returns false if the vacancy returns 404 (deleted/closed).
+ *
+ * Used by the notify-pending cron to mark stale vacancies as "closed".
+ *
+ * @param hhId - The HH.ru vacancy ID (numeric string)
+ * @returns true if still open, false if 404 or unreachable
+ */
+export async function checkVacancyStillOpen(hhId: string): Promise<boolean> {
+  const numericId = hhId.replace(/\D/g, "");
+  if (!numericId) return true; // Cannot determine — assume open
+
+  const url = `https://hh.ru/vacancy/${numericId}`;
+  try {
+    const response = await axios.head(url, {
+      headers: { "User-Agent": USER_AGENT },
+      timeout: 6000,
+      validateStatus: () => true,
+      maxRedirects: 3,
+    });
+
+    if (response.status === 404) {
+      console.log(`[HH Validity] Vacancy ${hhId} returned 404 — marking closed`);
+      return false;
+    }
+
+    // 200 or redirect = still accessible
+    return response.status < 400;
+  } catch {
+    // Network error — assume open to avoid false positives
+    return true;
+  }
 }

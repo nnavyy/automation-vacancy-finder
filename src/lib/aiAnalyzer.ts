@@ -207,7 +207,6 @@ Return STRICT JSON ONLY — no markdown, no code fences, no extra text before or
   "match_reasons": [],
   "missing_requirements": [],
   "red_flags": [{"trigger_text": "", "reason": "", "severity": "low | medium | high"}],
-  "cover_letter": "",
   "questions_to_recruiter": [],
   "confidence": 85
 }
@@ -221,9 +220,7 @@ Scoring guide:
 
 Rules:
 - Mention exact red flag trigger text if found.
-- Cover letter must sound natural and human.
 - Confidence should be a number from 0-100 indicating how confident you are in your score based on the available data.
-${coverLetterLangInstruction}
 - Note: If candidate's skills match perfectly, do not penalize heavily for language if it is a remote tech role, just note it in missing_requirements.`;
 }
 
@@ -436,6 +433,78 @@ export function buildRuleBasedResult(
  * @param vacancy        - Normalized vacancy to analyse
  * @param similarFeedback - Optional past feedback for prompt personalisation
  * @returns Analysis result, provider/model metadata, and AI status code
+/**
+ * Stage 2: Generates a high-fidelity, humanized cover letter for a vacancy.
+ * Enforces slop-monster anti-cliché directives (no robotic buzzwords, no boilerplate greetings).
+ */
+export async function generateCoverLetter(
+  vacancy: NormalizedVacancy,
+  analysis: Partial<AIAnalysisResult>,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  pref?: any
+): Promise<string> {
+  const candidateName = pref?.name || "Applicant";
+  const requiredSkills = pref?.requiredSkills || "TypeScript, React, Next.js, Node.js";
+  const resumeText = pref?.resumeText ? `\nCandidate Background:\n${pref.resumeText.slice(0, 1500)}` : "";
+  const lang = analysis.best_language || (pref?.coverLetterLanguage === "Russian" ? "russian" : "english");
+  const isRu = lang === "russian" || (lang as string) === "ru";
+
+  const targetLangDirective = isRu
+    ? "Write the entire cover letter in fluent, professional Russian."
+    : "Write the entire cover letter in fluent, professional English.";
+
+  const reasons = (analysis.match_reasons || []).slice(0, 3).join(", ");
+
+  const prompt = `You are a human career advisor drafting an authentic, compelling cover letter for ${candidateName}.
+
+Role: ${vacancy.title}
+Company: ${vacancy.company ?? "Hiring Team"}
+Key Matching Strengths: ${reasons || requiredSkills}
+${resumeText}
+
+Requirements & Tone Directive (SLOP-MONSTER HUMANIZER):
+- ${targetLangDirective}
+- Keep it concise: 2 to 3 short paragraphs maximum.
+- Absolutely NO corporate cliches or generic AI openings (DO NOT write "I am excited to apply", "I am writing to express my enthusiasm", "As a seasoned engineer with a track record", "In today's fast-paced tech landscape").
+- Open directly with the candidate's core stack and how their concrete experience solves this role's requirements.
+- Mention specific tools and real engineering relevance.
+- Close respectfully and invite a short technical call or chat.
+- Return ONLY the raw cover letter text. No greetings to the user, no markdown commentary, no code fences.`;
+
+  const customConfig =
+    pref?.aiCustomConfig ??
+    (typeof pref?.aiProviderOrder === "object" && !Array.isArray(pref?.aiProviderOrder)
+      ? pref?.aiProviderOrder
+      : undefined);
+
+  const aiResult = await callAI({
+    prompt,
+    requestType: "cover_letter",
+    maxTokens: 600,
+    providerOrder: Array.isArray(pref?.aiProviderOrder) ? pref.aiProviderOrder : customConfig?.order,
+    customConfig,
+  });
+
+  if (aiResult.isRateLimited || !aiResult.content.trim()) {
+    return buildRuleBasedResult(vacancy, pref).cover_letter;
+  }
+
+  return aiResult.content
+    .replace(/^```[a-z]*\n?/i, "")
+    .replace(/\n?```$/i, "")
+    .trim();
+}
+
+// ── Main Analyzer ─────────────────────────────────────────────
+
+/**
+ * Analyses a vacancy with the Two-Stage AI pipeline:
+ *  Stage 1: Fast compact scoring prompt (maxTokens: 500)
+ *  Stage 2: On-demand or threshold-based cover letter generation (>= 75 score)
+ *
+ * @param vacancy        - Normalized vacancy to analyse
+ * @param similarFeedback - Optional past feedback for prompt personalisation
+ * @returns Analysis result, provider/model metadata, and AI status code
  */
 export async function analyzeVacancy(
   vacancy: NormalizedVacancy,
@@ -456,32 +525,46 @@ export async function analyzeVacancy(
       ? pref?.aiProviderOrder
       : undefined);
 
-  // ── Step 1: Call AI provider chain ───────────────────────
+  // ── Step 1: Call AI provider chain (Stage 1: Fast compact scoring) ──
   const aiResult = await callAI({
     prompt,
     requestType: "analyze",
-    maxTokens: 2048,
+    maxTokens: 500, // Compact Stage 1 token limit saves ~1500 output tokens per call
     providerOrder: Array.isArray(pref?.aiProviderOrder) ? pref.aiProviderOrder : customConfig?.order,
     customConfig,
   });
 
-  // ── Step 2: Handle total AI failure ──────────────────────
+  // ── Step 2: Handle total AI failure / rate limits ─────────
   if (aiResult.isRateLimited || !aiResult.content.trim()) {
     console.warn(
       `[Analyzer] All AI providers unavailable for vacancy "${vacancy.title}". ` +
-        "Falling back to rule-based analysis."
+        "Setting pending_ai status for retry."
     );
     return {
       analysis: buildRuleBasedResult(vacancy, pref) as AIAnalysisResult,
       provider: "rule_based",
       model: "none",
-      aiStatus: "rule_based_only",
+      aiStatus: "pending_ai",
     };
   }
 
   // ── Step 3: Parse the AI JSON response ───────────────────
   try {
     const analysis = parseAIResponse(aiResult.content);
+
+    // ── Step 4: Stage 2 Auto-Generation for High-Score Vacancies ──
+    const autoMinScore = typeof pref?.autoCoverLetterMinScore === "number" ? pref.autoCoverLetterMinScore : 75;
+    if (analysis.match_score >= autoMinScore && (!analysis.cover_letter || analysis.cover_letter.trim() === "")) {
+      try {
+        console.log(`[Analyzer] High match score (${analysis.match_score} >= ${autoMinScore}), generating Stage 2 cover letter...`);
+        const coverLetter = await generateCoverLetter(vacancy, analysis, pref);
+        analysis.cover_letter = coverLetter;
+      } catch (clErr) {
+        console.warn("[Analyzer] Stage 2 cover letter generation failed, using fallback:", clErr);
+        analysis.cover_letter = buildRuleBasedResult(vacancy, pref).cover_letter;
+      }
+    }
+
     console.log(
       `[Analyzer] AI analysis complete — score: ${analysis.match_score}, ` +
         `recommendation: ${analysis.recommendation}, ` +
@@ -494,7 +577,7 @@ export async function analyzeVacancy(
       aiStatus: "completed",
     };
   } catch (parseError) {
-    // AI responded but the JSON could not be extracted — fall back
+    // AI responded but the JSON could not be extracted — fall back to pending_ai for retry
     console.error(
       `[Analyzer] Failed to parse AI response for "${vacancy.title}":`,
       parseError
@@ -506,9 +589,9 @@ export async function analyzeVacancy(
 
     return {
       analysis: buildRuleBasedResult(vacancy, pref) as AIAnalysisResult,
-      provider: aiResult.provider,   // keep the provider that responded
+      provider: aiResult.provider,
       model: aiResult.model,
-      aiStatus: "rule_based_only",
+      aiStatus: "pending_ai",
     };
   }
 }

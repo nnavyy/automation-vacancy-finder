@@ -13,16 +13,34 @@ export function generateNumericOTP(): string {
   return crypto.randomInt(100000, 1000000).toString();
 }
 
-// Mailer transport instance
+/**
+ * Computes a salted HMAC-SHA256 hash of the verification code for secure database storage.
+ */
+export function hashVerificationCode(email: string, code: string): string {
+  const pepper =
+    process.env.ENCRYPTION_KEY ||
+    process.env.NEXTAUTH_SECRET ||
+    process.env.AUTH_SECRET ||
+    "hh-copilot-otp-salt";
+  return crypto
+    .createHmac("sha256", pepper)
+    .update(`${email.trim().toLowerCase()}:${code.trim()}`)
+    .digest("hex");
+}
+
+// Mailer transport instance with flexible provider support (Gmail, Resend, Sendgrid, SES)
 function getMailer() {
-  const user = process.env.EMAIL_USER;
-  const pass = process.env.EMAIL_PASS;
+  const host = process.env.SMTP_HOST || "smtp.gmail.com";
+  const port = Number(process.env.SMTP_PORT || "465");
+  const secure = process.env.SMTP_SECURE ? process.env.SMTP_SECURE === "true" : port === 465;
+  const user = process.env.SMTP_USER || process.env.EMAIL_USER;
+  const pass = process.env.SMTP_PASS || process.env.EMAIL_PASS;
   if (!user || !pass) return null;
 
   return nodemailer.createTransport({
-    host: "smtp.gmail.com",
-    port: 465,
-    secure: true,
+    host,
+    port,
+    secure,
     auth: { user, pass },
   });
 }
@@ -47,19 +65,20 @@ export async function createVerificationCode(
     },
   });
 
-  const code = generateNumericOTP();
+  const rawCode = generateNumericOTP();
+  const hashedCode = hashVerificationCode(normalizedEmail, rawCode);
   const expiresAt = new Date(Date.now() + expiryMinutes * 60 * 1000);
 
   await prisma.verificationCode.create({
     data: {
       email: normalizedEmail,
-      code,
+      code: hashedCode,
       purpose,
       expiresAt,
     },
   });
 
-  return code;
+  return rawCode;
 }
 
 // Verify a submitted OTP code
@@ -70,6 +89,7 @@ export async function verifySubmittedCode(
 ): Promise<{ success: boolean; error?: string }> {
   const normalizedEmail = email.trim().toLowerCase();
   const cleanCode = code.trim();
+  const submittedHash = hashVerificationCode(normalizedEmail, cleanCode);
 
   const record = await prisma.verificationCode.findFirst({
     where: {
@@ -97,8 +117,12 @@ export async function verifySubmittedCode(
     return { success: false, error: "Verification code has expired. Please request a new code." };
   }
 
-  // Check matching code
-  if (record.code !== cleanCode) {
+  // Check matching code: backward-compatible support for legacy plaintext codes (length <= 6)
+  const isMatch = record.code.length <= 6
+    ? record.code === cleanCode
+    : record.code === submittedHash;
+
+  if (!isMatch) {
     await prisma.verificationCode.update({
       where: { id: record.id },
       data: { attempts: { increment: 1 } },
@@ -133,7 +157,11 @@ export async function sendVerificationEmail({
 }): Promise<{ success: boolean; error?: string }> {
   const transporter = getMailer();
   if (!transporter) {
-    console.warn("[Mail] EMAIL_USER or EMAIL_PASS not configured. Code for testing:", code);
+    if (process.env.NODE_ENV === "development") {
+      console.warn("[Mail Dev] EMAIL_USER or EMAIL_PASS not configured. Code for testing:", code);
+    } else {
+      console.error("[Mail] SMTP is not configured on the server. Email delivery aborted.");
+    }
     return { success: false, error: "Email service is not configured on the server." };
   }
 

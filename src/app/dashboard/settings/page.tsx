@@ -323,6 +323,7 @@ export default function SettingsPage() {
   const [hhResumes, setHhResumes] = useState<Array<{ id: string; title: string; status?: { name: string } }>>([]);
   const [checkingSession, setCheckingSession] = useState(false);
   const [hhConnectMode, setHhConnectMode] = useState<"console" | "oauth">("console");
+  const [hasOfficialHhOAuth, setHasOfficialHhOAuth] = useState<boolean>(true);
 
   // Portfolio crawling test state
   const [testingPortfolio, setTestingPortfolio] = useState(false);
@@ -551,6 +552,9 @@ export default function SettingsPage() {
             }
             if (Array.isArray(json.serverConfiguredProviders)) {
               setServerConfiguredProviders(json.serverConfiguredProviders);
+            }
+            if (json.systemCapabilities && typeof json.systemCapabilities.hasOfficialHhOAuth === "boolean") {
+              setHasOfficialHhOAuth(json.systemCapabilities.hasOfficialHhOAuth);
             }
             const d = json.data;
             const serverList = Array.isArray(json.serverConfiguredProviders) && json.serverConfiguredProviders.length > 0
@@ -1617,6 +1621,11 @@ export default function SettingsPage() {
                 >
                   <Globe size={13} className={hhConnectMode === "oauth" ? "text-emerald-400" : "text-zinc-400"} />
                   <span>{t("hh.modeOAuth", "Official OAuth")}</span>
+                  {!hasOfficialHhOAuth && (
+                    <span className="ml-1 px-1.5 py-0.5 text-[9px] rounded font-mono uppercase bg-zinc-900 border border-zinc-700/60 text-zinc-400">
+                      Self-Hosted
+                    </span>
+                  )}
                 </button>
               </div>
 
@@ -1702,22 +1711,59 @@ export default function SettingsPage() {
                 )}
 
                 {hhConnectMode === "oauth" && (
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-                    <div>
-                      <div className="font-medium text-zinc-200">{t("hh.oauthTitle", "Official HeadHunter OAuth 2.0")}</div>
-                      <div className="text-[11px] text-zinc-400 mt-0.5">
-                        {t("hh.oauthDesc", "Authorize directly via official HeadHunter servers. Works on mobile, desktop, and cloud.")}
+                  hasOfficialHhOAuth ? (
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                      <div>
+                        <div className="font-medium text-zinc-200">{t("hh.oauthTitle", "Official HeadHunter OAuth 2.0")}</div>
+                        <div className="text-[11px] text-zinc-400 mt-0.5">
+                          {t("hh.oauthDesc", "Authorize directly via official HeadHunter servers. Works on mobile, desktop, and cloud.")}
+                        </div>
                       </div>
+                      {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
+                      <a
+                        href="/api/auth/hh/login"
+                        className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 hover:text-white text-xs font-medium border border-zinc-700 shrink-0 transition-colors"
+                      >
+                        <Globe size={13} />
+                        <span>{t("hh.oauthBtn", "Official Login (OAuth)")}</span>
+                      </a>
                     </div>
-                    {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
-                    <a
-                      href="/api/auth/hh/login"
-                      className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 hover:text-white text-xs font-medium border border-zinc-700 shrink-0 transition-colors"
-                    >
-                      <Globe size={13} />
-                      <span>{t("hh.oauthBtn", "Official Login (OAuth)")}</span>
-                    </a>
-                  </div>
+                  ) : (
+                    <div className="space-y-3 text-xs">
+                      <div className="bg-zinc-900/90 border border-zinc-800 rounded-xl p-3.5 space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="font-semibold text-zinc-200 flex items-center gap-2">
+                            <Globe size={14} className="text-zinc-400" />
+                            <span>{language === "ru" ? "Официальный OAuth (Для Self-Hosted)" : "Official OAuth 2.0 (Self-Hosted Only)"}</span>
+                          </div>
+                          <span className="px-2 py-0.5 text-[10px] rounded font-mono bg-zinc-800 border border-zinc-700/80 text-zinc-300">
+                            Zero-Key Mode
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-zinc-400 leading-relaxed">
+                          {language === "ru"
+                            ? "Этот публичный инстанс работает в Zero-Key режиме без официальных ключей разработчика HeadHunter. Для синхронизации используйте вкладку «Сессионный токен / Расширение»."
+                            : "This public instance operates in Zero-Key Mode without bundling developer HeadHunter API keys. For 1-click sync, please use the 'Session Token / Cookie' tab with our companion Chrome Extension."}
+                        </p>
+                        <div className="bg-zinc-950/80 border border-zinc-800/80 rounded-lg p-2.5 space-y-1 font-mono text-[10px] text-zinc-400">
+                          <div className="text-emerald-400 font-sans font-medium text-[11px]">
+                            {language === "ru" ? "Инструкция для собственного сервера:" : "Self-Hoster Setup Guide:"}
+                          </div>
+                          <div>1. Register app at <span className="text-zinc-200">dev.hh.ru/admin</span></div>
+                          <div>2. Add <span className="text-zinc-200">HH_CLIENT_ID</span> & <span className="text-zinc-200">HH_CLIENT_SECRET</span> to your <span className="text-zinc-200">.env</span></div>
+                          <div>3. Set redirect URI to <span className="text-zinc-200">https://your-domain/api/auth/hh/callback</span></div>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setHhConnectMode("console")}
+                        className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-medium transition-colors"
+                      >
+                        <Terminal size={13} />
+                        <span>{language === "ru" ? "Переключиться на расширение Chrome (Рекомендуется)" : "Switch to Chrome Extension (Recommended)"}</span>
+                      </button>
+                    </div>
+                  )
                 )}
               </div>
             </div>

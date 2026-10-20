@@ -15,6 +15,7 @@
     "db:migrate": "prisma migrate dev",
     "db:studio": "prisma studio",
     "db:seed": "tsx src/lib/seed.ts",
+    "db:encrypt-secrets": "tsx scripts/encrypt-legacy-secrets.ts",
     "login:hh": "tsx scripts/login-hh.ts",
     "postinstall": "prisma generate"
   },

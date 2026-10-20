@@ -56,7 +56,21 @@ const proxyHandler = auth((req) => {
       return NextResponse.next();
     }
 
-    // 3. Unauthorized or anonymous visitors trying to access other pages -> Redirect to '/' (Under Construction)
+    // 3. Allow public showcase routes (landing, demo, engineering blog, creator about, architecture, legal)
+    const isPublicShowcase =
+      pathname === "/" ||
+      pathname === "/landing" ||
+      pathname === "/demo" ||
+      pathname === "/architecture" ||
+      pathname.startsWith("/blog") ||
+      pathname === "/about" ||
+      pathname.startsWith("/legal");
+
+    if (isPublicShowcase) {
+      return NextResponse.next();
+    }
+
+    // 4. Unauthorized or anonymous visitors trying to access other pages -> Redirect to '/'
     if (pathname !== "/") {
       return NextResponse.redirect(new URL("/", req.nextUrl.origin));
     }

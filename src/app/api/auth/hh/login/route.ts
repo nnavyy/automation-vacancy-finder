@@ -14,13 +14,17 @@ export async function GET(req: NextRequest) {
 
   const clientId = process.env.HH_CLIENT_ID;
   if (!clientId) {
-    // If developer hasn't configured OAuth yet, redirect with explanation
+    const errorMsg =
+      "Official HeadHunter OAuth is not enabled on this public instance. Please connect your account using the Chrome Extension or Session Cookie.";
+    const isJson = req.headers.get("accept")?.includes("application/json");
+    if (isJson) {
+      return NextResponse.json(
+        { success: false, error: errorMsg, code: "OAUTH_DISABLED_PUBLIC_INSTANCE" },
+        { status: 400 }
+      );
+    }
     return NextResponse.redirect(
-      new URL(
-        "/dashboard/settings?oauth_error=" +
-          encodeURIComponent("HH_CLIENT_ID is not configured in server Environment Variables."),
-        req.url
-      )
+      new URL("/dashboard/settings?oauth_error=" + encodeURIComponent(errorMsg), req.url)
     );
   }
 

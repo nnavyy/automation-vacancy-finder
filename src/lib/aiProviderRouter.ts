@@ -26,6 +26,7 @@ import type {
 } from "@/types";
 import prisma from "@/lib/db";
 import { BRAND_NAME } from "@/lib/brand";
+import { decrypt, decryptProviderKeys } from "@/lib/crypto";
 
 // ── Model Defaults ──────────────────────────────────────────
 
@@ -398,7 +399,7 @@ export async function logAIUsage(
 export async function callAI(options: CallAIOptions): Promise<AICallResult> {
   const customConfig = options.customConfig;
   const taskRouting = customConfig?.taskRouting;
-  const customProviders = customConfig?.customProviders || {};
+  const customProviders = decryptProviderKeys(customConfig?.customProviders);
 
   // 1. Resolve preferred provider based on specific task
   let taskPrimaryProvider: string | undefined;
@@ -550,37 +551,38 @@ export async function testAiProviderConnection(
   try {
     let reply = "";
     let model = config?.model || "";
+    const effectiveApiKey = config?.apiKey ? decrypt(config.apiKey) : undefined;
 
     switch (provider) {
       case "deepseek":
         model = model || getDeepSeekModel();
-        reply = await callDeepSeek(testOptions, config?.apiKey, model);
+        reply = await callDeepSeek(testOptions, effectiveApiKey, model);
         break;
       case "openai":
         model = model || getOpenAIModel();
-        reply = await callOpenAI(testOptions, config?.apiKey, model);
+        reply = await callOpenAI(testOptions, effectiveApiKey, model);
         break;
       case "anthropic":
       case "claude":
         model = model || getAnthropicModel();
-        reply = await callAnthropic(testOptions, config?.apiKey, model);
+        reply = await callAnthropic(testOptions, effectiveApiKey, model);
         break;
       case "groq":
         model = model || getGroqModel();
-        reply = await callGroq(testOptions, config?.apiKey, model);
+        reply = await callGroq(testOptions, effectiveApiKey, model);
         break;
       case "gemini":
         model = model || getGeminiModel();
-        reply = await callGemini(testOptions, config?.apiKey, model);
+        reply = await callGemini(testOptions, effectiveApiKey, model);
         break;
       case "openrouter":
         model = model || getOpenRouterModel();
-        reply = await callOpenRouter(testOptions, config?.apiKey, model);
+        reply = await callOpenRouter(testOptions, effectiveApiKey, model);
         break;
       case "custom":
       case "ollama":
         model = model || "custom-model";
-        reply = await callCustomEndpoint(testOptions, config?.baseUrl, config?.apiKey, model);
+        reply = await callCustomEndpoint(testOptions, config?.baseUrl, effectiveApiKey, model);
         break;
       default:
         throw new Error(`Unsupported provider: ${provider}`);

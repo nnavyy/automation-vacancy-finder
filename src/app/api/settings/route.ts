@@ -8,7 +8,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getApiUser } from "@/lib/auth-helpers";
-import { encrypt, decrypt } from "@/lib/crypto";
+import { encrypt, decrypt, maskProviderKeys, encryptProviderKeys } from "@/lib/crypto";
 import { recordPreferenceCatalogTerms } from "@/lib/catalog/dynamic";
 import type { SearchPreferenceData } from "@/types";
 
@@ -49,20 +49,29 @@ function pick<T extends object, K extends keyof T>(obj: T, keys: K[]): Partial<T
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function serializePref(pref: any) {
   const hasHhToken = Boolean(pref.hhToken);
-  let decryptedHhToken = "";
-  if (pref.hhToken) {
-    try {
-      decryptedHhToken = decrypt(pref.hhToken);
-    } catch {
-      decryptedHhToken = "";
-    }
-  }
+  // Strictly omit raw hhToken from the JSON response to prevent credential leaks to browser/extensions
+  const { hhToken: _omittedHhToken, ...clean } = pref;
 
-  const clean = { ...pref };
+  const rawCustomConfig = typeof pref.aiProviderOrder === "object" && pref.aiProviderOrder !== null && !Array.isArray(pref.aiProviderOrder)
+    ? pref.aiProviderOrder
+    : {
+        order: Array.isArray(pref.aiProviderOrder) ? pref.aiProviderOrder : ["groq", "gemini", "openrouter"],
+        taskRouting: {
+          deepAnalysis: Array.isArray(pref.aiProviderOrder) ? pref.aiProviderOrder[0] || "groq" : "groq",
+          coverLetter: Array.isArray(pref.aiProviderOrder) ? pref.aiProviderOrder[0] || "groq" : "groq",
+        },
+        customProviders: {},
+      };
+
+  // Mask custom provider API keys so raw keys never touch client JavaScript
+  const maskedAiCustomConfig = {
+    ...rawCustomConfig,
+    customProviders: maskProviderKeys(rawCustomConfig.customProviders),
+  };
 
   return {
     ...clean,
-    hhToken: decryptedHhToken,
+    hhToken: undefined,
     hasHhToken,
     targetRoles:           Array.isArray(pref.targetRoles)           ? pref.targetRoles           : [],
     searchKeywordsEn:      Array.isArray(pref.searchKeywordsEn)      ? pref.searchKeywordsEn      : [],
@@ -78,16 +87,7 @@ function serializePref(pref: any) {
       : (typeof pref.aiProviderOrder === "object" && pref.aiProviderOrder !== null && Array.isArray((pref.aiProviderOrder as any).order)
           ? (pref.aiProviderOrder as any).order
           : ["groq", "gemini", "openrouter"]),
-    aiCustomConfig:        typeof pref.aiProviderOrder === "object" && pref.aiProviderOrder !== null && !Array.isArray(pref.aiProviderOrder)
-      ? pref.aiProviderOrder
-      : {
-          order: Array.isArray(pref.aiProviderOrder) ? pref.aiProviderOrder : ["groq", "gemini", "openrouter"],
-          taskRouting: {
-            deepAnalysis: Array.isArray(pref.aiProviderOrder) ? pref.aiProviderOrder[0] || "groq" : "groq",
-            coverLetter: Array.isArray(pref.aiProviderOrder) ? pref.aiProviderOrder[0] || "groq" : "groq",
-          },
-          customProviders: {},
-        },
+    aiCustomConfig:        maskedAiCustomConfig,
   };
 }
 
@@ -159,6 +159,11 @@ export async function GET() {
     return NextResponse.json({
       success: true,
       data: serializePref(pref),
+      systemCapabilities: {
+        hasOfficialHhOAuth: Boolean(process.env.HH_CLIENT_ID && process.env.HH_CLIENT_SECRET),
+        hasTelegramBot: Boolean(process.env.TELEGRAM_BOT_TOKEN),
+        hasEmailService: Boolean(process.env.SMTP_USER || process.env.EMAIL_USER),
+      },
       serverConfiguredProviders: getServerConfiguredProviders(),
       telegramLink: tgLink
         ? {
@@ -235,19 +240,6 @@ export async function POST(req: NextRequest) {
       if (key in body && Array.isArray((body as any)[key])) jsonFields[key] = (body as any)[key];
     }
 
-    // Handle rich AI provider config (BYOK + Task-Specific Routing)
-    if (body.aiCustomConfig) {
-      jsonFields.aiProviderOrder = {
-        order: Array.isArray(body.aiCustomConfig.order)
-          ? body.aiCustomConfig.order
-          : (Array.isArray(body.aiProviderOrder) ? body.aiProviderOrder : ["deepseek", "groq", "gemini", "openrouter"]),
-        taskRouting: body.aiCustomConfig.taskRouting || {},
-        customProviders: body.aiCustomConfig.customProviders || {},
-      };
-    }
-
-    const safeData = { ...scalarFields, ...jsonFields };
-
     let existing = null;
     if (body.id) {
       existing = await prisma.searchPreference.findFirst({
@@ -260,6 +252,31 @@ export async function POST(req: NextRequest) {
         where: { userId: user.id, isActive: true },
       });
     }
+
+    // Handle rich AI provider config (BYOK + Task-Specific Routing)
+    if (body.aiCustomConfig) {
+      const existingConfig =
+        typeof existing?.aiProviderOrder === "object" &&
+        existing?.aiProviderOrder !== null &&
+        !Array.isArray(existing.aiProviderOrder)
+          ? (existing.aiProviderOrder as any)
+          : undefined;
+
+      const encryptedProviders = encryptProviderKeys(
+        body.aiCustomConfig.customProviders,
+        existingConfig?.customProviders
+      );
+
+      jsonFields.aiProviderOrder = {
+        order: Array.isArray(body.aiCustomConfig.order)
+          ? body.aiCustomConfig.order
+          : (Array.isArray(body.aiProviderOrder) ? body.aiProviderOrder : ["deepseek", "groq", "gemini", "openrouter"]),
+        taskRouting: body.aiCustomConfig.taskRouting || {},
+        customProviders: encryptedProviders,
+      };
+    }
+
+    const safeData = { ...scalarFields, ...jsonFields };
 
     if (existing) {
       const updated = await prisma.searchPreference.update({

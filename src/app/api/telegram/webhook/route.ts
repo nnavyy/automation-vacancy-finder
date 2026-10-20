@@ -12,6 +12,7 @@ import { buildAnalysisPrompt, parseAIResponse } from "@/lib/aiAnalyzer";
 import { callAI } from "@/lib/aiProviderRouter";
 import { getSimilarFeedbackExamples } from "@/lib/feedbackLearning";
 import { BRAND_NAME } from "@/lib/brand";
+import { safeEqual } from "@/lib/timingSafe";
 import type { NormalizedVacancy, HHSalary } from "@/types";
 
 // ── Direct Telegram API call (no external deps) ──────────────
@@ -278,10 +279,20 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   console.log("[Webhook] ── Incoming POST ──");
 
-  const secretHeader = req.headers.get("x-telegram-bot-api-secret-token");
-  if (process.env.TELEGRAM_WEBHOOK_SECRET && secretHeader !== process.env.TELEGRAM_WEBHOOK_SECRET) {
-    console.warn("[Webhook] Invalid secret token header");
-    return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  const webhookSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
+  if (!webhookSecret) {
+    if (process.env.NODE_ENV === "development") {
+      console.warn("[Webhook Dev] Warning: TELEGRAM_WEBHOOK_SECRET is not set. Allowing request in development mode.");
+    } else {
+      console.error("[Webhook] TELEGRAM_WEBHOOK_SECRET is not configured on the server. Rejecting request.");
+      return NextResponse.json({ ok: false, error: "Webhook secret is not configured" }, { status: 503 });
+    }
+  } else {
+    const secretHeader = req.headers.get("x-telegram-bot-api-secret-token") || "";
+    if (!safeEqual(secretHeader, webhookSecret)) {
+      console.warn("[Webhook] Invalid secret token header");
+      return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+    }
   }
 
   try {

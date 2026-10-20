@@ -7,7 +7,7 @@
 
 import crypto from "crypto";
 import prisma from "@/lib/db";
-import { collectAllVacancies, fetchVacancyJsonLd } from "@/lib/hhPublicVacancyClient";
+import { collectAllVacancies, fetchVacancyJsonLd, MAX_VACANCIES_PER_USER } from "@/lib/hhPublicVacancyClient";
 import { passesBasicFilter } from "@/lib/ruleFilter";
 import { calculateRuleScore } from "@/lib/scoring";
 import { getSimilarFeedbackExamples } from "@/lib/feedbackLearning";
@@ -194,10 +194,23 @@ export async function runCollectionPipeline(
       }
     };
 
+    // ── 100-vacancy cap guard (hoisted once outside loop to eliminate query explosion) ──
+    let activeVacancyCount = await prisma.vacancy.count({
+      where: {
+        userId,
+        status: { notIn: ["ignored", "low_priority", "closed"] },
+        NOT: { hhId: { startsWith: "manual-" } },
+      },
+    });
+
     const processSingleVacancy = async (vacancy: NormalizedVacancy) => {
       if (Date.now() > deadline) return;
 
       try {
+        if (activeVacancyCount >= MAX_VACANCIES_PER_USER) {
+          // Soft cap reached — stop accepting new vacancies for this run
+          return;
+        }
         let dbVacancyId: string;
 
         const existing = await prisma.vacancy.findFirst({
@@ -318,7 +331,7 @@ export async function runCollectionPipeline(
             matchScore: ruleScore.score,
             ruleScore: ruleScore.score,
             recommendation: ruleScore.score >= 70 ? "apply" : ruleScore.score >= 45 ? "maybe" : "skip",
-            aiStatus: "rule_based_only",
+            aiStatus: "pending_ai",
             bestLanguage: pref.coverLetterLanguage || "ru",
             summary: `Rule-based match score: ${ruleScore.score}/100.`,
             matchReasons: ruleScore.reasons,
@@ -327,9 +340,6 @@ export async function runCollectionPipeline(
             ruleScore: ruleScore.score,
           },
         });
-        await prisma.vacancy.update({ where: { id: dbVacancyId }, data: { status: "analyzed" } });
-        summary.analyzed++;
-        await reportProgress();
 
         // ── AI analysis ────────────────────────────────────────
         const { positive, negative } = await getSimilarFeedbackExamples(vacancy, pref.userId);
@@ -363,7 +373,10 @@ export async function runCollectionPipeline(
         await reportProgress();
 
         // ── Telegram notification ──────────────────────────────
+        // Defer notification if AI status is pending retry to prevent degraded rule-only alerts
+        const isPendingAi = aiStatus === "pending_ai" || aiStatus === "pending_limit";
         const shouldNotify =
+          !isPendingAi &&
           analysis.match_score >= pref.minimumScoreToNotify &&
           todayNotifiedCount < pref.maxNotificationsPerDay;
 

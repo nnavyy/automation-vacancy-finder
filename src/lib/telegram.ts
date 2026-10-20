@@ -23,11 +23,19 @@ const TELEGRAM_API_BASE = "https://api.telegram.org";
  * @param text - Raw string to escape
  * @returns HTML-safe string
  */
-function escapeHtml(text: string): string {
+export function escapeHtml(text: string): string {
   return text
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
+}
+
+/**
+ * Truncates plain text strings before HTML escaping to avoid slicing inside tags or entities.
+ */
+export function truncateString(str: string, maxLen: number): string {
+  if (!str || str.length <= maxLen) return str || "";
+  return `${str.slice(0, Math.max(0, maxLen - 1))}…`;
 }
 
 /**
@@ -76,11 +84,16 @@ export async function sendMessage(
   customChatId?: string
 ): Promise<boolean> {
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
-  const chatId = customChatId || process.env.TELEGRAM_CHAT_ID;
+  // Multi-tenant protection: do not leak notifications to deployer's TELEGRAM_CHAT_ID
+  // unless explicitly configured for single-user dev environments
+  const allowDeployerFallback =
+    process.env.NODE_ENV === "development" ||
+    process.env.ALLOW_SINGLE_USER_TELEGRAM_FALLBACK === "true";
+  const chatId = customChatId || (allowDeployerFallback ? process.env.TELEGRAM_CHAT_ID : undefined);
 
   if (!botToken || !chatId) {
     console.error(
-      "[Telegram] TELEGRAM_BOT_TOKEN and/or TELEGRAM_CHAT_ID are not set. " +
+      "[Telegram] TELEGRAM_BOT_TOKEN and/or recipient chatId are not available. " +
         "Cannot send message."
     );
     return false;
@@ -167,7 +180,7 @@ export async function sendMessage(
  * @param vacancyId - Internal DB ID used in callback_data payloads
  * @returns true if the Telegram message was delivered successfully
  */
-function buildVacancyNotificationPayload(
+export function buildVacancyNotificationPayload(
   vacancy: NormalizedVacancy,
   rawAnalysis: AIAnalysisResult | Record<string, unknown> | null | undefined,
   vacancyId: string,
@@ -183,11 +196,11 @@ function buildVacancyNotificationPayload(
   };
   const recommendationIcon = recTag[recRaw] ?? `[${recRaw.toUpperCase()}]`;
 
-  // ── Format match reasons ──────────────────────────────────
+  // ── Format match reasons (truncated individually before escaping) ────────
   const matchReasonsRaw =
     (analysis as any).match_reasons ?? (analysis as any).matchReasons;
   const matchReasonsList: string[] = Array.isArray(matchReasonsRaw)
-    ? matchReasonsRaw.map((r) => String(r))
+    ? matchReasonsRaw.slice(0, 5).map((r) => truncateString(String(r).trim(), 120))
     : [];
   const matchReasonsText =
     matchReasonsList.length > 0
@@ -198,7 +211,7 @@ function buildVacancyNotificationPayload(
   const missingRaw =
     (analysis as any).missing_requirements ?? (analysis as any).missingRequirements;
   const missingList: string[] = Array.isArray(missingRaw)
-    ? missingRaw.map((m) => String(m))
+    ? missingRaw.slice(0, 5).map((m) => truncateString(String(m).trim(), 120))
     : [];
   const missingText =
     missingList.length > 0
@@ -208,7 +221,7 @@ function buildVacancyNotificationPayload(
   // ── Format red flags ──────────────────────────────────────
   const redFlagsRaw =
     (analysis as any).red_flags ?? (analysis as any).redFlags;
-  const redFlagsList: any[] = Array.isArray(redFlagsRaw) ? redFlagsRaw : [];
+  const redFlagsList: any[] = Array.isArray(redFlagsRaw) ? redFlagsRaw.slice(0, 4) : [];
   const redFlagTag: Record<string, string> = {
     high: isRu ? "[ВЫСОКИЙ]" : "[HIGH]",
     medium: isRu ? "[СРЕДНИЙ]" : "[MEDIUM]",
@@ -220,22 +233,21 @@ function buildVacancyNotificationPayload(
           .map((f) => {
             const sev = (f.severity || "info").toString().toLowerCase();
             const tag = redFlagTag[sev] ?? "[ALERT]";
-            const trigger = f.trigger_text ? `${f.trigger_text}: ` : "";
-            const reason = f.reason || "";
+            const trigger = f.trigger_text ? `${truncateString(f.trigger_text, 40)}: ` : "";
+            const reason = truncateString(f.reason || "", 120);
             return `  ${tag} ${trigger}${reason}`;
           })
           .join("\n")
       : (isRu ? "  Не обнаружено" : "  None detected");
 
-  // ── Cover letter preview (max 200 chars) ─────────────────
+  // ── Cover letter preview (pre-truncated to safe length) ────
   const coverLetterRaw =
     (analysis as any).cover_letter ?? (analysis as any).coverLetter;
   const coverLetterStr =
     typeof coverLetterRaw === "string" ? coverLetterRaw.trim() : "";
-  const coverPreview =
-    coverLetterStr.length > 200
-      ? `${coverLetterStr.slice(0, 200)}…`
-      : coverLetterStr || (isRu ? "Сопроводительное письмо в панели" : "Cover letter available in dashboard");
+  const coverPreview = coverLetterStr
+    ? truncateString(coverLetterStr, 220)
+    : (isRu ? "Сопроводительное письмо в панели" : "Cover letter available in dashboard");
 
   const score =
     (analysis as any).match_score ?? (analysis as any).matchScore ?? 0;
@@ -243,16 +255,24 @@ function buildVacancyNotificationPayload(
   const bestLang =
     (analysis as any).best_language ?? (analysis as any).bestLanguage ?? (isRu ? "Русский" : "Russian");
 
+  // ── Pre-truncate headers and details before HTML escaping ───
+  const cleanTitle = truncateString(vacancy.title || (isRu ? "Без названия" : "Untitled Vacancy"), 120);
+  const cleanCompany = truncateString(vacancy.company ?? (isRu ? "Не указано" : "Not specified"), 80);
+  const cleanArea = truncateString(vacancy.area ?? (isRu ? "Удалённо / Не указано" : "Remote / Not specified"), 80);
+  const cleanSalary = formatSalary(vacancy.salary, lang);
+  const cleanExp = truncateString(vacancy.experience ?? (isRu ? "Не указано" : "Not specified"), 50);
+  const cleanSchedule = truncateString(vacancy.schedule ?? (isRu ? "Не указано" : "Not specified"), 50);
+
   // ── Compose the full message ──────────────────────────────
   let message = [
     `<b>${isRu ? "[Подходящая вакансия] HeadHunter" : "[Job Match] HeadHunter"}</b>`,
     ``,
-    `<b>${isRu ? "Должность:" : "Role:"}</b> ${escapeHtml(vacancy.title || (isRu ? "Без названия" : "Untitled Vacancy"))}`,
-    `<b>${isRu ? "Компания:" : "Company:"}</b> ${escapeHtml(vacancy.company ?? (isRu ? "Не указано" : "Not specified"))}`,
-    `<b>${isRu ? "Локация:" : "Location:"}</b> ${escapeHtml(vacancy.area ?? (isRu ? "Удалённо / Не указано" : "Remote / Not specified"))}`,
-    `<b>${isRu ? "Зарплата:" : "Salary:"}</b> ${formatSalary(vacancy.salary, lang)}`,
-    `<b>${isRu ? "Опыт:" : "Experience:"}</b> ${escapeHtml(vacancy.experience ?? (isRu ? "Не указано" : "Not specified"))}`,
-    `<b>${isRu ? "Формат:" : "Format:"}</b> ${escapeHtml(vacancy.schedule ?? (isRu ? "Не указано" : "Not specified"))}`,
+    `<b>${isRu ? "Должность:" : "Role:"}</b> ${escapeHtml(cleanTitle)}`,
+    `<b>${isRu ? "Компания:" : "Company:"}</b> ${escapeHtml(cleanCompany)}`,
+    `<b>${isRu ? "Локация:" : "Location:"}</b> ${escapeHtml(cleanArea)}`,
+    `<b>${isRu ? "Зарплата:" : "Salary:"}</b> ${escapeHtml(cleanSalary)}`,
+    `<b>${isRu ? "Опыт:" : "Experience:"}</b> ${escapeHtml(cleanExp)}`,
+    `<b>${isRu ? "Формат:" : "Format:"}</b> ${escapeHtml(cleanSchedule)}`,
     ``,
     `<b>${isRu ? "Совместимость:" : "Score:"}</b> ${score}/100  |  <b>${isRu ? "Уверенность:" : "Confidence:"}</b> ${confidence}%`,
     `<b>${isRu ? "Рекомендация:" : "Recommendation:"}</b> ${recommendationIcon} <b>${recRaw.toUpperCase()}</b>`,
@@ -272,9 +292,12 @@ function buildVacancyNotificationPayload(
     `<i>${escapeHtml(coverPreview)}</i>`,
   ].join("\n");
 
-  // Enforce Telegram 4096 character safety limit
-  if (message.length > 4000) {
-    message = `${message.slice(0, 3950)}…\n<i>(truncated)</i>`;
+  // Non-destructive fallback if message ever approaches Telegram limit
+  if (message.length > 3900) {
+    message = message.replace(
+      /<i>[\s\S]*?<\/i>/,
+      `<i>${escapeHtml(isRu ? "(Текст письма доступен в панели управления)" : "(Cover letter viewable in dashboard)")}</i>`
+    );
   }
 
   // ── Inline keyboard ───────────────────────────────────────

@@ -1,22 +1,32 @@
 import React from "react";
 
-interface BrandLogoProps {
+export interface BrandLogoProps {
   size?: number;
   className?: string;
   showBackground?: boolean;
+  variant?: "dark" | "light" | "auto";
 }
 
 /**
  * Official Brand Logo for HH Job Copilot
  * "The Kinetic Chevrons" (Concept C - Official Brand Identity)
- * Inspired by tech platforms (ClickUp, CapCut, Atlassian) & AI tools
- * Represents rapid career launch, forward momentum, and dynamic 'H' structure.
+ * Available in both Dark and Light versions with Apple-inspired precision.
  */
 export function BrandLogo({
   size = 28,
   className = "",
   showBackground = true,
+  variant = "dark",
 }: BrandLogoProps) {
+  const isLight = variant === "light";
+
+  // Light vs Dark palettes
+  const bgFill = isLight ? "#F5F5F7" : "#0E1015";
+  const bgStroke = isLight ? "rgba(0, 0, 0, 0.08)" : "#202A24";
+  const upperDartFill = isLight ? "#18181B" : "#FFFFFF";
+  const lowerChevronFill = isLight ? "#059669" : "#10B981";
+  const beaconFill = isLight ? "#10B981" : "#34D399";
+
   return (
     <svg
       width={size}
@@ -25,18 +35,18 @@ export function BrandLogo({
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       className={className}
-      aria-label="HH Job Copilot Logo"
+      aria-label={`HH Job Copilot Logo (${isLight ? "Light" : "Dark"})`}
     >
       {showBackground && (
         <>
-          <rect width="100" height="100" rx="22" fill="#0E1015" />
+          <rect width="100" height="100" rx="22" fill={bgFill} />
           <rect
             x="0.5"
             y="0.5"
             width="99"
             height="99"
             rx="21.5"
-            stroke="#202A24"
+            stroke={bgStroke}
             strokeWidth="1"
           />
         </>
@@ -46,17 +56,31 @@ export function BrandLogo({
       {/* Lower Chevron (Emerald Base) */}
       <path
         d="M 22 68 L 50 44 L 78 68 L 78 56 L 50 32 L 22 56 Z"
-        fill="#10B981"
+        fill={lowerChevronFill}
       />
-      {/* Upper Precision Dart (Pure White) */}
+      {/* Upper Precision Dart */}
       <path
         d="M 32 44 L 50 28 L 68 44 L 68 34 L 50 18 L 32 34 Z"
-        fill="#FFFFFF"
+        fill={upperDartFill}
       />
       {/* Target Launch Beacon Apex */}
-      <circle cx="50" cy="74" r="4.5" fill="#34D399" />
+      <circle cx="50" cy="74" r="4.5" fill={beaconFill} />
     </svg>
   );
+}
+
+/**
+ * Dedicated Light Mode Logo export
+ */
+export function BrandLogoLight(props: Omit<BrandLogoProps, "variant">) {
+  return <BrandLogo {...props} variant="light" />;
+}
+
+/**
+ * Dedicated Dark Mode Logo export
+ */
+export function BrandLogoDark(props: Omit<BrandLogoProps, "variant">) {
+  return <BrandLogo {...props} variant="dark" />;
 }
 
 /**

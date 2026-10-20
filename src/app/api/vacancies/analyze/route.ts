@@ -79,14 +79,22 @@ export async function POST(req: NextRequest) {
     const { positive, negative } = await getSimilarFeedbackExamples(vacancy, user.id);
     const similarFeedback = [...positive, ...negative];
 
-    // Fetch user's active search preference
+    // Fetch user's active search preference (strictly isolated to current user)
     const pref = await prisma.searchPreference.findFirst({
       where: { userId: user.id, isActive: true },
-    }) || await prisma.searchPreference.findFirst({
-      where: { isActive: true },
     });
 
-    const prefData = pref ? toSearchPrefData(pref) : undefined;
+    if (!pref) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "No active search profile found. Please configure and activate a search profile in Settings first.",
+        },
+        { status: 400 }
+      );
+    }
+
+    const prefData = toSearchPrefData(pref);
 
     // Run AI analysis
     const { analysis, provider, model, aiStatus } = await analyzeVacancy(
@@ -124,12 +132,12 @@ export async function POST(req: NextRequest) {
     let finalStatus = "analyzed";
 
     // ── Dispatch Telegram notification if score meets threshold ──
-    const minScoreToNotify = pref?.minimumScoreToNotify ?? 75;
+    const minScoreToNotify = pref.minimumScoreToNotify ?? 75;
     if (analysis.match_score >= minScoreToNotify) {
       const link = await prisma.telegramLink.findFirst({
         where: { userId: user.id, isActive: true },
       });
-      const chatId = link?.telegramChatId || process.env.TELEGRAM_CHAT_ID;
+      const chatId = link?.telegramChatId;
       if (chatId) {
         const sent = await sendVacancyNotificationToUser(
           vacancy,

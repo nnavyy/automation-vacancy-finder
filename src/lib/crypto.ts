@@ -64,3 +64,91 @@ export function decrypt(ciphertext: string): string {
     return "";
   }
 }
+
+/**
+ * Masks a secret string (e.g. API key or token) so it can be safely sent to the client.
+ * Example: "sk-proj-1234567890abcdef" -> "sk-p***cdef"
+ */
+export function maskSecret(secret?: string | null): string {
+  if (!secret) return "";
+  const raw = secret.startsWith("enc:") ? decrypt(secret) : secret;
+  if (!raw) return "";
+  if (raw.length <= 8) return "***";
+  const start = raw.slice(0, 4);
+  const end = raw.slice(-4);
+  return `${start}***${end}`;
+}
+
+/**
+ * Masks all API keys in a custom providers map for safe JSON serialization to the browser.
+ */
+export function maskProviderKeys(
+  customProviders?: Record<string, any> | null
+): Record<string, any> {
+  if (!customProviders || typeof customProviders !== "object") return {};
+  const masked: Record<string, any> = {};
+  for (const [provider, config] of Object.entries(customProviders)) {
+    if (!config || typeof config !== "object") {
+      masked[provider] = config;
+      continue;
+    }
+    masked[provider] = {
+      ...config,
+      apiKey: config.apiKey ? maskSecret(config.apiKey) : "",
+      hasApiKey: Boolean(config.apiKey),
+    };
+  }
+  return masked;
+}
+
+/**
+ * Encrypts all plaintext API keys in a custom providers map before saving to the database.
+ * If incoming key contains '***' or is empty, preserves the existing encrypted key.
+ */
+export function encryptProviderKeys(
+  newProviders?: Record<string, any> | null,
+  existingProviders?: Record<string, any> | null
+): Record<string, any> {
+  if (!newProviders || typeof newProviders !== "object") return {};
+  const encrypted: Record<string, any> = { ...newProviders };
+
+  for (const [provider, config] of Object.entries(encrypted)) {
+    if (!config || typeof config !== "object") continue;
+    const incomingKey = typeof config.apiKey === "string" ? config.apiKey.trim() : "";
+    const oldConfig = existingProviders?.[provider];
+    const oldKey = typeof oldConfig?.apiKey === "string" ? oldConfig.apiKey : "";
+
+    if (incomingKey.includes("***") || incomingKey === "") {
+      // Retain existing key from DB
+      if (oldKey) {
+        encrypted[provider] = { ...config, apiKey: oldKey };
+      }
+    } else if (!incomingKey.startsWith("enc:")) {
+      // New plaintext key entered -> encrypt it
+      encrypted[provider] = { ...config, apiKey: encrypt(incomingKey) };
+    }
+  }
+
+  return encrypted;
+}
+
+/**
+ * Decrypts all API keys in a custom providers map for backend execution (e.g. calling LLMs).
+ */
+export function decryptProviderKeys(
+  customProviders?: Record<string, any> | null
+): Record<string, any> {
+  if (!customProviders || typeof customProviders !== "object") return {};
+  const decrypted: Record<string, any> = {};
+  for (const [provider, config] of Object.entries(customProviders)) {
+    if (!config || typeof config !== "object") {
+      decrypted[provider] = config;
+      continue;
+    }
+    decrypted[provider] = {
+      ...config,
+      apiKey: config.apiKey ? decrypt(config.apiKey) : undefined,
+    };
+  }
+  return decrypted;
+}

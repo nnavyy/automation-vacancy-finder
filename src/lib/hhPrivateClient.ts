@@ -13,6 +13,33 @@ const BROWSER_USER_AGENT =
 const API_USER_AGENT =
   process.env.HH_USER_AGENT || "VacancyAssistant/2.0 (automation-client@vacancy-finder.io)";
 
+export type HHAuthType = "oauth_bearer" | "cookie_session";
+
+/**
+ * Detects whether the provided credential is an official OAuth Bearer token or a web browser cookie string.
+ */
+export function detectHHAuthType(tokenOrCookie: string): HHAuthType {
+  if (!tokenOrCookie) return "cookie_session";
+  const clean = tokenOrCookie.trim();
+  if (clean.startsWith("oauth:")) return "oauth_bearer";
+  // If user pasted a cookie string (contains ; or = or starts with hhtoken/hhuid)
+  if (clean.includes(";") || clean.includes("=") || clean.startsWith("hhtoken") || clean.startsWith("hhuid")) {
+    return "cookie_session";
+  }
+  // Standalone bearer tokens without semicolons or equals (>= 32 chars)
+  if (clean.length >= 32) {
+    return "oauth_bearer";
+  }
+  return "cookie_session";
+}
+
+/**
+ * Extracts a clean OAuth Bearer token string without prefixes.
+ */
+export function getCleanOAuthToken(token: string): string {
+  return token.replace(/^oauth:/i, "").trim();
+}
+
 /**
  * Cleans and formats the HH cookie string.
  * Supports:
@@ -26,6 +53,11 @@ export function formatHHCookies(cookieString: string): string {
   let clean = cookieString.replace(/^['"]|['"]$/g, "").trim();
   // Strip "Cookie: " prefix if copied directly from Request Headers
   clean = clean.replace(/^cookie:\s*/i, "").trim();
+
+  // If this is an OAuth Bearer token, return it as-is without corrupting it with hhtoken=
+  if (detectHHAuthType(clean) === "oauth_bearer") {
+    return clean;
+  }
 
   // If user pasted only the raw token value (no key=value format)
   if (!clean.includes("=") && !clean.includes(";")) {
@@ -174,13 +206,42 @@ function extractHHInitialState(html: string): Record<string, any> | null {
  * Fetches the list of active resumes for the authenticated user by scraping the web UI.
  * Supports both raw token values and full cookie strings.
  */
-export async function fetchMyResumes(cookieString: string): Promise<HHResume[]> {
+export async function fetchMyResumes(tokenOrCookie: string): Promise<HHResume[]> {
   try {
-    const formattedCookies = formatHHCookies(cookieString);
-    if (!formattedCookies) {
+    if (!tokenOrCookie || !tokenOrCookie.trim()) {
       throw new Error("HH.ru Token/Cookie is empty. Please provide your hhtoken or cookie string.");
     }
 
+    // Branch 1: Official OAuth REST API
+    if (detectHHAuthType(tokenOrCookie) === "oauth_bearer") {
+      const bearer = getCleanOAuthToken(tokenOrCookie);
+      const res = await axios.get("https://api.hh.ru/resumes/mine", {
+        headers: {
+          Authorization: `Bearer ${bearer}`,
+          "User-Agent": API_USER_AGENT,
+        },
+        timeout: 15000,
+        validateStatus: () => true,
+      });
+
+      if (res.status === 200 && Array.isArray(res.data?.items)) {
+        return res.data.items.map((r: any) => ({
+          id: r.id,
+          title: r.title || "Untitled Resume",
+          updated_at: r.updated_at || new Date().toISOString(),
+          url: r.alternate_url || `https://hh.ru/resume/${r.id}`,
+          status: { id: r.status?.id || "published", name: r.status?.name || "Active" },
+        }));
+      }
+
+      if (res.status === 401 || res.status === 403) {
+        throw new Error("HeadHunter OAuth access token has expired or is invalid.");
+      }
+      throw new Error(`HH.ru REST API returned HTTP status ${res.status}`);
+    }
+
+    // Branch 2: Web scraping via session cookies
+    const formattedCookies = formatHHCookies(tokenOrCookie);
     const res = await axios.get("https://hh.ru/applicant/resumes", {
       headers: getWebHeaders(formattedCookies, "https://hh.ru/"),
       timeout: 15000,
@@ -277,14 +338,36 @@ export async function fetchMyResumes(cookieString: string): Promise<HHResume[]> 
  * Fetches the user's HH.ru profile and analytics (applications count) by scraping the web UI.
  */
 export async function fetchHHProfile(
-  cookieString: string
+  tokenOrCookie: string
 ): Promise<{ name: string | null; avatar: string | null; totalApplications: number }> {
   try {
-    const formattedCookies = formatHHCookies(cookieString);
-    if (!formattedCookies) {
+    if (!tokenOrCookie || !tokenOrCookie.trim()) {
       return { name: null, avatar: null, totalApplications: 0 };
     }
 
+    // Branch 1: Official OAuth REST API
+    if (detectHHAuthType(tokenOrCookie) === "oauth_bearer") {
+      const bearer = getCleanOAuthToken(tokenOrCookie);
+      let name: string | null = null;
+      try {
+        const meRes = await axios.get("https://api.hh.ru/me", {
+          headers: {
+            Authorization: `Bearer ${bearer}`,
+            "User-Agent": API_USER_AGENT,
+          },
+          timeout: 10000,
+          validateStatus: () => true,
+        });
+        if (meRes.status === 200 && meRes.data) {
+          name = `${meRes.data.first_name || ""} ${meRes.data.last_name || ""}`.trim() || null;
+        }
+      } catch {}
+
+      return { name, avatar: null, totalApplications: 0 };
+    }
+
+    // Branch 2: Web scraping via session cookies
+    const formattedCookies = formatHHCookies(tokenOrCookie);
     const headers = getWebHeaders(formattedCookies, "https://hh.ru/");
 
     // Fetch resumes / profile page for profile info
@@ -426,14 +509,51 @@ export interface HHSyncHistoryResult {
 /**
  * Scrapes all history of applications from HH.ru.
  */
-export async function syncHHHistory(cookieString: string): Promise<HHSyncHistoryResult> {
+export async function syncHHHistory(tokenOrCookie: string): Promise<HHSyncHistoryResult> {
   const history: any[] = [];
   try {
-    const formattedCookies = formatHHCookies(cookieString);
-    if (!formattedCookies) {
-      return { success: false, history: [], error: "No HeadHunter session cookie provided." };
+    if (!tokenOrCookie || !tokenOrCookie.trim()) {
+      return { success: false, history: [], error: "No HeadHunter session cookie or token provided." };
     }
 
+    // Branch 1: Official OAuth REST API
+    if (detectHHAuthType(tokenOrCookie) === "oauth_bearer") {
+      const bearer = getCleanOAuthToken(tokenOrCookie);
+      const res = await axios.get("https://api.hh.ru/negotiations", {
+        headers: {
+          Authorization: `Bearer ${bearer}`,
+          "User-Agent": API_USER_AGENT,
+        },
+        timeout: 15000,
+        validateStatus: () => true,
+      });
+
+      if (res.status === 200 && Array.isArray(res.data?.items)) {
+        for (const item of res.data.items) {
+          history.push({
+            title: item.vacancy?.name || "Untitled Vacancy",
+            company: item.vacancy?.employer?.name || "Unknown Company",
+            status: item.state?.name || "applied",
+            url: item.vacancy?.alternate_url || "",
+            appliedAt: item.created_at ? new Date(item.created_at) : new Date(),
+          });
+        }
+        return { success: true, history };
+      }
+
+      if (res.status === 401 || res.status === 403) {
+        return {
+          success: false,
+          history: [],
+          sessionExpired: true,
+          error: "HeadHunter OAuth access token has expired or is invalid.",
+        };
+      }
+      return { success: false, history: [], error: `HH.ru API returned status ${res.status}` };
+    }
+
+    // Branch 2: Web scraping via session cookies
+    const formattedCookies = formatHHCookies(tokenOrCookie);
     let page = 0;
     let hasMore = true;
 
@@ -646,10 +766,9 @@ export async function applyToVacancy(
   vacancyId: string,
   message: string
 ): Promise<boolean> {
-  const clean = formatHHCookies(tokenOrCookie);
-
   // If token is an official OAuth Bearer token
-  if (!clean.includes(";") && clean.length > 40 && !clean.includes("hhtoken=")) {
+  if (detectHHAuthType(tokenOrCookie) === "oauth_bearer") {
+    const bearer = getCleanOAuthToken(tokenOrCookie);
     try {
       const params = new URLSearchParams();
       params.append("vacancy_id", vacancyId);
@@ -659,7 +778,7 @@ export async function applyToVacancy(
       const res = await axios.post("https://api.hh.ru/negotiations", params, {
         headers: {
           "User-Agent": API_USER_AGENT,
-          Authorization: `Bearer ${clean}`,
+          Authorization: `Bearer ${bearer}`,
           "Content-Type": "application/x-www-form-urlencoded",
         },
         timeout: 10000,
@@ -673,6 +792,8 @@ export async function applyToVacancy(
       throw new Error(error.response?.data?.description || "Failed to apply via HH.ru REST API.");
     }
   }
+
+  const clean = formatHHCookies(tokenOrCookie);
 
   // Attempt apply via web form
   try {
@@ -717,16 +838,68 @@ export interface HHSessionCheckResult {
   };
 }
 
-/**
- * Checks whether the current HeadHunter session cookies are active and valid using a fast single request.
- */
-export async function checkHHSession(cookieString: string): Promise<HHSessionCheckResult> {
+export async function checkHHSession(tokenOrCookie: string): Promise<HHSessionCheckResult> {
   try {
-    const formatted = formatHHCookies(cookieString);
-    if (!formatted) {
+    if (!tokenOrCookie || !tokenOrCookie.trim()) {
       return { active: false, error: "No cookie/token configured." };
     }
 
+    // Branch 1: Official OAuth REST API
+    if (detectHHAuthType(tokenOrCookie) === "oauth_bearer") {
+      const bearer = getCleanOAuthToken(tokenOrCookie);
+      const res = await axios.get("https://api.hh.ru/resumes/mine", {
+        headers: {
+          Authorization: `Bearer ${bearer}`,
+          "User-Agent": API_USER_AGENT,
+        },
+        timeout: 10000,
+        validateStatus: () => true,
+      });
+
+      if (res.status === 200 && Array.isArray(res.data?.items)) {
+        const resumes: HHResume[] = res.data.items.map((r: any) => ({
+          id: r.id,
+          title: r.title || "Untitled Resume",
+          updated_at: r.updated_at || new Date().toISOString(),
+          url: r.alternate_url || `https://hh.ru/resume/${r.id}`,
+          status: { id: r.status?.id || "published", name: r.status?.name || "Active" },
+        }));
+
+        let profileName: string | null = null;
+        try {
+          const meRes = await axios.get("https://api.hh.ru/me", {
+            headers: {
+              Authorization: `Bearer ${bearer}`,
+              "User-Agent": API_USER_AGENT,
+            },
+            timeout: 5000,
+            validateStatus: () => true,
+          });
+          if (meRes.status === 200 && meRes.data) {
+            profileName = `${meRes.data.first_name || ""} ${meRes.data.last_name || ""}`.trim() || null;
+          }
+        } catch {}
+
+        return {
+          active: true,
+          resumes,
+          profile: {
+            name: profileName,
+            avatar: null,
+            totalApplications: 0,
+          },
+        };
+      }
+
+      if (res.status === 401 || res.status === 403) {
+        return { active: false, error: "HeadHunter OAuth access token has expired or is invalid." };
+      }
+
+      return { active: false, error: `HH.ru API returned status ${res.status}` };
+    }
+
+    // Branch 2: Web scraping via session cookies
+    const formatted = formatHHCookies(tokenOrCookie);
     const res = await axios.get("https://hh.ru/applicant/resumes", {
       headers: getWebHeaders(formatted, "https://hh.ru/"),
       timeout: 10000,

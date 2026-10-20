@@ -221,4 +221,4 @@ export type VacancyStatus =
   | "ignored"
   | "low_priority";
 
-export type AIStatus = "completed" | "pending_limit" | "failed" | "rule_based_only";
+export type AIStatus = "completed" | "pending_limit" | "pending_ai" | "failed" | "rule_based_only";

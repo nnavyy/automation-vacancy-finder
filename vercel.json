@@ -4,6 +4,14 @@
     {
       "path": "/api/cron/collect-vacancies",
       "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/notify-pending",
+      "schedule": "0 */2 * * *"
+    },
+    {
+      "path": "/api/cron/sync-negotiations",
+      "schedule": "0 */4 * * *"
     }
   ]
 }

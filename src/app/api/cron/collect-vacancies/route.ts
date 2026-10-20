@@ -10,15 +10,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { runCollectionPipeline } from "@/lib/collectionPipeline";
 import prisma from "@/lib/db";
+import { safeEqual } from "@/lib/timingSafe";
 
 export const maxDuration = 300;
 
 export async function GET(req: NextRequest) {
   // ── Auth ──────────────────────────────────────────────────
   const cronSecret = process.env.CRON_SECRET;
-  const authHeader = req.headers.get("authorization");
+  const authHeader = req.headers.get("authorization") || "";
 
-  if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
+  if (!cronSecret || !safeEqual(authHeader, `Bearer ${cronSecret}`)) {
     return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
   }
 

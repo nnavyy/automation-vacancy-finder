@@ -2,14 +2,15 @@ import { NextResponse } from "next/server";
 import { syncHHHistory } from "@/lib/hhPrivateClient";
 import prisma from "@/lib/db";
 import { decrypt } from "@/lib/crypto";
+import { safeEqual } from "@/lib/timingSafe";
 
 // GET /api/cron/sync-negotiations
 // This endpoint is meant to be called periodically (e.g. by n8n or Vercel Cron)
 export async function GET(req: Request) {
   try {
     const cronSecret = process.env.CRON_SECRET;
-    const authHeader = req.headers.get("authorization");
-    if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
+    const authHeader = req.headers.get("authorization") || "";
+    if (!cronSecret || !safeEqual(authHeader, `Bearer ${cronSecret}`)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
