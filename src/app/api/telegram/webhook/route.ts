@@ -142,6 +142,31 @@ async function handleLinkAccount(tokenCandidate: string, chatId: string, usernam
     const isRu = (pref as any)?.language === "ru" || pref?.coverLetterLanguage === "Russian" || link.language === "ru";
     const userLang = isRu ? "ru" : "en";
 
+    // 1. Release this telegramChatId if it was bound to an older or different token
+    await prisma.telegramLink.updateMany({
+      where: {
+        telegramChatId: chatId,
+        id: { not: link.id },
+      },
+      data: {
+        telegramChatId: null,
+        isActive: false,
+      },
+    });
+
+    // 2. Deactivate any previous tokens belonging to this user
+    await prisma.telegramLink.updateMany({
+      where: {
+        userId: link.userId,
+        id: { not: link.id },
+      },
+      data: {
+        telegramChatId: null,
+        isActive: false,
+      },
+    });
+
+    // 3. Atomically bind current token to this telegram user
     await prisma.telegramLink.update({
       where: { id: link.id },
       data: {

@@ -74,10 +74,10 @@ export async function POST() {
     return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
   }
   try {
-    // Deactivate previous tokens for this user
+    // Deactivate previous tokens for this user and clear chatId to prevent @unique constraint collisions
     await prisma.telegramLink.updateMany({
       where: { userId: user.id },
-      data:  { isActive: false },
+      data:  { isActive: false, telegramChatId: null },
     });
 
     const pref = await prisma.searchPreference.findFirst({
