@@ -22,8 +22,8 @@ export default async function Home({ searchParams }: HomePageProps) {
   const resolvedParams = searchParams ? await searchParams : {};
   const isPreview = resolvedParams.preview === "true" || resolvedParams.preview === "landing";
 
-  // If a whitelisted user visits '/', immediately take them to /dashboard unless previewing
-  if (isWhitelisted && !isPreview) {
+  // If maintenance lockdown is active, authorized testers are routed to /dashboard unless previewing
+  if (IS_MAINTENANCE_LOCKDOWN && isWhitelisted && !isPreview) {
     redirect("/dashboard");
   }
 

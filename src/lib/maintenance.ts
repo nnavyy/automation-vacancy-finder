@@ -1,8 +1,8 @@
 // src/lib/maintenance.ts — Centralized Maintenance Mode & Whitelist Controller
 
 // Set to `true` to lock down the website from the public (only whitelisted emails can access)
-// Set to `false` to open the website publicly
-export const IS_MAINTENANCE_LOCKDOWN = true;
+// Set to `false` to open the website publicly. Controlled via MAINTENANCE_LOCKDOWN env var (defaults to false).
+export const IS_MAINTENANCE_LOCKDOWN = process.env.MAINTENANCE_LOCKDOWN === "true";
 
 // List of emails authorized to bypass maintenance lockdown
 export const WHITELISTED_EMAILS: string[] = [

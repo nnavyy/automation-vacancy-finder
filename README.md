@@ -2,8 +2,8 @@
 
 <div align="center">
 
-![Status: Private Beta](https://img.shields.io/badge/Status-Private_Beta_Testing-yellow?style=for-the-badge)
-![Public Release](https://img.shields.io/badge/Public_Release-Oct_24--26,_2026-blue?style=for-the-badge)
+![Status: Public Release](https://img.shields.io/badge/Status-Public_Release-emerald?style=for-the-badge)
+![Release](https://img.shields.io/badge/Release-v1.0.0-blue?style=for-the-badge)
 ![License](https://img.shields.io/badge/License-MIT-emerald?style=for-the-badge)
 
 **English** • [Русский](./README.ru.md)
@@ -11,8 +11,8 @@
 </div>
 
 > [!NOTE]
-> **Pre-Launch Beta Testing (Official Public Release: Oct 24–26, 2026):**  
-> The project is currently under active private testing and polishing. All beta testers can connect directly to our central Telegram bot **[@Wongkiisbot](https://t.me/Wongkiisbot)** without any custom bot setup.
+> **Official Public Release (October 26, 2026):**  
+> HH Job Copilot is officially online and open source. Users and testers can connect directly to the central Telegram bot **[@Wongkiisbot](https://t.me/Wongkiisbot)** or deploy their own dedicated instance.
 
 A self-hosted, multi-user AI job search copilot engineered for the HeadHunter (HH.ru) ecosystem and international tech markets. HH Job Copilot continuously collects vacancies matching customizable candidate profiles, screens them with deterministic filters and multi-provider AI reasoning (DeepSeek, Gemini, OpenAI, Claude, Groq, OpenRouter, and local Ollama models), delivers instant interactive Telegram notifications, and features company OSINT intelligence for direct recruiter outreach.
 
