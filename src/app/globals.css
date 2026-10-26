@@ -1,0 +1,156 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #09090b;
+  --foreground: #fafafa;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+}
+
+/* Custom Scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background-color: #27272a;
+  border-radius: 9999px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: #3f3f46;
+}
+
+/* ── Hardware-Accelerated Micro-Animations ── */
+@keyframes toastSlideInTop {
+  0% {
+    transform: translateY(-130%) scale(0.96);
+    opacity: 0;
+  }
+  65% {
+    transform: translateY(3px) scale(1.005);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes toastSlideOutTop {
+  0% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(-140%) scale(0.95);
+    opacity: 0;
+  }
+}
+
+@keyframes modalPopIn {
+  0% {
+    transform: scale(0.92) translateY(14px);
+    opacity: 0;
+  }
+  70% {
+    transform: scale(1.01) translateY(-2px);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes modalPopOut {
+  0% {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0.94) translateY(12px);
+    opacity: 0;
+  }
+}
+
+@keyframes backdropFadeIn {
+  0% {
+    opacity: 0;
+    backdrop-filter: blur(0px);
+  }
+  100% {
+    opacity: 1;
+    backdrop-filter: blur(8px);
+  }
+}
+
+@keyframes backdropFadeOut {
+  0% {
+    opacity: 1;
+    backdrop-filter: blur(8px);
+  }
+  100% {
+    opacity: 0;
+    backdrop-filter: blur(0px);
+  }
+}
+
+.toast-animate-in {
+  animation: toastSlideInTop 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.toast-animate-out {
+  animation: toastSlideOutTop 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.modal-animate-in {
+  animation: modalPopIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.modal-animate-out {
+  animation: modalPopOut 0.2s cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+
+.backdrop-animate-in {
+  animation: backdropFadeIn 0.25s ease-out forwards;
+}
+
+.backdrop-animate-out {
+  animation: backdropFadeOut 0.2s ease-in forwards;
+}
+
+/* ── Modern Fluid Shimmer Skeleton Wave ── */
+@keyframes shimmerWave {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.shimmer-skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(39, 39, 42, 0.45) 0%,
+    rgba(63, 63, 70, 0.85) 50%,
+    rgba(39, 39, 42, 0.45) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmerWave 1.7s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.shimmer-card {
+  background: rgba(24, 24, 27, 0.6);
+  border: 1px solid rgba(39, 39, 42, 0.8);
+  backdrop-filter: blur(8px);
+}

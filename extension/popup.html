@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>HH Job Copilot Sync</title>
+  <style>
+    body {
+      width: 300px;
+      margin: 0;
+      padding: 16px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #09090b;
+      color: #fafafa;
+    }
+    h2 {
+      margin: 0 0 6px 0;
+      font-size: 14px;
+      font-weight: 600;
+      color: #10b981;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    p {
+      margin: 0 0 12px 0;
+      font-size: 12px;
+      color: #a1a1aa;
+      line-height: 1.4;
+    }
+    button {
+      width: 100%;
+      padding: 10px;
+      background: #10b981;
+      color: #09090b;
+      font-size: 12px;
+      font-weight: 600;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    button:hover {
+      background: #34d399;
+    }
+    #status {
+      margin-top: 10px;
+      font-size: 11px;
+      line-height: 1.4;
+    }
+    .success { color: #34d399; }
+    .error { color: #f87171; }
+  </style>
+</head>
+<body>
+  <h2>HH Job Copilot</h2>
+  <p>Make sure you are logged into <strong>hh.ru</strong> in this browser, then click below to sync automatically.</p>
+  <button id="syncBtn">Connect HeadHunter Account</button>
+  <div id="status"></div>
+  <script src="popup.js"></script>
+</body>
+</html>

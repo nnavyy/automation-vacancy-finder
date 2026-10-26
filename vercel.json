@@ -1,0 +1,17 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "crons": [
+    {
+      "path": "/api/cron/collect-vacancies",
+      "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/cron/notify-pending",
+      "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/sync-negotiations",
+      "schedule": "0 12 * * *"
+    }
+  ]
+}

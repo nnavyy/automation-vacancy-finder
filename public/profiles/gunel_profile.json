@@ -1,0 +1,200 @@
+{
+  "profileName": "Gunel Mammadzade - Frontend Developer",
+  "name": "Gunel Mammadzade",
+  "targetRoles": [
+    "Junior Frontend Developer",
+    "Frontend Developer",
+    "React Developer",
+    "Web Developer",
+    "Junior Software Engineer",
+    "Frontend Intern"
+  ],
+  "searchKeywords": {
+    "english": [
+      "frontend developer",
+      "junior frontend developer",
+      "react developer",
+      "javascript developer",
+      "web developer",
+      "junior react developer",
+      "frontend intern",
+      "html css javascript developer"
+    ],
+    "russian": [
+      "фронтенд разработчик",
+      "junior frontend разработчик",
+      "react разработчик",
+      "javascript разработчик",
+      "веб-разработчик",
+      "стажер фронтенд",
+      "младший разработчик",
+      "верстальщик"
+    ]
+  },
+  "searchKeywordsEn": [
+    "frontend developer",
+    "junior frontend developer",
+    "react developer",
+    "javascript developer",
+    "web developer",
+    "junior react developer",
+    "frontend intern",
+    "html css javascript developer"
+  ],
+  "searchKeywordsRu": [
+    "фронтенд разработчик",
+    "junior frontend разработчик",
+    "react разработчик",
+    "javascript разработчик",
+    "веб-разработчик",
+    "стажер фронтенд",
+    "младший разработчик",
+    "верстальщик"
+  ],
+  "skills": {
+    "required": [
+      "JavaScript",
+      "HTML5",
+      "CSS3",
+      "React",
+      "DOM Manipulation",
+      "Git",
+      "GitHub",
+      "Responsive Design"
+    ],
+    "niceToHave": [
+      "TypeScript",
+      "Bootstrap",
+      "BEM",
+      "Python",
+      "C#",
+      ".NET WinForms",
+      "MySQL",
+      "LocalStorage",
+      "REST API",
+      "Tailwind CSS"
+    ]
+  },
+  "requiredSkills": [
+    "JavaScript",
+    "HTML5",
+    "CSS3",
+    "React",
+    "DOM Manipulation",
+    "Git",
+    "GitHub",
+    "Responsive Design"
+  ],
+  "niceToHaveSkills": [
+    "TypeScript",
+    "Bootstrap",
+    "BEM",
+    "Python",
+    "C#",
+    ".NET WinForms",
+    "MySQL",
+    "LocalStorage",
+    "REST API",
+    "Tailwind CSS"
+  ],
+  "experience": [
+    "noExperience",
+    "between1And3"
+  ],
+  "workFormat": [
+    "remote",
+    "hybrid"
+  ],
+  "scoring": {
+    "minimumScoreToNotify": 65,
+    "maxNotificationsPerDay": 20,
+    "salaryMinimum": 80000,
+    "salaryCurrency": "RUR"
+  },
+  "minimumScoreToNotify": 65,
+  "maxNotificationsPerDay": "20",
+  "salaryMinimum": "80000",
+  "salaryCurrency": "RUR",
+  "exclusionFilters": {
+    "excludeKeywords": [
+      "1C",
+      "1С",
+      "Bitrix",
+      "Битрикс",
+      "PHP",
+      "WordPress",
+      "Joomla",
+      "Senior",
+      "Lead",
+      "Тимлид",
+      "Архитектор",
+      "DevOps",
+      "Ruby",
+      "Golang"
+    ],
+    "redFlagKeywords": [
+      "паспорт",
+      "залог",
+      "unpaid",
+      "неоплачиваемая",
+      "сетевой маркетинг",
+      "холодные звонки",
+      "без оплаты",
+      "испытательный срок без оплаты",
+      "стажировка без оплаты"
+    ]
+  },
+  "excludeKeywords": [
+    "1C",
+    "1С",
+    "Bitrix",
+    "Битрикс",
+    "PHP",
+    "WordPress",
+    "Joomla",
+    "Senior",
+    "Lead",
+    "Тимлид",
+    "Архитектор",
+    "DevOps",
+    "Ruby",
+    "Golang"
+  ],
+  "redFlagKeywords": [
+    "паспорт",
+    "залог",
+    "unpaid",
+    "неоплачиваемая",
+    "сетевой маркетинг",
+    "холодные звонки",
+    "без оплаты",
+    "испытательный срок без оплаты",
+    "стажировка без оплаты"
+  ],
+  "coverLetterLanguage": "Auto (Match Vacancy Language)",
+  "portfolioUrl": "https://github.com/GunelMammadzade",
+  "aiProviderOrder": [
+    "deepseek",
+    "groq",
+    "gemini",
+    "openrouter"
+  ],
+  "aiCustomConfig": {
+    "order": [
+      "deepseek",
+      "groq",
+      "gemini",
+      "openrouter"
+    ],
+    "taskRouting": {
+      "deepAnalysis": "deepseek",
+      "coverLetter": "deepseek"
+    },
+    "customProviders": {}
+  },
+  "coverLetterContext": {
+    "portfolioWebsiteUrl": "https://github.com/GunelMammadzade",
+    "resumeBackgroundText": "# Gunel Mammadzade\n\n**Email:** gunel1mammadzade@gmail.com | gunelmemmedzade2006@gmail.com  \n**Phone:** +90 5016618761  \n**Location:** Istanbul, Turkey  \n**GitHub:** https://github.com/GunelMammadzade  \n\n---\n\n## Summary\nMathematical Engineering student at Yildiz Technical University with hands-on experience building dynamic web apps and browser-based games. Particularly passionate about frontend development, focusing heavily on JavaScript (ES6+), HTML5, and CSS3, while possessing foundational knowledge of Python and C#. Solid problem-solving and analytical background developed through rigorous engineering coursework, mathematics competitions, and professional training programs including SOCAR Türkiye NextGen Academy and Sprints x Microsoft.\n\n---\n\n## Education\n- **Yildiz Technical University** (Oct 2023 – Jul 2027)\n  - Bachelor of Science in Mathematical Engineering, Istanbul, Turkey\n\n---\n\n## Project Experience\n\n### 1. YummyBox E-commerce Dynamic Web Application (Sep 2025 – Feb 2026)\n- Engineered a responsive e-commerce web application using Vanilla JavaScript (ES6+), Semantic HTML5, and modern CSS3 with a mobile-first design system.\n- Built a persistent client-side shopping cart utilizing LocalStorage for instantaneous price and total calculations.\n- Integrated WhatsApp Business API for automated order processing, translating structured cart items into instant checkout messages.\n\n### 2. Secret Santa Game — Interactive Point and Click Game (Dec 2025 – Feb 2026)\n- Developed a browser-based point-and-click game featuring complex DOM manipulation, animated interactive elements, and asynchronous sound cues.\n- Designed a 4-digit keypad puzzle engine featuring custom input validation and state management.\n- Built a dynamic viewport scaling engine guaranteeing a fixed 16:9 aspect ratio and seamless responsiveness across any screen size.\n\n### 3. Travel Agency Landing Page (Oct 2024 – Jan 2025)\n- Architected a high-performance landing page adhering to clean Semantic HTML5 structure and modern CSS Grid & Flexbox layouts.\n- Structured styling using the BEM methodology to ensure scalable, modular, and maintainable styles.\n- Implemented interactive navigation menus and external travel resource deep-linking to maximize conversion rate.\n\n### 4. Desktop Calculator App (C# / WinForms) (Aug 2023 – Sep 2023)\n- Engineered a multi-functional desktop calculator application using C# and .NET WinForms with an ergonomic, color-coded UI.\n- Developed an arithmetic computation engine utilizing switch-case state machines for complex multi-operand calculation flows.\n- Implemented event-driven architecture to seamlessly synchronize user interactions with calculation logic.\n\n---\n\n## Technical Skills\n- **Languages:** JavaScript (ES6+), TypeScript, C#, Python, SQL\n- **Frontend:** HTML5 (Semantic), CSS3 (Flexbox/Grid, Animations), React, Bootstrap, Tailwind CSS, DOM Manipulation, LocalStorage\n- **Methodologies & Architecture:** BEM (Block Element Modifier), Mobile-First Responsive Design, Event-Driven Programming\n- **Tools & Platforms:** Git, GitHub, MySQL, .NET WinForms, REST APIs, WhatsApp API, VS Code\n\n---\n\n## Certifications & Training Programs\n- **Next Gen Academy Program** — SOCAR Türkiye\n- **Full-Stack Web Development Training Program** — Sprints x Microsoft\n- **Online Coding Training and Examination** — Bogazici University\n- **ADA Business Marathon Participant** — ADA University\n- **Canadian Open Mathematics Challenge (COMC)** — Canadian Mathematical Society\n\n---\n\n## Awards & Honors\n- **Bronze Award — American Mathematics Olympiad** (STEM Education Research Center)\n  - Placed in the top 20% of 1,500+ international contestants (2022).\n  - Solved advanced proof problems in number theory and Euclidean geometry.\n- **Bronze Award — IQ FISO** (Future Intelligence Student Olympiad)\n  - Awarded Bronze Medal for excellence in logical deduction, creative problem-solving, and analytical intelligence.\n\n---\n\n## Languages\n- **Russian:** C2 (Fluent / Native Proficiency)\n- **English:** C1 (Advanced) | IELTS: 7.0, SAT: 1450\n- **Azerbaijani:** Native / Bilingual\n- **Turkish:** B2 (Conversational / Working Proficiency)\n- **German:** A2 (Elementary / Pre-Intermediate)"
+  },
+  "resumeText": "# Gunel Mammadzade\n\n**Email:** gunel1mammadzade@gmail.com | gunelmemmedzade2006@gmail.com  \n**Phone:** +90 5016618761  \n**Location:** Istanbul, Turkey  \n**GitHub:** https://github.com/GunelMammadzade  \n\n---\n\n## Summary\nMathematical Engineering student at Yildiz Technical University with hands-on experience building dynamic web apps and browser-based games. Particularly passionate about frontend development, focusing heavily on JavaScript (ES6+), HTML5, and CSS3, while possessing foundational knowledge of Python and C#. Solid problem-solving and analytical background developed through rigorous engineering coursework, mathematics competitions, and professional training programs including SOCAR Türkiye NextGen Academy and Sprints x Microsoft.\n\n---\n\n## Education\n- **Yildiz Technical University** (Oct 2023 – Jul 2027)\n  - Bachelor of Science in Mathematical Engineering, Istanbul, Turkey\n\n---\n\n## Project Experience\n\n### 1. YummyBox E-commerce Dynamic Web Application (Sep 2025 – Feb 2026)\n- Engineered a responsive e-commerce web application using Vanilla JavaScript (ES6+), Semantic HTML5, and modern CSS3 with a mobile-first design system.\n- Built a persistent client-side shopping cart utilizing LocalStorage for instantaneous price and total calculations.\n- Integrated WhatsApp Business API for automated order processing, translating structured cart items into instant checkout messages.\n\n### 2. Secret Santa Game — Interactive Point and Click Game (Dec 2025 – Feb 2026)\n- Developed a browser-based point-and-click game featuring complex DOM manipulation, animated interactive elements, and asynchronous sound cues.\n- Designed a 4-digit keypad puzzle engine featuring custom input validation and state management.\n- Built a dynamic viewport scaling engine guaranteeing a fixed 16:9 aspect ratio and seamless responsiveness across any screen size.\n\n### 3. Travel Agency Landing Page (Oct 2024 – Jan 2025)\n- Architected a high-performance landing page adhering to clean Semantic HTML5 structure and modern CSS Grid & Flexbox layouts.\n- Structured styling using the BEM methodology to ensure scalable, modular, and maintainable styles.\n- Implemented interactive navigation menus and external travel resource deep-linking to maximize conversion rate.\n\n### 4. Desktop Calculator App (C# / WinForms) (Aug 2023 – Sep 2023)\n- Engineered a multi-functional desktop calculator application using C# and .NET WinForms with an ergonomic, color-coded UI.\n- Developed an arithmetic computation engine utilizing switch-case state machines for complex multi-operand calculation flows.\n- Implemented event-driven architecture to seamlessly synchronize user interactions with calculation logic.\n\n---\n\n## Technical Skills\n- **Languages:** JavaScript (ES6+), TypeScript, C#, Python, SQL\n- **Frontend:** HTML5 (Semantic), CSS3 (Flexbox/Grid, Animations), React, Bootstrap, Tailwind CSS, DOM Manipulation, LocalStorage\n- **Methodologies & Architecture:** BEM (Block Element Modifier), Mobile-First Responsive Design, Event-Driven Programming\n- **Tools & Platforms:** Git, GitHub, MySQL, .NET WinForms, REST APIs, WhatsApp API, VS Code\n\n---\n\n## Certifications & Training Programs\n- **Next Gen Academy Program** — SOCAR Türkiye\n- **Full-Stack Web Development Training Program** — Sprints x Microsoft\n- **Online Coding Training and Examination** — Bogazici University\n- **ADA Business Marathon Participant** — ADA University\n- **Canadian Open Mathematics Challenge (COMC)** — Canadian Mathematical Society\n\n---\n\n## Awards & Honors\n- **Bronze Award — American Mathematics Olympiad** (STEM Education Research Center)\n  - Placed in the top 20% of 1,500+ international contestants (2022).\n  - Solved advanced proof problems in number theory and Euclidean geometry.\n- **Bronze Award — IQ FISO** (Future Intelligence Student Olympiad)\n  - Awarded Bronze Medal for excellence in logical deduction, creative problem-solving, and analytical intelligence.\n\n---\n\n## Languages\n- **Russian:** C2 (Fluent / Native Proficiency)\n- **English:** C1 (Advanced) | IELTS: 7.0, SAT: 1450\n- **Azerbaijani:** Native / Bilingual\n- **Turkish:** B2 (Conversational / Working Proficiency)\n- **German:** A2 (Elementary / Pre-Intermediate)"
+}

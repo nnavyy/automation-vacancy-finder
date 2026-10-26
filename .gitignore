@@ -62,14 +62,8 @@ vc low code/
 /vc low code
 *.mp4
 
-# Test directories, configs & scratch files
-tests/
-/tests
-vitest.config.mts
-*test*.*
-test*.*
+# Scratch files & temporary test scripts
 scratch/
-scripts/
 /test_*.ts
 /test_*.js
 /test-*.ts
@@ -92,4 +86,10 @@ tools/
 # Local promotional drafts
 HABR_ARTICLE_RU.md
 
+# AI Agent workspace customizations & skills
+.agents/
+/.agents
 
+# UI/UX documentation & design assets
+docs/
+/docs
