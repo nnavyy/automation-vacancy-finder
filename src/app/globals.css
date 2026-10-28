@@ -154,3 +154,73 @@ body {
   border: 1px solid rgba(39, 39, 42, 0.8);
   backdrop-filter: blur(8px);
 }
+
+
+/* Dashboard surface: dot grid fading out from the top, as on dub.co */
+.dash-backdrop {
+  position: relative;
+  isolation: isolate;
+}
+.dash-backdrop::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px);
+  background-size: 22px 22px;
+  mask-image: radial-gradient(ellipse 70% 38% at 50% 0%, #000 30%, transparent 100%);
+  -webkit-mask-image: radial-gradient(ellipse 70% 38% at 50% 0%, #000 30%, transparent 100%);
+}
+
+/* Spotlight tile: hairline border plus a glow that follows the cursor */
+.spotlight-card {
+  --spot-x: 50%;
+  --spot-y: 0%;
+  position: relative;
+  background: #0f0f11;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  transition: border-color 200ms ease;
+}
+.spotlight-card::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 250ms ease;
+  background: radial-gradient(260px circle at var(--spot-x) var(--spot-y), rgba(255, 255, 255, 0.07), transparent 70%);
+}
+.spotlight-card:hover {
+  border-color: rgba(255, 255, 255, 0.14);
+}
+.spotlight-card:hover::before {
+  opacity: 1;
+}
+.spotlight-card[data-active="true"] {
+  border-color: rgba(52, 211, 153, 0.35);
+}
+
+/* Slow sweep across a card while a collection run is active */
+@keyframes sweepLine {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+.sweep-line {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 1px;
+  width: 100%;
+  background: linear-gradient(90deg, transparent, rgba(52, 211, 153, 0.9), transparent);
+  animation: sweepLine 2.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sweep-line { animation: none; opacity: 0; }
+  .spotlight-card::before { transition: none; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .glass-chrome { backdrop-filter: none !important; background: #0a0a0b !important; }
+}

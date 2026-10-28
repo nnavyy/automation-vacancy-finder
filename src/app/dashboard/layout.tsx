@@ -1,5 +1,5 @@
-// ============================================================
-// Dashboard shell — sidebar + main content area
+﻿// ============================================================
+// Dashboard shell â€” sidebar + main content area
 // ============================================================
 
 import MobileSidebarWrapper from "@/components/MobileSidebarWrapper";
@@ -21,12 +21,12 @@ export default async function DashboardLayout({
 
   return (
     <LanguageProvider>
-      <div className="flex flex-col md:flex-row min-h-[100dvh] bg-zinc-950 text-zinc-100">
+      <div className="flex flex-col md:flex-row min-h-[100dvh] bg-[#09090b] text-zinc-100 antialiased">
         {/* Sidebar (Wrapped for Mobile) */}
         <MobileSidebarWrapper />
 
         {/* Main content */}
-        <main className="flex-1 p-4 md:p-6 bg-zinc-950 overflow-auto min-w-0">
+        <main className="dash-backdrop flex-1 px-4 py-6 md:px-10 md:py-9 overflow-auto min-w-0">
           {children}
         </main>
       </div>
