@@ -7,7 +7,9 @@
 
 import crypto from "crypto";
 import prisma from "@/lib/db";
-import { collectAllVacancies, fetchVacancyJsonLd, MAX_VACANCIES_PER_USER } from "@/lib/hhPublicVacancyClient";
+import { fetchVacancyJsonLd, MAX_VACANCIES_PER_USER } from "@/lib/hhPublicVacancyClient";
+import { getPoolVacancies } from "@/lib/vacancyPool";
+import { buildSearchQueries } from "@/lib/queryBuilder";
 import { passesBasicFilter } from "@/lib/ruleFilter";
 import { calculateRuleScore } from "@/lib/scoring";
 import { getSimilarFeedbackExamples } from "@/lib/feedbackLearning";
@@ -142,7 +144,8 @@ export async function runCollectionPipeline(
   try {
     // ── Step 2: Collect vacancies from HH API ─────────────────
     try {
-      vacancies = await collectAllVacancies(pref);
+      // Serve from the shared DB pool; HH is only crawled for stale queries.
+      vacancies = await getPoolVacancies(pref, buildSearchQueries(pref));
     } catch (err) {
       console.error("[Pipeline] collectAllVacancies failed:", err);
       return {
@@ -207,15 +210,18 @@ export async function runCollectionPipeline(
       if (Date.now() > deadline) return;
 
       try {
-        if (activeVacancyCount >= MAX_VACANCIES_PER_USER) {
-          // Soft cap reached — stop accepting new vacancies for this run
-          return;
-        }
         let dbVacancyId: string;
 
         const existing = await prisma.vacancy.findFirst({
           where: { hhId: vacancy.hhId, userId },
         });
+
+        // Soft cap reached: only already-stored vacancies may continue
+        if (!existing && activeVacancyCount >= MAX_VACANCIES_PER_USER) {
+          summary.processed++;
+          await reportProgress();
+          return;
+        }
 
         if (existing) {
           summary.processed++;
@@ -271,6 +277,7 @@ export async function runCollectionPipeline(
             },
           });
           dbVacancyId = created.id;
+          activeVacancyCount++; // was never incremented, so the cap never triggered
           summary.saved++;
           summary.processed++;
           await reportProgress();
@@ -418,6 +425,15 @@ export async function runCollectionPipeline(
     });
 
     await Promise.all(workers);
+
+    // Trim junk (ignored/low-priority/closed) older than 3 days so a profile stays near the cap
+    await prisma.vacancy.deleteMany({
+      where: {
+        userId,
+        status: { in: ["ignored", "low_priority", "closed"] },
+        updatedAt: { lt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000) },
+      },
+    });
     await reportProgress(true);
 
     console.log("[Pipeline] Done —", summary);

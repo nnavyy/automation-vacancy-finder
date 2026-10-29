@@ -10,6 +10,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { runCollectionPipeline } from "@/lib/collectionPipeline";
 import prisma from "@/lib/db";
+import { purgePool } from "@/lib/vacancyPool";
 import { safeEqual } from "@/lib/timingSafe";
 
 export const maxDuration = 300;
@@ -35,7 +36,13 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ success: false, error: "No active users with search preferences." }, { status: 400 });
     }
 
-    const results: Record<string, unknown> = {};
+    // Keep the shared pool small: drop stale/closed/over-cap rows before users read from it
+    const purged = await purgePool().catch((e) => {
+      console.error("[Cron] purgePool failed:", e);
+      return null;
+    });
+
+    const results: Record<string, unknown> = { pool: purged };
     const cronDeadline = Date.now() + 250_000; // 250s max to safely return before 300s gateway timeout
 
     for (let i = 0; i < activePrefs.length; i++) {

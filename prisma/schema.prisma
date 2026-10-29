@@ -327,3 +327,32 @@ model CatalogTerm {
   @@index([category, usageCount])
   @@map("catalog_terms")
 }
+
+// ============================================================
+// PoolVacancy - shared HH vacancy cache (one crawl serves all users)
+// Auto-purged by purgePool() (age, closed, size cap)
+// ============================================================
+model PoolVacancy {
+  hhId            String   @id
+  title           String
+  company         String?
+  area            String?
+  salary          Json?
+  url             String?
+  description     String?
+  descriptionHash String?
+  queries         String[] // search queries that surfaced this vacancy
+  lastSeenAt      DateTime @default(now())
+  checkedAt       DateTime @default(now())
+
+  @@index([lastSeenAt])
+  @@map("pool_vacancies")
+}
+
+// Tracks when each (query, area) was last crawled so users reuse the pool
+model PoolQuery {
+  key       String   @id // "<area>|<lowercased query>"
+  fetchedAt DateTime @default(now())
+
+  @@map("pool_queries")
+}
