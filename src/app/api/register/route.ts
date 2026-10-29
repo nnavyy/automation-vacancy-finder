@@ -5,9 +5,18 @@ import prisma from "@/lib/db";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
 import { IS_MAINTENANCE_LOCKDOWN, isEmailWhitelisted } from "@/lib/maintenance";
 import { createVerificationCode, sendVerificationEmail, isMailConfigured } from "@/lib/verificationCode";
+import {
+  expandBilingualKeywords,
+  parseMultilingualOnboardingText,
+  synthesizeCandidateResume,
+} from "@/lib/onboardingProfile";
 
 interface OnboardingProfileInput {
   name?: string;
+  selectedTracks?: string[];
+  yearsBracketId?: string;
+  exactYears?: string;
+  customWhatIDoText?: string;
   targetRoles?: string[];
   searchKeywordsEn?: string[];
   searchKeywordsRu?: string[];
@@ -15,12 +24,20 @@ interface OnboardingProfileInput {
   niceToHaveSkills?: string[];
   experience?: string[];
   workFormat?: string[];
+  excludeKeywords?: string[];
+  redFlagKeywords?: string[];
   salaryMinimum?: number | null;
   salaryCurrency?: string;
+  minimumScoreToNotify?: number;
+  maxNotificationsPerDay?: number;
+  coverLetterLanguage?: string;
+  portfolioUrl?: string;
   resumeText?: string;
+  userNotes?: string;
+  uiLanguage?: string;
 }
 
-function sanitizeStringArray(val: unknown): string[] {
+function sanitizeStringArray(val: unknown, max = 35): string[] {
   if (!Array.isArray(val)) return [];
   return Array.from(
     new Set(
@@ -29,7 +46,7 @@ function sanitizeStringArray(val: unknown): string[] {
         .map((s) => s.trim())
         .filter((s) => s.length > 0)
     )
-  ).slice(0, 30);
+  ).slice(0, max);
 }
 
 export async function POST(req: NextRequest) {
@@ -81,29 +98,134 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Build profile fields from the pre-signup questionnaire answers
-    const profileName = onboardingProfile?.name?.trim() || "Default";
-    const targetRoles = sanitizeStringArray(onboardingProfile?.targetRoles);
-    const searchKeywordsEn = sanitizeStringArray(onboardingProfile?.searchKeywordsEn);
-    const searchKeywordsRu = sanitizeStringArray(onboardingProfile?.searchKeywordsRu);
-    const requiredSkills = sanitizeStringArray(onboardingProfile?.requiredSkills);
+    // Parse any multilingual free-text answers (EN, RU, UK, UZ, KK, etc.)
+    const combinedFreeText = [
+      onboardingProfile?.customWhatIDoText ?? "",
+      onboardingProfile?.userNotes ?? "",
+      onboardingProfile?.resumeText ?? "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+
+    const parsedMultilingual = parseMultilingualOnboardingText(combinedFreeText);
+
+    const selectedTracks = sanitizeStringArray([
+      ...(onboardingProfile?.selectedTracks ?? []),
+      ...parsedMultilingual.matchedTrackIds,
+    ]);
+
+    const targetRoles = sanitizeStringArray([
+      ...(onboardingProfile?.targetRoles ?? []),
+      ...parsedMultilingual.roles,
+    ]);
+
+    const requiredSkills = sanitizeStringArray([
+      ...(onboardingProfile?.requiredSkills ?? []),
+      ...parsedMultilingual.skills,
+    ]);
+
     const niceToHaveSkills = sanitizeStringArray(onboardingProfile?.niceToHaveSkills);
+
+    const { searchKeywordsEn, searchKeywordsRu } = expandBilingualKeywords({
+      selectedTrackIds: selectedTracks,
+      targetRoles,
+      customKeywordsEn: sanitizeStringArray(onboardingProfile?.searchKeywordsEn),
+      customKeywordsRu: sanitizeStringArray(onboardingProfile?.searchKeywordsRu),
+      freeTextBio: combinedFreeText,
+    });
+
     const experience = sanitizeStringArray(onboardingProfile?.experience);
-    const workFormat = sanitizeStringArray(onboardingProfile?.workFormat);
+    const workFormat = sanitizeStringArray([
+      ...(onboardingProfile?.workFormat ?? []),
+      ...parsedMultilingual.detectedWorkFormats,
+    ]);
+    const excludeKeywords = sanitizeStringArray(onboardingProfile?.excludeKeywords);
+    const redFlagKeywords = sanitizeStringArray(onboardingProfile?.redFlagKeywords);
+
     const salaryMinimum =
       typeof onboardingProfile?.salaryMinimum === "number" && onboardingProfile.salaryMinimum > 0
         ? onboardingProfile.salaryMinimum
         : null;
+
+    const validCurrencies = ["RUR", "USD", "EUR", "KZT", "UZS", "UAH"];
     const salaryCurrency =
-      onboardingProfile?.salaryCurrency && ["RUR", "USD", "EUR"].includes(onboardingProfile.salaryCurrency)
+      onboardingProfile?.salaryCurrency && validCurrencies.includes(onboardingProfile.salaryCurrency)
         ? onboardingProfile.salaryCurrency
         : "RUR";
-    const resumeText = typeof onboardingProfile?.resumeText === "string" ? onboardingProfile.resumeText.trim() : "";
+
+    const minimumScoreToNotify =
+      typeof onboardingProfile?.minimumScoreToNotify === "number" &&
+      onboardingProfile.minimumScoreToNotify >= 50 &&
+      onboardingProfile.minimumScoreToNotify <= 95
+        ? onboardingProfile.minimumScoreToNotify
+        : 70;
+
+    const maxNotificationsPerDay =
+      typeof onboardingProfile?.maxNotificationsPerDay === "number" &&
+      onboardingProfile.maxNotificationsPerDay >= 1 &&
+      onboardingProfile.maxNotificationsPerDay <= 100
+        ? onboardingProfile.maxNotificationsPerDay
+        : 20;
+
+    const coverLetterLanguage =
+      typeof onboardingProfile?.coverLetterLanguage === "string" && onboardingProfile.coverLetterLanguage.trim()
+        ? onboardingProfile.coverLetterLanguage.trim()
+        : "Auto (Match Vacancy Language)";
+
+    const portfolioUrl =
+      typeof onboardingProfile?.portfolioUrl === "string" && onboardingProfile.portfolioUrl.trim()
+        ? onboardingProfile.portfolioUrl.trim()
+        : null;
+
+    const profileName = onboardingProfile?.name?.trim() || targetRoles[0] || "Default";
+
+    // Build comprehensive candidate resume text combining structured profile + user notes
+    const resumeText =
+      typeof onboardingProfile?.resumeText === "string" && onboardingProfile.resumeText.trim()
+        ? onboardingProfile.resumeText.trim()
+        : synthesizeCandidateResume({
+            name: cleanName,
+            selectedTrackIds: selectedTracks,
+            yearsBracketId: onboardingProfile?.yearsBracketId || parsedMultilingual.detectedYearsBracketId || "1-3",
+            exactYears: onboardingProfile?.exactYears,
+            targetRoles,
+            requiredSkills,
+            niceToHaveSkills,
+            workFormat: workFormat.length > 0 ? workFormat : ["remote"],
+            salaryMinimum,
+            salaryCurrency,
+            portfolioUrl: portfolioUrl ?? undefined,
+            userNotes: onboardingProfile?.userNotes || onboardingProfile?.customWhatIDoText,
+          });
+
+    const preferredAppLang =
+      onboardingProfile?.uiLanguage && ["ru", "uk", "uz"].includes(onboardingProfile.uiLanguage)
+        ? "ru"
+        : "en";
+
+    const profileData = {
+      name: profileName,
+      targetRoles,
+      searchKeywordsEn,
+      searchKeywordsRu,
+      requiredSkills,
+      niceToHaveSkills,
+      experience: experience.length > 0 ? experience : ["noExperience", "between1And3"],
+      workFormat: workFormat.length > 0 ? workFormat : ["remote"],
+      salaryMinimum,
+      salaryCurrency,
+      excludeKeywords,
+      redFlagKeywords: redFlagKeywords.length > 0 ? redFlagKeywords : ["паспорт", "залог", "unpaid"],
+      minimumScoreToNotify,
+      maxNotificationsPerDay,
+      coverLetterLanguage,
+      language: preferredAppLang,
+      portfolioUrl,
+      resumeText,
+    };
 
     const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } });
     if (existing) {
-      // If the user already submitted the form once and is retrying OTP verification with the same password,
-      // update their profile with the latest questionnaire answers and issue a fresh OTP code.
       const samePassword = await bcrypt.compare(password, existing.passwordHash);
       if (!samePassword) {
         return NextResponse.json(
@@ -115,19 +237,7 @@ export async function POST(req: NextRequest) {
       if (targetRoles.length > 0 || searchKeywordsEn.length > 0) {
         await prisma.searchPreference.updateMany({
           where: { userId: existing.id, isActive: true },
-          data: {
-            name: profileName,
-            targetRoles,
-            searchKeywordsEn,
-            searchKeywordsRu,
-            requiredSkills,
-            niceToHaveSkills,
-            experience: experience.length > 0 ? experience : ["noExperience", "between1And3"],
-            workFormat: workFormat.length > 0 ? workFormat : ["remote"],
-            salaryMinimum,
-            salaryCurrency,
-            resumeText,
-          },
+          data: profileData,
         });
       }
 
@@ -154,39 +264,24 @@ export async function POST(req: NextRequest) {
       data: { name: cleanName, email: normalizedEmail, passwordHash },
     });
 
-    // Create the user's SearchPreference pre-populated from their onboarding questionnaire answers
     await prisma.searchPreference.create({
       data: {
-        userId:            user.id,
-        name:              profileName,
-        targetRoles,
-        searchKeywordsEn,
-        searchKeywordsRu,
-        requiredSkills,
-        niceToHaveSkills,
-        experience:        experience.length > 0 ? experience : ["noExperience", "between1And3"],
-        workFormat:        workFormat.length > 0 ? workFormat : ["remote"],
-        salaryMinimum,
-        salaryCurrency,
-        resumeText,
-        excludeKeywords:   [],
-        redFlagKeywords:   ["паспорт", "залог", "unpaid"],
-        aiProviderOrder:   ["groq", "gemini", "openrouter"],
-        isActive:          true,
+        userId: user.id,
+        ...profileData,
+        aiProviderOrder: ["groq", "gemini", "openrouter"],
+        isActive: true,
       },
     });
 
-    // Provision an active Telegram sync token for the new user
     await prisma.telegramLink.create({
       data: {
         userId: user.id,
         token: crypto.randomBytes(3).toString("hex").toUpperCase(),
         isActive: true,
-        language: "en",
+        language: preferredAppLang,
       },
     });
 
-    // Generate 6-digit OTP code and dispatch email asynchronously via after() for instant UI response
     const code = await createVerificationCode(normalizedEmail, "sign_in", 10);
     after(async () => {
       await sendVerificationEmail({

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import NextTopLoader from "nextjs-toploader";
+import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 
 const inter = Inter({
@@ -35,6 +36,7 @@ export default function RootLayout({
         <main className="flex-1 flex flex-col w-full h-full">
           {children}
         </main>
+        <Analytics />
       </body>
     </html>
   );
