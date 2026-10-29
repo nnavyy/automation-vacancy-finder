@@ -8,7 +8,8 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { Play, Loader2, CheckCircle, XCircle, RefreshCw } from "lucide-react";
+import Link from "next/link";
+import { Play, Loader2, CheckCircle, XCircle, RefreshCw, Settings } from "lucide-react";
 
 export interface LiveDashboardStats {
   total: number;
@@ -37,6 +38,7 @@ export default function RunCollectionButton({
   const [progress, setProgress] = useState<{ current: number; total: number } | null>(null);
   const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [stale, setStale] = useState(false);
+  const [profileConfigured, setProfileConfigured] = useState<boolean>(true);
   const loadingRef = useRef(loading);
   loadingRef.current = loading;
 
@@ -56,6 +58,10 @@ export default function RunCollectionButton({
         if (res.ok) {
           const json = await res.json();
           const status = json.data;
+
+          if (typeof json.profileConfigured === "boolean") {
+            setProfileConfigured(json.profileConfigured);
+          }
 
           if (json.liveStats && onLiveUpdateRef.current) {
             onLiveUpdateRef.current(json.liveStats);
@@ -111,31 +117,51 @@ export default function RunCollectionButton({
     };
 
     checkStatus(); // initial check
-    interval = setInterval(checkStatus, 1500); // poll every 1.5s for live reactivity
+    interval = setInterval(checkStatus, 2000);
 
     return () => clearInterval(interval);
   }, [router]);
 
   const handleRun = async () => {
+    if (!profileConfigured) {
+      setResult({
+        ok: false,
+        message: "Please configure your profile (Target Roles or Keywords) in Settings first.",
+      });
+      return;
+    }
+
     setLoading(true);
     setStale(false);
     setProgress({ current: 0, total: 0 });
     setResult(null);
     onRunningChangeRef.current?.(true);
 
-    // Fire and forget
-    fetch("/api/dashboard/collect").catch(() => {
+    try {
+      const res = await fetch("/api/dashboard/collect");
+      const data = await res.json().catch(() => null);
+      if (!res.ok || (data && data.success === false)) {
+        setLoading(false);
+        setProgress(null);
+        onRunningChangeRef.current?.(false);
+        setResult({
+          ok: false,
+          message: data?.error || "Failed to start collection. Please check your profile in Settings.",
+        });
+      }
+    } catch {
       setResult({
         ok: false,
         message: "Network error starting collection.",
       });
       setLoading(false);
+      setProgress(null);
       onRunningChangeRef.current?.(false);
-    });
+    }
   };
 
   const handleForceReset = async () => {
-    await fetch("/api/dashboard/reset-collection", { method: "POST" }).catch(() => {});
+    await fetch("/api/dashboard/reset-collection", { method: "POST" }).catch(() => { });
     setStale(false);
     setLoading(false);
     setProgress(null);
@@ -155,20 +181,30 @@ export default function RunCollectionButton({
             Reset Stuck
           </button>
         )}
-        <button
-          onClick={handleRun}
-          disabled={loading}
-          className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {loading ? (
-            <Loader2 size={13} className="animate-spin shrink-0" />
-          ) : (
-            <Play size={13} className="shrink-0" />
-          )}
-          <span className="truncate">
-            {loading ? "Collecting..." : "Run Collection"}
-          </span>
-        </button>
+        {!profileConfigured && !loading ? (
+          <Link
+            href="/dashboard/settings"
+            className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-100 text-xs font-medium transition-colors shadow-sm"
+          >
+            <Settings size={13} className="shrink-0 text-emerald-400" />
+            <span className="truncate">Set Profile First</span>
+          </Link>
+        ) : (
+          <button
+            onClick={handleRun}
+            disabled={loading}
+            className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {loading ? (
+              <Loader2 size={13} className="animate-spin shrink-0" />
+            ) : (
+              <Play size={13} className="shrink-0" />
+            )}
+            <span className="truncate">
+              {loading ? "Collecting..." : "Run Collection"}
+            </span>
+          </button>
+        )}
       </div>
 
       {loading && (
@@ -187,9 +223,8 @@ export default function RunCollectionButton({
 
       {result && !loading && (
         <div
-          className={`flex items-center gap-1.5 text-xs ${
-            result.ok ? "text-emerald-400" : "text-rose-400"
-          }`}
+          className={`flex items-center gap-1.5 text-xs ${result.ok ? "text-emerald-400" : "text-rose-400"
+            }`}
         >
           {result.ok ? <CheckCircle size={13} /> : <XCircle size={13} />}
           {result.message}

@@ -1,9 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import bcrypt from "bcryptjs";
 import prisma from "@/lib/db";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
 import { IS_MAINTENANCE_LOCKDOWN, isEmailWhitelisted } from "@/lib/maintenance";
-import { createVerificationCode, sendVerificationEmail } from "@/lib/verificationCode";
+import { createVerificationCode, sendVerificationEmail, isMailConfigured } from "@/lib/verificationCode";
 
 export async function POST(req: NextRequest) {
   try {
@@ -42,6 +42,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    if (!isMailConfigured() && process.env.NODE_ENV !== "development") {
+      return NextResponse.json(
+        { success: false, error: "Email service is not configured on the server." },
+        { status: 500 }
+      );
+    }
+
     const existing = await prisma.user.findUnique({ where: { email: normalizedEmail } });
     if (existing) {
       // If the user already submitted the form once and is retrying OTP verification with the same password,
@@ -55,19 +62,14 @@ export async function POST(req: NextRequest) {
       }
 
       const code = await createVerificationCode(normalizedEmail, "sign_in", 10);
-      const emailResult = await sendVerificationEmail({
-        email: normalizedEmail,
-        code,
-        purpose: "sign_in",
-        name: existing.name,
+      after(async () => {
+        await sendVerificationEmail({
+          email: normalizedEmail,
+          code,
+          purpose: "sign_in",
+          name: existing.name,
+        });
       });
-
-      if (!emailResult.success) {
-        return NextResponse.json(
-          { success: false, error: emailResult.error || "Failed to send verification email." },
-          { status: 500 }
-        );
-      }
 
       return NextResponse.json({
         success: true,
@@ -82,16 +84,17 @@ export async function POST(req: NextRequest) {
       data: { name: cleanName, email: normalizedEmail, passwordHash },
     });
 
-    // Create a default search preference matching user's profile
+    // Create an unconfigured default search profile so the user must set their own
+    // roles and keywords in Settings before collection can run.
     await prisma.searchPreference.create({
       data: {
         userId:            user.id,
         name:              "Default",
-        targetRoles:       ["Full Stack Developer", "Frontend Developer", "UI/UX Designer", "Web Developer", "WordPress Developer"],
-        searchKeywordsEn:  ["full stack developer", "frontend developer", "react developer", "next.js developer", "UI/UX designer", "web developer intern", "wordpress developer"],
-        searchKeywordsRu:  ["фулл стек разработчик", "фронтенд разработчик", "веб разработчик", "react разработчик", "стажёр разработчик", "UI/UX дизайнер"],
-        requiredSkills:    ["React", "TypeScript", "JavaScript", "Next.js"],
-        niceToHaveSkills:  ["Figma", "Node.js", "Tailwind CSS", "Prisma", "WordPress", "PostgreSQL", "REST API", "JWT Auth"],
+        targetRoles:       [],
+        searchKeywordsEn:  [],
+        searchKeywordsRu:  [],
+        requiredSkills:    [],
+        niceToHaveSkills:  [],
         experience:        ["noExperience", "between1And3"],
         workFormat:        ["remote"],
         excludeKeywords:   [],
@@ -101,24 +104,16 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // Generate and send 6-digit OTP code immediately so the user verifies their email on /register
+    // Generate 6-digit OTP code and dispatch email asynchronously via after() for instant UI response
     const code = await createVerificationCode(normalizedEmail, "sign_in", 10);
-    const emailResult = await sendVerificationEmail({
-      email: normalizedEmail,
-      code,
-      purpose: "sign_in",
-      name: cleanName,
+    after(async () => {
+      await sendVerificationEmail({
+        email: normalizedEmail,
+        code,
+        purpose: "sign_in",
+        name: cleanName,
+      });
     });
-
-    if (!emailResult.success) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: emailResult.error || "Account created, but failed to send verification email. Please try resending.",
-        },
-        { status: 500 }
-      );
-    }
 
     return NextResponse.json({
       success: true,

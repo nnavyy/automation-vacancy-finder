@@ -133,6 +133,22 @@ function containsAny(text: string, patterns: string[]): string | null {
 }
 
 /**
+ * Checks whether a profile has at least one configured target role or search keyword.
+ * Collection and auto-sync require a configured profile before running.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function isProfileConfigured(pref?: any): boolean {
+  if (!pref) return false;
+  const asStringArray = (val: unknown): string[] =>
+    Array.isArray(val) ? val.filter((x): x is string => typeof x === "string" && x.trim().length > 0) : [];
+  return (
+    asStringArray(pref.targetRoles).length > 0 ||
+    asStringArray(pref.searchKeywordsEn).length > 0 ||
+    asStringArray(pref.searchKeywordsRu).length > 0
+  );
+}
+
+/**
  * Expands a user's active profile into a list of related role/title tokens.
  * For Full Stack / Frontend / Web profiles, automatically includes adjacent
  * creative & AI-assisted roles (Vibe Coding, No-Code/Low-Code, Web Design, UI/UX).
@@ -225,14 +241,19 @@ export function buildProfileRelatedKeywords(pref: any): string[] {
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function buildProfileVacancyWhere(userId: string, pref?: any): Record<string, any> {
+  if (!isProfileConfigured(pref)) {
+    return {
+      userId,
+      id: "__unconfigured_profile__",
+    };
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const where: Record<string, any> = {
     userId,
     NOT: { hhId: { startsWith: "manual-" } },
     url: { startsWith: "http" },
   };
-
-  if (!pref) return where;
 
   const asStringArray = (val: unknown): string[] =>
     Array.isArray(val) ? val.filter((x): x is string => typeof x === "string") : [];

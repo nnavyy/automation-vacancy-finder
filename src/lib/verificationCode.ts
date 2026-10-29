@@ -28,7 +28,17 @@ export function hashVerificationCode(email: string, code: string): string {
     .digest("hex");
 }
 
-// Mailer transport instance with flexible provider support (Gmail, Resend, Sendgrid, SES)
+// Mailer transport instance with connection pooling and IPv4 enforcement
+// (prevents 30-40s IPv6 DNS/socket hang on serverless environments)
+let cachedTransporter: nodemailer.Transporter | null = null;
+let cachedMailerKey = "";
+
+export function isMailConfigured(): boolean {
+  const user = process.env.SMTP_USER || process.env.EMAIL_USER;
+  const pass = process.env.SMTP_PASS || process.env.EMAIL_PASS;
+  return Boolean(user && pass);
+}
+
 function getMailer() {
   const host = process.env.SMTP_HOST || "smtp.gmail.com";
   const port = Number(process.env.SMTP_PORT || "465");
@@ -37,12 +47,26 @@ function getMailer() {
   const pass = process.env.SMTP_PASS || process.env.EMAIL_PASS;
   if (!user || !pass) return null;
 
-  return nodemailer.createTransport({
+  const key = `${host}:${port}:${secure}:${user}`;
+  if (cachedTransporter && cachedMailerKey === key) {
+    return cachedTransporter;
+  }
+
+  cachedMailerKey = key;
+  cachedTransporter = nodemailer.createTransport({
     host,
     port,
     secure,
+    pool: true,
+    maxConnections: 3,
+    connectionTimeout: 8000,
+    greetingTimeout: 8000,
+    socketTimeout: 10000,
+    family: 4,
     auth: { user, pass },
-  });
+  } as nodemailer.TransportOptions);
+
+  return cachedTransporter;
 }
 
 // Create & store a new verification code
@@ -165,24 +189,20 @@ export async function sendVerificationEmail({
     return { success: false, error: "Email service is not configured on the server." };
   }
 
-  const senderEmail = process.env.EMAIL_USER;
+  const senderEmail = process.env.SMTP_USER || process.env.EMAIL_USER;
 
   let title = "Verification Code";
   let description = "Use the 6-digit code below to complete your action.";
-  let badgeColor = "#10b981"; // Emerald
 
   if (purpose === "sign_in") {
     title = "Sign-In Verification Code";
     description = "Someone (hopefully you) is signing in to your account. Enter this verification code to proceed:";
-    badgeColor = "#10b981";
   } else if (purpose === "reset_password") {
     title = "Password Reset Code";
     description = "We received a request to reset your password. Use the verification code below to set a new password:";
-    badgeColor = "#3b82f6"; // Blue
   } else if (purpose === "register") {
     title = "Email Verification Code";
     description = "Thank you for registering. Confirm your email address with the code below:";
-    badgeColor = "#8b5cf6"; // Purple
   }
 
   const html = `

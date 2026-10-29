@@ -1,7 +1,7 @@
 import { NextResponse, after } from "next/server";
 import prisma from "@/lib/db";
 import { getApiUser } from "@/lib/auth-helpers";
-import { buildProfileVacancyWhere } from "@/lib/ruleFilter";
+import { buildProfileVacancyWhere, isProfileConfigured } from "@/lib/ruleFilter";
 import { MAX_VACANCIES_PER_USER } from "@/lib/hhPublicVacancyClient";
 import { runCollectionPipeline, getActivePipelineLoad } from "@/lib/collectionPipeline";
 
@@ -21,6 +21,7 @@ export async function GET() {
       return NextResponse.json({ success: false, error: "No active preference" }, { status: 404 });
     }
 
+    const profileConfigured = isProfileConfigured(pref);
     const genuine = buildProfileVacancyWhere(user.id, pref);
 
     const [
@@ -90,17 +91,15 @@ export async function GET() {
       new Date().toISOString();
 
     // ── Continuous Auto-Sync Trigger (Load-Balanced) ───────────
-    // Automatically refreshes the shared HH pool and user profile in the background
-    // whenever the profile is stale (>15m) or empty, without waiting for a fixed cron clock.
-    const lastSyncMs = statusObj?.finishedAt
-      ? new Date(statusObj.finishedAt).getTime()
-      : latestVacancy?.createdAt
-      ? latestVacancy.createdAt.getTime()
-      : 0;
-    const isStale = Date.now() - lastSyncMs > AUTO_SYNC_INTERVAL_MS || totalVacancies === 0;
+    // Only auto-refresh in the background AFTER the user has configured their profile
+    // AND has run collection at least once (`statusObj?.finishedAt` exists).
+    // Never auto-start collection on an unconfigured or brand-new profile.
+    const hasCompletedInitialRun = Boolean(statusObj?.finishedAt);
+    const lastSyncMs = statusObj?.finishedAt ? new Date(statusObj.finishedAt).getTime() : 0;
+    const isStale = hasCompletedInitialRun && Date.now() - lastSyncMs > AUTO_SYNC_INTERVAL_MS;
     const load = getActivePipelineLoad();
 
-    if (!statusObj?.running && isStale && load.canAcceptAuto) {
+    if (profileConfigured && !statusObj?.running && isStale && load.canAcceptAuto) {
       after(async () => {
         try {
           await runCollectionPipeline(user.id, { maxDurationMs: 120_000, maxAiCalls: 25 });
@@ -112,6 +111,7 @@ export async function GET() {
 
     return NextResponse.json({
       success: true,
+      profileConfigured,
       data: pref.collectionStatus || null,
       lastSyncedAt,
       syncIntervalMinutes: 15,

@@ -170,12 +170,12 @@ const AI_PROVIDERS_CONFIG: Array<{
 ];
 
 const DEFAULT_FORM: FormState = {
-  name: "Default Profile",
-  targetRoles: ["Frontend Developer"],
-  searchKeywordsEn: ["frontend developer", "react developer", "typescript"],
-  searchKeywordsRu: ["фронтенд разработчик", "react разработчик"],
-  requiredSkills: ["React", "TypeScript", "JavaScript", "Next.js"],
-  niceToHaveSkills: ["Tailwind CSS", "Node.js", "Git"],
+  name: "Default",
+  targetRoles: [],
+  searchKeywordsEn: [],
+  searchKeywordsRu: [],
+  requiredSkills: [],
+  niceToHaveSkills: [],
   experience: ["between1And3", "between3And6"],
   workFormat: ["remote", "hybrid"],
   minimumScoreToNotify: 70,
@@ -512,9 +512,52 @@ export default function SettingsPage() {
     }
   };
 
-  // Refs for tracking changes and debounce
+  // Refs for tracking changes, in-flight queue, and unload flush
   const isLoadedRef = useRef(false);
+  const isSavingRef = useRef(false);
+  const queuedSaveRef = useRef<{ form: FormState; isManual: boolean } | null>(null);
+  const lastSavedPayloadRef = useRef<string>("");
+  const latestFormRef = useRef<FormState>(form);
+  latestFormRef.current = form;
+  const latestLangRef = useRef<string>(language);
+  latestLangRef.current = language;
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const buildSavePayload = useCallback((formData: FormState, lang: string, isManual = false) => {
+    return {
+      id: formData.id,
+      name: formData.name,
+      targetRoles: formData.targetRoles,
+      searchKeywordsEn: formData.searchKeywordsEn,
+      searchKeywordsRu: formData.searchKeywordsRu,
+      requiredSkills: formData.requiredSkills,
+      niceToHaveSkills: formData.niceToHaveSkills,
+      experience: formData.experience,
+      workFormat: formData.workFormat,
+      minimumScoreToNotify: formData.minimumScoreToNotify,
+      maxNotificationsPerDay: parseInt(formData.maxNotificationsPerDay, 10) || 20,
+      excludeKeywords: formData.excludeKeywords,
+      redFlagKeywords: formData.redFlagKeywords,
+      salaryMinimum:
+        formData.salaryMinimum.trim() !== "" ? parseInt(formData.salaryMinimum, 10) || null : null,
+      salaryCurrency: formData.salaryCurrency,
+      aiProviderOrder: formData.aiProviderOrder,
+      aiCustomConfig: formData.aiCustomConfig,
+      coverLetterLanguage: formData.coverLetterLanguage,
+      language: lang,
+      resumeText: formData.resumeText,
+      portfolioUrl: formData.portfolioUrl,
+      hhToken: isManual || formData.hhSessionStatus === "disconnected" ? formData.hhToken : undefined,
+      hhResumeId: formData.hhResumeId,
+      hhResumeTitle: formData.hhResumeTitle,
+      hhProfileName: formData.hhProfileName,
+      hhProfileAvatar: formData.hhProfileAvatar,
+      hhTotalApplications: formData.hhTotalApplications,
+      hhSessionStatus: formData.hhSessionStatus,
+      hhLastVerifiedAt: formData.hhLastVerifiedAt ? new Date(formData.hhLastVerifiedAt) : null,
+      hhExpiresAt: formData.hhExpiresAt ? new Date(formData.hhExpiresAt) : null,
+    };
+  }, []);
 
   // ── Load Settings on Mount (with instant 0ms cache hydration) ────
   useEffect(() => {
@@ -636,8 +679,12 @@ export default function SettingsPage() {
               hhExpiresAt: d.hhExpiresAt ? String(d.hhExpiresAt) : "",
             };
 
+            lastSavedPayloadRef.current = JSON.stringify(
+              buildSavePayload(updatedForm, d.language || latestLangRef.current, false)
+            );
             setForm(updatedForm);
             setHasLoadedFromCache(true);
+            isLoadedRef.current = true;
 
             // Persist to local cache for 0ms loads in future visits
             try {
@@ -657,10 +704,7 @@ export default function SettingsPage() {
       } finally {
         if (isMounted) {
           setLoading(false);
-          // Wait 500ms before enabling auto-save to ignore initial state setup
-          setTimeout(() => {
-            isLoadedRef.current = true;
-          }, 500);
+          isLoadedRef.current = true;
         }
       }
     };
@@ -728,57 +772,36 @@ export default function SettingsPage() {
     };
   }, []);
 
-  // ── Core Save Execution ───────────────────────────────────
+  // ── Core Save Execution (with in-flight queue & sidebar sync) ────
   const executeSave = useCallback(
     async (formData: FormState, isManual = false) => {
-      if (saving) return;
+      if (isSavingRef.current) {
+        queuedSaveRef.current = { form: formData, isManual };
+        return;
+      }
+      isSavingRef.current = true;
       if (isManual) setSaving(true);
       setAutoSaveStatus("saving");
 
       try {
-        const payload = {
-          id: formData.id,
-          name: formData.name,
-          targetRoles: formData.targetRoles,
-          searchKeywordsEn: formData.searchKeywordsEn,
-          searchKeywordsRu: formData.searchKeywordsRu,
-          requiredSkills: formData.requiredSkills,
-          niceToHaveSkills: formData.niceToHaveSkills,
-          experience: formData.experience,
-          workFormat: formData.workFormat,
-          minimumScoreToNotify: formData.minimumScoreToNotify,
-          maxNotificationsPerDay: parseInt(formData.maxNotificationsPerDay, 10) || 20,
-          excludeKeywords: formData.excludeKeywords,
-          redFlagKeywords: formData.redFlagKeywords,
-          salaryMinimum:
-            formData.salaryMinimum.trim() !== "" ? parseInt(formData.salaryMinimum, 10) || null : null,
-          salaryCurrency: formData.salaryCurrency,
-          aiProviderOrder: formData.aiProviderOrder,
-          aiCustomConfig: formData.aiCustomConfig,
-          coverLetterLanguage: formData.coverLetterLanguage,
-          language: language,
-          resumeText: formData.resumeText,
-          portfolioUrl: formData.portfolioUrl,
-          // Only send hhToken on manual save or explicit disconnect to prevent typing in the input box from overwriting active token
-          hhToken: isManual || formData.hhSessionStatus === "disconnected" ? formData.hhToken : undefined,
-          hhResumeId: formData.hhResumeId,
-          hhResumeTitle: formData.hhResumeTitle,
-          hhProfileName: formData.hhProfileName,
-          hhProfileAvatar: formData.hhProfileAvatar,
-          hhTotalApplications: formData.hhTotalApplications,
-          hhSessionStatus: formData.hhSessionStatus,
-          hhLastVerifiedAt: formData.hhLastVerifiedAt ? new Date(formData.hhLastVerifiedAt) : null,
-          hhExpiresAt: formData.hhExpiresAt ? new Date(formData.hhExpiresAt) : null,
-        };
+        const payload = buildSavePayload(formData, latestLangRef.current, isManual);
+        const serializedPayload = JSON.stringify(
+          buildSavePayload(formData, latestLangRef.current, false)
+        );
 
         const res = await fetch("/api/settings", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
+          keepalive: true,
         });
         const json = await res.json();
 
         if (res.ok && json.success) {
+          lastSavedPayloadRef.current = serializedPayload;
+          if (!formData.id && json.data?.id) {
+            setForm((prev) => (prev.id ? prev : { ...prev, id: json.data.id }));
+          }
           setAutoSaveStatus("saved");
           const nowStr = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
           setLastSavedTime(nowStr);
@@ -786,11 +809,12 @@ export default function SettingsPage() {
             localStorage.setItem(
               SETTINGS_CACHE_KEY,
               JSON.stringify({
-                form: formData,
+                form: { ...formData, id: formData.id || json.data?.id },
                 stats,
                 telegramLink: { token: tgToken, linked: tgLinked, username: tgUsername, botUsername: tgBotUsername },
               })
             );
+            window.dispatchEvent(new CustomEvent("hh-profile-updated"));
           } catch {}
           if (isManual) {
             setMsg({ text: "Settings saved successfully!", type: "success" });
@@ -808,30 +832,63 @@ export default function SettingsPage() {
           setMsg({ text: "Network error saving settings.", type: "error" });
         }
       } finally {
+        isSavingRef.current = false;
         if (isManual) setSaving(false);
+        if (queuedSaveRef.current) {
+          const next = queuedSaveRef.current;
+          queuedSaveRef.current = null;
+          void executeSave(next.form, next.isManual);
+        }
       }
     },
-    [saving]
+    [buildSavePayload, stats, tgToken, tgLinked, tgUsername, tgBotUsername, setMsg]
   );
 
   // ── Debounced Auto-Save on form change ─────────────────────
   useEffect(() => {
     if (!isLoadedRef.current) return;
 
+    const currentSerialized = JSON.stringify(
+      buildSavePayload(form, language, false)
+    );
+    if (currentSerialized === lastSavedPayloadRef.current) {
+      return;
+    }
+
+    setAutoSaveStatus("saving");
+
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
     }
 
     saveTimeoutRef.current = setTimeout(() => {
-      executeSave(form, false);
-    }, 1500);
+      saveTimeoutRef.current = null;
+      void executeSave(form, false);
+    }, 500);
 
     return () => {
       if (saveTimeoutRef.current) {
         clearTimeout(saveTimeoutRef.current);
       }
     };
-  }, [form, executeSave]);
+  }, [form, language, buildSavePayload, executeSave]);
+
+  // ── Flush unsaved profile changes on unmount / navigation ──
+  useEffect(() => {
+    return () => {
+      if (!isLoadedRef.current) return;
+      const latestPayload = buildSavePayload(latestFormRef.current, latestLangRef.current, false);
+      const serialized = JSON.stringify(latestPayload);
+      if (serialized !== lastSavedPayloadRef.current) {
+        fetch("/api/settings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: serialized,
+          keepalive: true,
+        }).catch(() => {});
+      }
+    };
+  }, [buildSavePayload]);
 
   // ── Keyboard Shortcut: Ctrl+S / Cmd+S ──────────────────────
   useEffect(() => {

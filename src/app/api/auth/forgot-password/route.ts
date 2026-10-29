@@ -1,9 +1,9 @@
 // src/app/api/auth/forgot-password/route.ts
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import prisma from "@/lib/db";
 import crypto from "crypto";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
-import { createVerificationCode, sendVerificationEmail } from "@/lib/verificationCode";
+import { createVerificationCode, sendVerificationEmail, isMailConfigured } from "@/lib/verificationCode";
 
 export async function POST(req: NextRequest) {
   try {
@@ -23,6 +23,13 @@ export async function POST(req: NextRequest) {
 
     if (!email) {
       return NextResponse.json({ success: false, error: "Email is required" }, { status: 400 });
+    }
+
+    if (!isMailConfigured() && process.env.NODE_ENV !== "development") {
+      return NextResponse.json(
+        { success: false, error: "Email service is not configured on the server." },
+        { status: 500 }
+      );
     }
 
     const normalizedEmail = email.trim().toLowerCase();
@@ -45,20 +52,15 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // 3. Send email with 6-digit OTP
-    const mailResult = await sendVerificationEmail({
-      email: normalizedEmail,
-      code,
-      purpose: "reset_password",
-      name: user.name,
+    // 3. Dispatch email with 6-digit OTP in background for instant UI response
+    after(async () => {
+      await sendVerificationEmail({
+        email: normalizedEmail,
+        code,
+        purpose: "reset_password",
+        name: user.name,
+      });
     });
-
-    if (!mailResult.success) {
-      return NextResponse.json(
-        { success: false, error: mailResult.error || "Failed to deliver reset email." },
-        { status: 500 }
-      );
-    }
 
     return NextResponse.json({
       success: true,

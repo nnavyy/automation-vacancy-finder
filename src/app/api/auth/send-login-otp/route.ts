@@ -1,15 +1,15 @@
 // src/app/api/auth/send-login-otp/route.ts
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import bcrypt from "bcryptjs";
 import prisma from "@/lib/db";
 import { rateLimit, getClientIp } from "@/lib/rate-limit";
-import { createVerificationCode, sendVerificationEmail } from "@/lib/verificationCode";
+import { createVerificationCode, sendVerificationEmail, isMailConfigured } from "@/lib/verificationCode";
 import { IS_MAINTENANCE_LOCKDOWN, isEmailWhitelisted } from "@/lib/maintenance";
 
 export async function POST(req: NextRequest) {
   try {
     const ip = getClientIp(req);
-    
+
     // Rate limit: 5 OTP requests per 10 minutes per IP
     const limit = rateLimit(`send-otp:${ip}`, 5, 10 * 60 * 1000);
     if (!limit.success) {
@@ -41,6 +41,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    if (!isMailConfigured() && process.env.NODE_ENV !== "development") {
+      return NextResponse.json(
+        { success: false, error: "Email service is not configured on the server." },
+        { status: 500 }
+      );
+    }
+
     // Verify credentials first before sending OTP
     const user = await prisma.user.findUnique({
       where: { email: normalizedEmail },
@@ -64,23 +71,15 @@ export async function POST(req: NextRequest) {
     // Generate 6-digit OTP (10 minutes validity)
     const code = await createVerificationCode(normalizedEmail, "sign_in", 10);
 
-    // Send email via Gmail SMTP
-    const emailResult = await sendVerificationEmail({
-      email: normalizedEmail,
-      code,
-      purpose: "sign_in",
-      name: user.name,
+    // Dispatch email via after() so the OTP UI step opens immediately
+    after(async () => {
+      await sendVerificationEmail({
+        email: normalizedEmail,
+        code,
+        purpose: "sign_in",
+        name: user.name,
+      });
     });
-
-    if (!emailResult.success) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: emailResult.error || "Failed to send verification email.",
-        },
-        { status: 500 }
-      );
-    }
 
     return NextResponse.json({
       success: true,

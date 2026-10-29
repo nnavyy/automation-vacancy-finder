@@ -11,7 +11,7 @@ import prisma from "@/lib/db";
 import { fetchVacancyJsonLd, MAX_VACANCIES_PER_USER } from "@/lib/hhPublicVacancyClient";
 import { getPoolVacancies } from "@/lib/vacancyPool";
 import { buildSearchQueries } from "@/lib/queryBuilder";
-import { passesBasicFilter } from "@/lib/ruleFilter";
+import { passesBasicFilter, isProfileConfigured } from "@/lib/ruleFilter";
 import { calculateRuleScore } from "@/lib/scoring";
 import { getSimilarFeedbackExamples } from "@/lib/feedbackLearning";
 import { analyzeVacancy } from "@/lib/aiAnalyzer";
@@ -95,6 +95,13 @@ export async function runCollectionPipeline(
     return {
       success: false,
       error: "No active search profile found. Please configure one in Settings.",
+    };
+  }
+
+  if (!isProfileConfigured(prefRaw)) {
+    return {
+      success: false,
+      error: "Please configure your profile (Target Roles or Search Keywords) in Settings before running collection.",
     };
   }
 

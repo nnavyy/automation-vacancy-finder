@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 // ============================================================
 // Sidebar navigation, client component for active link highlight
@@ -17,9 +17,9 @@ import {
   LucideIcon,
   ChevronDown,
   LogOut,
-  Globe
+  Globe,
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import { BRAND_NAME, BRAND_SHORT } from "@/lib/brand";
 import { useLanguage } from "@/lib/i18n";
@@ -45,38 +45,50 @@ const NAV_ITEMS: NavItem[] = [
 export default function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
   const { language, setLanguage, t, languages } = useLanguage();
-  const [profiles, setProfiles] = useState<{id: string; name: string; isActive: boolean}[]>([]);
+  const [profiles, setProfiles] = useState<{ id: string; name: string; isActive: boolean }[]>([]);
   const [loading, setLoading] = useState(true);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [userName, setUserName] = useState<string | null>(null);
 
-  useEffect(() => {
+  const loadProfiles = useCallback(() => {
     fetch("/api/profiles")
-      .then(res => res.json())
-      .then(data => {
-        if (data.success) {
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && Array.isArray(data.data)) {
           setProfiles(data.data);
         }
       })
+      .catch(() => {})
       .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => {
+    loadProfiles();
 
     // Fetch session to get user email
     fetch("/api/auth/session")
-      .then(res => res.json())
-      .then(data => {
+      .then((res) => res.json())
+      .then((data) => {
         if (data?.user) {
           setUserEmail(data.user.email || null);
           setUserName(data.user.name || null);
         }
       })
       .catch(() => {});
-  }, []);
+
+    const handleProfileUpdated = () => loadProfiles();
+    window.addEventListener("hh-profile-updated", handleProfileUpdated);
+    return () => window.removeEventListener("hh-profile-updated", handleProfileUpdated);
+  }, [loadProfiles]);
 
   const handleSwitchProfile = async (id: string) => {
+    try {
+      localStorage.removeItem("hh_settings_cache_v2");
+    } catch {}
     await fetch("/api/profiles", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "switch", id })
+      body: JSON.stringify({ action: "switch", id }),
     });
     window.location.reload();
   };
@@ -84,15 +96,18 @@ export default function SidebarNav({ onNavigate }: { onNavigate?: () => void }) 
   const handleCreateProfile = async () => {
     const name = prompt("Enter new profile name:");
     if (!name) return;
+    try {
+      localStorage.removeItem("hh_settings_cache_v2");
+    } catch {}
     await fetch("/api/profiles", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "create", name })
+      body: JSON.stringify({ action: "create", name }),
     });
     window.location.reload();
   };
 
-  const activeProfile = profiles.find(p => p.isActive);
+  const activeProfile = profiles.find((p) => p.isActive);
 
   return (
     <div className="flex flex-col h-full">
@@ -117,19 +132,22 @@ export default function SidebarNav({ onNavigate }: { onNavigate?: () => void }) 
                 if (e.target.value === "new") handleCreateProfile();
                 else handleSwitchProfile(e.target.value);
               }}
-              className="w-full appearance-none bg-white/[0.03] border border-white/[0.07] rounded-lg px-3 py-2 text-xs text-zinc-200 focus:outline-none focus:border-white/25 cursor-pointer transition-colors hover:bg-white/[0.05]"
+              style={{ colorScheme: "dark" }}
+              className="w-full appearance-none bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 pr-8 text-xs text-zinc-100 focus:outline-none focus:border-zinc-600 cursor-pointer transition-colors hover:bg-zinc-800/80"
             >
               {profiles.map((p) => (
-                <option key={p.id} value={p.id}>
+                <option key={p.id} value={p.id} className="bg-zinc-900 text-zinc-100">
                   {p.name}
                 </option>
               ))}
-              <option value="new">+ Create New Profile</option>
+              <option value="new" className="bg-zinc-900 text-emerald-400 font-medium">
+                + Create New Profile
+              </option>
             </select>
             <ChevronDown
               size={13}
               strokeWidth={1.5}
-              className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-zinc-500"
+              className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-zinc-400"
             />
           </div>
         )}
@@ -234,4 +252,3 @@ export default function SidebarNav({ onNavigate }: { onNavigate?: () => void }) 
     </div>
   );
 }
-

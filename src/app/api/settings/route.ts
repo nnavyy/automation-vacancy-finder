@@ -8,24 +8,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getApiUser } from "@/lib/auth-helpers";
-import { encrypt, decrypt, maskProviderKeys, encryptProviderKeys } from "@/lib/crypto";
+import { encrypt, maskProviderKeys, encryptProviderKeys } from "@/lib/crypto";
 import { recordPreferenceCatalogTerms } from "@/lib/catalog/dynamic";
 import type { SearchPreferenceData } from "@/types";
 
-// ── Default Values ────────────────────────────────────────────
+// ── Default Values (unconfigured until user sets their roles/keywords) ────
 
 const PREF_DEFAULTS = {
   name:                  "Default",
-  targetRoles:           ["Frontend Developer", "Full Stack Developer", "Software Engineer"],
-  searchKeywordsEn:      ["frontend developer", "full stack developer", "react developer", "next.js developer"],
-  searchKeywordsRu:      ["фронтенд разработчик", "фулл стек разработчик", "веб разработчик", "react разработчик"],
-  requiredSkills:        ["React", "TypeScript", "JavaScript", "Next.js"],
-  niceToHaveSkills:      ["Tailwind CSS", "Node.js", "PostgreSQL", "REST API", "Git"],
+  targetRoles:           [] as string[],
+  searchKeywordsEn:      [] as string[],
+  searchKeywordsRu:      [] as string[],
+  requiredSkills:        [] as string[],
+  niceToHaveSkills:      [] as string[],
   experience:            ["between1And3", "between3And6"],
   workFormat:            ["remote", "hybrid"],
   salaryMinimum:         null as number | null,
   salaryCurrency:        "RUR",
-  excludeKeywords:       [],
+  excludeKeywords:       [] as string[],
   redFlagKeywords:       ["паспорт", "залог", "unpaid"],
   minimumScoreToNotify:  70,
   maxNotificationsPerDay: 20,
@@ -148,7 +148,7 @@ export async function GET() {
           data: {
             ...PREF_DEFAULTS,
             userId: user.id,
-            name: "Default Profile",
+            name: "Default",
             isActive: true,
           },
         });
@@ -213,6 +213,10 @@ export async function POST(req: NextRequest) {
       "hhProfileName", "hhProfileAvatar", "hhTotalApplications",
       "hhSessionStatus", "hhLastVerifiedAt", "hhExpiresAt",
     ]);
+
+    if (typeof scalarFields.name === "string") {
+      scalarFields.name = scalarFields.name.trim() || "Default";
+    }
 
     if (typeof scalarFields.language !== "string" || !scalarFields.language) {
       delete scalarFields.language;
@@ -313,5 +317,3 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: "Failed to save settings" }, { status: 500 });
   }
 }
-
-// ts recheck

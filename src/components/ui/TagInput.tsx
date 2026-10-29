@@ -18,7 +18,7 @@ interface TagInputProps {
 
 /**
  * Chip input with catalog autocomplete.
- * Enter/Tab/comma add (the highlighted suggestion if any, otherwise the typed text),
+ * Enter/Tab/comma/blur add (the highlighted suggestion if any, otherwise the typed text),
  * Backspace on empty input removes the last chip, ArrowUp/Down navigate suggestions.
  */
 export default function TagInput({
@@ -38,6 +38,7 @@ export default function TagInput({
   const [text, setText] = useState("");
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
+  const selectingSuggestionRef = useRef(false);
 
   const suggestions = useMemo(
     () => searchCatalog(catalog, text, { limit: maxSuggestions, exclude: value }),
@@ -163,10 +164,15 @@ export default function TagInput({
           }}
           onFocus={() => setOpen(true)}
           onBlur={() => {
-            // Delay so a click on a suggestion registers first.
+            // Commit any typed text if user clicks away without pressing Enter
+            const pendingText = text.trim();
             setTimeout(() => {
+              if (!selectingSuggestionRef.current && pendingText) {
+                addTags(pendingText.split(","));
+              }
+              selectingSuggestionRef.current = false;
               setOpen(false);
-            }, 120);
+            }, 130);
           }}
           onKeyDown={onKeyDown}
           onPaste={onPaste}
@@ -189,6 +195,7 @@ export default function TagInput({
               aria-selected={i === active}
               onMouseDown={(e) => {
                 e.preventDefault();
+                selectingSuggestionRef.current = true;
                 addTags(s);
               }}
               onMouseEnter={() => setActive(i)}
