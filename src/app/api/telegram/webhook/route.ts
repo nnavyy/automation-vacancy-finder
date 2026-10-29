@@ -580,7 +580,7 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ ok: true });
           }
           const applied = await prisma.vacancy.findMany({
-            where: { userId: linked.userId, status: "applied_manual" },
+            where: { userId: linked.userId, status: { in: ["applied_manual", "applied_hh", "applied_auto"] } },
             orderBy: { updatedAt: "desc" },
             take: 10,
             include: { analysis: { select: { matchScore: true } } },

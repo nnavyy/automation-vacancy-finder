@@ -8,6 +8,8 @@ import { requireUser } from "@/lib/auth-helpers";
 import VacanciesSplitView, { VacancyItem } from "@/components/VacanciesSplitView";
 import { calculateRuleScore } from "@/lib/scoring";
 import { toSearchPrefData } from "@/lib/collectionPipeline";
+import { buildProfileVacancyWhere } from "@/lib/ruleFilter";
+import { MAX_VACANCIES_PER_USER } from "@/lib/hhPublicVacancyClient";
 
 export default async function VacanciesPage({
   searchParams,
@@ -22,9 +24,10 @@ export default async function VacanciesPage({
   const limit = 50;
   const skip = (page - 1) * limit;
 
-  // Date cutoff: default last 7 days as requested
   let dateCutoff: Date | undefined = undefined;
-  if (dateRange === "7d") {
+  if (dateRange === "5d") {
+    dateCutoff = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
+  } else if (dateRange === "7d") {
     dateCutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
   } else if (dateRange === "14d") {
     dateCutoff = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
@@ -32,30 +35,7 @@ export default async function VacanciesPage({
     dateCutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
   }
 
-  // Base filter guarantees strictly genuine HH vacancies with valid working URLs
-  const baseGenuineFilter = {
-    userId: user.id,
-    NOT: { hhId: { startsWith: "manual-" } },
-    url: { startsWith: "http" },
-  };
-
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const where: Record<string, any> = { ...baseGenuineFilter };
-  if (status === "applied_manual") {
-    where.status = { in: ["applied_manual", "applied_hh"] };
-  } else if (status === "skip" || status === "ignored") {
-    where.status = { in: ["skipped", "ignored", "low_priority"] };
-  } else if (status) {
-    where.status = status;
-  } else {
-    // Default: prioritize active matching opportunities, exclude non-target/spam
-    where.status = { notIn: ["ignored", "low_priority", "skipped"] };
-  }
-
-  if (dateCutoff) {
-    where.createdAt = { gte: dateCutoff };
-  }
-
   let vacancies: any[] = [];
   let total = 0;
   let totalActive = 0;
@@ -63,6 +43,7 @@ export default async function VacanciesPage({
   let totalSkipped = 0;
   let hasProfile = false;
   let minScoreThreshold = 70;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let prefData: any = undefined;
 
   try {
@@ -81,46 +62,72 @@ export default async function VacanciesPage({
       minScoreThreshold = profile.minimumScoreToNotify;
     }
 
-    [vacancies, total, totalActive, totalAll, totalSkipped] = await withRetry(() =>
+    // Scope vacancies to roles related to the user's active profile
+    // (including adjacent domains like Web Design, UI/UX, and Vibe Coding for Full Stack profiles)
+    const baseGenuineFilter = buildProfileVacancyWhere(user.id, profile);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const where: Record<string, any> = { ...baseGenuineFilter };
+    if (status === "applied_manual") {
+      where.status = { in: ["applied_manual", "applied_hh", "applied_auto"] };
+    } else if (status === "skip" || status === "ignored") {
+      where.status = { in: ["skipped", "ignored", "low_priority"] };
+    } else if (status) {
+      where.status = status;
+    } else {
+      where.status = { notIn: ["ignored", "low_priority", "skipped"] };
+    }
+
+    if (dateCutoff) {
+      where.createdAt = { gte: dateCutoff };
+    }
+
+    // Enforce max 200 vacancies per profile across pagination
+    const remainingQuota = Math.max(0, MAX_VACANCIES_PER_USER - skip);
+    const effectiveTake = Math.min(limit, remainingQuota);
+
+    const [rawVacancies, rawTotal, rawActive, rawAll, rawSkipped] = await withRetry(() =>
       Promise.all([
-        prisma.vacancy.findMany({
-          where,
-          skip,
-          take: limit,
-          orderBy: [
-            { analysis: { matchScore: "desc" } },
-            { createdAt: "desc" },
-          ],
-          select: {
-            id: true,
-            hhId: true,
-            title: true,
-            company: true,
-            area: true,
-            salary: true,
-            url: true,
-            status: true,
-            description: true,
-            createdAt: true,
-            rawData: true,
-            analysis: {
+        effectiveTake > 0
+          ? prisma.vacancy.findMany({
+              where,
+              skip,
+              take: effectiveTake,
+              orderBy: [
+                { analysis: { matchScore: "desc" } },
+                { createdAt: "desc" },
+              ],
               select: {
-                matchScore: true,
-                ruleScore: true,
-                recommendation: true,
-                aiStatus: true,
-                summary: true,
-                matchReasons: true,
-                missingRequirements: true,
-                redFlags: true,
-                coverLetter: true,
-                questions: true,
-                modelUsed: true,
-                bestLanguage: true,
+                id: true,
+                hhId: true,
+                title: true,
+                company: true,
+                area: true,
+                salary: true,
+                url: true,
+                status: true,
+                description: true,
+                createdAt: true,
+                rawData: true,
+                analysis: {
+                  select: {
+                    matchScore: true,
+                    ruleScore: true,
+                    recommendation: true,
+                    aiStatus: true,
+                    summary: true,
+                    matchReasons: true,
+                    missingRequirements: true,
+                    redFlags: true,
+                    coverLetter: true,
+                    questions: true,
+                    modelUsed: true,
+                    bestLanguage: true,
+                  },
+                },
               },
-            },
-          },
-        }),
+            })
+          : Promise.resolve([]),
         prisma.vacancy.count({ where }),
         prisma.vacancy.count({
           where: {
@@ -137,13 +144,20 @@ export default async function VacanciesPage({
         }),
       ])
     );
+
+    vacancies = rawVacancies;
+    total = Math.min(rawTotal, MAX_VACANCIES_PER_USER);
+    totalActive = Math.min(rawActive, MAX_VACANCIES_PER_USER);
+    totalAll = Math.min(rawAll, MAX_VACANCIES_PER_USER);
+    totalSkipped = rawSkipped;
   } catch (err) {
     console.error("[Vacancies Page] Database error:", err);
     throw err;
   }
 
-  // Format vacancies for split view with on-the-fly rule score fallback
+  const writes: Promise<unknown>[] = [];
   const formattedVacancies: VacancyItem[] = vacancies.map((v) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const rawObj = typeof v.rawData === "object" && v.rawData !== null ? (v.rawData as any) : {};
     const normalizedVacancy = {
       hhId: v.hhId,
@@ -151,6 +165,7 @@ export default async function VacanciesPage({
       company: v.company,
       area: v.area ?? undefined,
       description: v.description ?? rawObj.description,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       salary: v.salary as any,
       snippet: rawObj.snippet,
       experience: rawObj.experience?.id ?? rawObj.experience?.name ?? rawObj.experience,
@@ -162,32 +177,36 @@ export default async function VacanciesPage({
     const needsFallback = !v.analysis || (v.analysis.matchScore === 0 && !v.analysis.ruleScore);
     const fallbackRule = needsFallback ? calculateRuleScore(normalizedVacancy, prefData) : null;
 
-    // Asynchronously persist fallback score so DB records are updated permanently
     if (!v.analysis && fallbackRule) {
-      withRetry(() =>
-        prisma.vacancyAnalysis.upsert({
-          where: { vacancyId: v.id },
-          create: {
-            vacancyId: v.id,
-            matchScore: fallbackRule.score,
-            ruleScore: fallbackRule.score,
-            recommendation: fallbackRule.score >= 70 ? "apply" : fallbackRule.score >= 45 ? "maybe" : "skip",
-            aiStatus: "rule_based_only",
-            bestLanguage: prefData?.coverLetterLanguage || "ru",
-            summary: `Rule-based evaluation: ${fallbackRule.score}/100.`,
-            matchReasons: fallbackRule.reasons,
-          },
-          update: {
-            ruleScore: fallbackRule.score,
-          },
-        })
-      ).catch(() => {});
-      withRetry(() =>
-        prisma.vacancy.update({
-          where: { id: v.id },
-          data: { status: "analyzed" },
-        })
-      ).catch(() => {});
+      writes.push(
+        withRetry(() =>
+          prisma.vacancyAnalysis.upsert({
+            where: { vacancyId: v.id },
+            create: {
+              vacancyId: v.id,
+              matchScore: fallbackRule.score,
+              ruleScore: fallbackRule.score,
+              recommendation:
+                fallbackRule.score >= 70 ? "apply" : fallbackRule.score >= 45 ? "maybe" : "skip",
+              aiStatus: "rule_based_only",
+              bestLanguage: prefData?.coverLetterLanguage || "ru",
+              summary: `Rule-based evaluation: ${fallbackRule.score}/100.`,
+              matchReasons: fallbackRule.reasons,
+            },
+            update: {
+              ruleScore: fallbackRule.score,
+            },
+          })
+        ).catch(() => {})
+      );
+      writes.push(
+        withRetry(() =>
+          prisma.vacancy.update({
+            where: { id: v.id },
+            data: { status: "analyzed" },
+          })
+        ).catch(() => {})
+      );
     }
 
     const calculatedScore = v.analysis?.matchScore || fallbackRule?.score || 0;
@@ -198,17 +217,25 @@ export default async function VacanciesPage({
       ? {
           matchScore: finalScore,
           ruleScore: effectiveRuleScore,
-          recommendation: v.analysis.recommendation || (finalScore >= 70 ? "apply" : finalScore >= 45 ? "maybe" : "skip"),
+          recommendation:
+            v.analysis.recommendation ||
+            (finalScore >= 70 ? "apply" : finalScore >= 45 ? "maybe" : "skip"),
           aiStatus: v.analysis.aiStatus || "rule_based_only",
-          summary: v.analysis.summary || (fallbackRule ? `Rule-based evaluation: ${finalScore}/100 based on title, skills, and experience criteria.` : undefined),
-          matchReasons: Array.isArray(v.analysis.matchReasons) && v.analysis.matchReasons.length
-            ? (v.analysis.matchReasons as string[])
-            : fallbackRule?.reasons ?? [],
+          summary:
+            v.analysis.summary ||
+            (fallbackRule
+              ? `Rule-based evaluation: ${finalScore}/100 based on title, skills, and experience criteria.`
+              : undefined),
+          matchReasons:
+            Array.isArray(v.analysis.matchReasons) && v.analysis.matchReasons.length
+              ? (v.analysis.matchReasons as string[])
+              : fallbackRule?.reasons ?? [],
           missingRequirements: Array.isArray(v.analysis.missingRequirements)
             ? (v.analysis.missingRequirements as string[])
             : undefined,
           redFlags: Array.isArray(v.analysis.redFlags)
-            ? (v.analysis.redFlags as any[])
+            ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              (v.analysis.redFlags as any[])
             : undefined,
           coverLetter: v.analysis.coverLetter ?? undefined,
           questions: Array.isArray(v.analysis.questions)
@@ -237,7 +264,10 @@ export default async function VacanciesPage({
       company: v.company,
       area: v.area ?? undefined,
       salary: v.salary,
-      url: v.hhId && /^\d+$/.test(v.hhId) ? `https://hh.ru/vacancy/${v.hhId}` : (v.url ?? undefined),
+      url:
+        v.hhId && /^\d+$/.test(v.hhId)
+          ? `https://hh.ru/vacancy/${v.hhId}`
+          : (v.url ?? undefined),
       status: v.status,
       description: v.description ?? undefined,
       createdAt: v.createdAt.toISOString(),
@@ -246,7 +276,8 @@ export default async function VacanciesPage({
     };
   });
 
-  // Sort strictly by highest match score first, then newest
+  await Promise.allSettled(writes);
+
   formattedVacancies.sort((a, b) => {
     const scoreA = Math.max(a.analysis?.matchScore ?? 0, a.analysis?.ruleScore ?? 0);
     const scoreB = Math.max(b.analysis?.matchScore ?? 0, b.analysis?.ruleScore ?? 0);

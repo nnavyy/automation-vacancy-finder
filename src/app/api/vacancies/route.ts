@@ -1,37 +1,10 @@
-// ============================================================
-// HH Job Copilot — Vacancies List
-// ============================================================
-// GET /api/vacancies
-//
-// Returns a paginated, filterable list of vacancies.
-// Each item includes a lightweight inline analysis summary.
-//
-// Query parameters:
-//   status    — filter by vacancy status (optional)
-//   minScore  — minimum AI match score (optional, 0–100)
-//   page      — current page number (default: 1)
-//   limit     — items per page (default: 20)
-//   sortBy    — "createdAt" | "matchScore" (default: "createdAt")
-//   order     — "asc" | "desc" (default: "desc")
-// ============================================================
-
 import { NextRequest, NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getApiUser } from "@/lib/auth-helpers";
+import { buildProfileVacancyWhere } from "@/lib/ruleFilter";
+import { MAX_VACANCIES_PER_USER } from "@/lib/hhPublicVacancyClient";
 import type { VacancyStatus } from "@/types";
 
-/**
- * GET /api/vacancies
- *
- * List vacancies with optional filtering and pagination.
- *
- * Returns:
- *   200 {
- *     success: true,
- *     data: { vacancies: [...], total: number, page: number, totalPages: number }
- *   }
- *   500 { success: false, error: string }
- */
 export async function GET(req: NextRequest) {
   const user = await getApiUser();
   if (!user) {
@@ -40,7 +13,6 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
 
-    // ── Parse query params ────────────────────────────────
     const status = searchParams.get("status") as VacancyStatus | null;
     const minScoreRaw = searchParams.get("minScore");
     const minScore =
@@ -55,67 +27,65 @@ export async function GET(req: NextRequest) {
     const order: "asc" | "desc" = orderRaw === "asc" ? "asc" : "desc";
     const skip = (page - 1) * limit;
 
-    // ── Build Prisma where clause ─────────────────────────
+    const pref = await prisma.searchPreference.findFirst({
+      where: { userId: user.id, isActive: true },
+    });
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const where: Record<string, any> = {
-      userId: user.id,
-      NOT: { hhId: { startsWith: "manual-" } },
-      url: { startsWith: "http" },
-    };
+    const where: Record<string, any> = buildProfileVacancyWhere(user.id, pref);
 
     if (status) {
       where.status = status;
     }
 
-    // Filtering by minScore requires filtering through the analysis relation.
-    // Vacancies without an analysis record will be excluded when minScore is set.
     if (minScore !== undefined && !isNaN(minScore)) {
       where.analysis = { matchScore: { gte: minScore } };
     }
 
-    // ── Build orderBy clause ──────────────────────────────
-    // Prisma v5 supports ordering by one-to-one relation fields.
-    // Vacancies without an analysis are sorted with nulls last (DB default).
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const orderBy: Record<string, any> =
       sortBy === "matchScore"
         ? { analysis: { matchScore: order } }
         : { createdAt: order };
 
-    // ── Execute queries in parallel ───────────────────────
-    const [vacancies, total] = await Promise.all([
-      prisma.vacancy.findMany({
-        where,
-        skip,
-        take: limit,
-        orderBy,
-        select: {
-          id: true,
-          hhId: true,
-          title: true,
-          company: true,
-          area: true,
-          salary: true,
-          url: true,
-          status: true,
-          createdAt: true,
-          updatedAt: true,
-          // Lightweight analysis summary — avoids loading cover letter / full text
-          analysis: {
+    const remainingQuota = Math.max(0, MAX_VACANCIES_PER_USER - skip);
+    const effectiveTake = Math.min(limit, remainingQuota);
+
+    const [vacancies, rawTotal] = await Promise.all([
+      effectiveTake > 0
+        ? prisma.vacancy.findMany({
+            where,
+            skip,
+            take: effectiveTake,
+            orderBy,
             select: {
-              matchScore: true,
-              recommendation: true,
-              aiStatus: true,
-              redFlags: true,
-              bestLanguage: true,
-              confidence: true,
+              id: true,
+              hhId: true,
+              title: true,
+              company: true,
+              area: true,
+              salary: true,
+              url: true,
+              status: true,
+              createdAt: true,
+              updatedAt: true,
+              analysis: {
+                select: {
+                  matchScore: true,
+                  recommendation: true,
+                  aiStatus: true,
+                  redFlags: true,
+                  bestLanguage: true,
+                  confidence: true,
+                },
+              },
             },
-          },
-        },
-      }),
+          })
+        : Promise.resolve([]),
       prisma.vacancy.count({ where }),
     ]);
 
+    const total = Math.min(rawTotal, MAX_VACANCIES_PER_USER);
     const mappedVacancies = vacancies.map((v) => ({
       ...v,
       url: v.hhId && /^\d+$/.test(v.hhId) ? `https://hh.ru/vacancy/${v.hhId}` : v.url,

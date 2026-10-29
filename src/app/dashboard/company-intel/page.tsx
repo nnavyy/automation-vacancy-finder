@@ -2,12 +2,13 @@
 
 // ============================================================
 // HH Job Copilot — Company Intelligence & Recruiter Directory
-// Multi-engine crawler with quick company switcher, decision makers, and inline AI pitch generator
-// Dynamic localization support (EN / RU)
+// Multi-engine crawler with quick company switcher, decision makers,
+// confirmation modal for deleting history, and inline AI pitch generator
 // ============================================================
 
 import { useState, useEffect, useCallback, Suspense, useMemo } from "react";
 import { useSearchParams } from "next/navigation";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   Search,
   Building2,
@@ -25,6 +26,7 @@ import {
   ExternalLink,
   RefreshCw,
   FileText,
+  X,
 } from "lucide-react";
 import RecruiterDossierModal, { RecruiterDossierData } from "@/components/RecruiterDossierModal";
 import { useLanguage } from "@/lib/i18n";
@@ -126,6 +128,10 @@ function CompanyIntelContent() {
   const [roleQuery, setRoleQuery] = useState("");
   const [error, setError] = useState("");
 
+  // Delete Confirmation Modal State
+  const [deleteTarget, setDeleteTarget] = useState<CompanyIntel | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
   // Inline Pitch Generator State
   const [pitchChannel, setPitchChannel] = useState<"telegram" | "email" | "linkedin">("telegram");
   const [activePitchContact, setActivePitchContact] = useState<CompanyContact | null>(null);
@@ -139,6 +145,18 @@ function CompanyIntelContent() {
 
   // Contact Category Filter
   const [contactFilter, setContactFilter] = useState<"all" | "tech" | "hr">("all");
+
+  // Dismiss delete confirmation modal on Escape key
+  useEffect(() => {
+    if (!deleteTarget) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !deleting) {
+        setDeleteTarget(null);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [deleteTarget, deleting]);
 
   const performSearch = useCallback(async (targetName: string) => {
     if (!targetName.trim()) return;
@@ -177,16 +195,17 @@ function CompanyIntelContent() {
         setIntels(json.data);
         const urlCompany = searchParams.get("company");
         if (urlCompany) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const matched = json.data.find((c: any) =>
             c.companyName.toLowerCase().includes(urlCompany.toLowerCase())
           );
           if (matched) {
             setSelectedId(matched.id);
           } else {
-            // Not in existing records: automatically crawl this company
             performSearch(urlCompany);
           }
         } else if (json.data.length > 0 && !selectedId) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const novakid = json.data.find((c: any) => c.companyName.includes("Novakid"));
           setSelectedId(novakid ? novakid.id : json.data[0].id);
         }
@@ -200,7 +219,6 @@ function CompanyIntelContent() {
     fetchIntels();
   }, [fetchIntels]);
 
-  // Active Company
   const activeCompany = useMemo(() => {
     return intels.find((i) => i.id === selectedId) ?? intels[0] ?? null;
   }, [intels, selectedId]);
@@ -209,7 +227,6 @@ function CompanyIntelContent() {
     return activeCompany ? parseIntelMetadata(activeCompany.description) : {};
   }, [activeCompany]);
 
-  // Filtered Contacts for active company
   const filteredContacts = useMemo(() => {
     if (!activeCompany) return [];
     return activeCompany.contacts.filter((c) => {
@@ -236,7 +253,6 @@ function CompanyIntelContent() {
     });
   }, [activeCompany, contactFilter]);
 
-  // Aggregated Stats
   const totalTracked = intels.length;
   const totalDecisionMakers = intels.reduce((acc, i) => acc + i.contacts.length, 0);
   const totalVerifiedEmails = intels.reduce(
@@ -271,17 +287,25 @@ function CompanyIntelContent() {
     }
   };
 
-  const handleDelete = async (intelId: string) => {
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    const intelId = deleteTarget.id;
+    setDeleting(true);
     try {
       await fetch(`/api/company-intel/${intelId}`, { method: "DELETE" });
       setIntels((prev) => {
         const remaining = prev.filter((i) => i.id !== intelId);
-        if (selectedId === intelId && remaining.length > 0) {
-          setSelectedId(remaining[0].id);
+        if (selectedId === intelId) {
+          setSelectedId(remaining[0]?.id ?? "");
         }
         return remaining;
       });
-    } catch {}
+      setDeleteTarget(null);
+    } catch {
+      // Ignore transient network errors
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const handleGeneratePitchForContact = async (
@@ -354,30 +378,17 @@ function CompanyIntelContent() {
 
   return (
     <div className="max-w-7xl space-y-6 pb-12">
-      {/* ── Top Header & KPI Summary ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <h1 className="text-xl font-bold text-zinc-100 tracking-tight">
-              {t("intel.title", "Company Intel & Recruiter Directory")}
-            </h1>
-            <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-mono">
-              {t("intel.osintBadge", "AUTOMATED OSINT")}
-            </span>
-          </div>
-          <p className="text-zinc-400 text-sm">
-            {t(
-              "intel.subtitle",
-              "Discover verified hiring managers, tech leads, and HR contacts for target vacancies. Generate personalized, high-converting cold pitches via AI engine."
-            )}
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <span className="text-xs px-3 py-1.5 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-300 font-mono">
-            {t("intel.activeCrawler", "Active Multi-Engine Crawler")}
-          </span>
-        </div>
+      {/* ── Top Header (Pure Typographic Hierarchy, Zero Badge Clutter) ── */}
+      <div>
+        <h1 className="text-xl font-bold text-zinc-100 tracking-tight mb-1">
+          {t("intel.title", "Company Intel & Recruiter Directory")}
+        </h1>
+        <p className="text-zinc-400 text-sm">
+          {t(
+            "intel.subtitle",
+            "Discover verified hiring managers, tech leads, and HR contacts for target vacancies. Generate personalized cold pitches via AI engine."
+          )}
+        </p>
       </div>
 
       {/* ── Metric Cards Row ── */}
@@ -477,7 +488,7 @@ function CompanyIntelContent() {
           <button
             type="submit"
             disabled={searching || !companyName.trim()}
-            className="flex items-center justify-center gap-2 px-5 py-2.5 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white rounded-xl text-sm font-semibold transition-all shadow-sm whitespace-nowrap"
+            className="flex items-center justify-center gap-2 px-5 py-2.5 bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white rounded-xl text-sm font-semibold transition-all shadow-sm whitespace-nowrap active:scale-[0.98]"
           >
             {searching ? (
               <>
@@ -546,7 +557,6 @@ function CompanyIntelContent() {
         {/* ── Left Column: Company Profile & Recent Analyses Switcher (1/3 width) ── */}
         <div className="lg:col-span-4 space-y-4">
           {activeCompany ? (
-            /* Active Company Overview Card */
             <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-2xl p-5 backdrop-blur-sm space-y-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-3">
@@ -566,19 +576,28 @@ function CompanyIntelContent() {
                   </div>
                 </div>
 
-                <button
-                  onClick={() =>
-                    handleRecrawl(
-                      activeCompany.id,
-                      activeCompany.companyName,
-                      activeCompany.domain
-                    )
-                  }
-                  className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 transition-colors"
-                  title="Re-crawl intelligence"
-                >
-                  <RefreshCw className="w-3.5 h-3.5 text-violet-400" />
-                </button>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() =>
+                      handleRecrawl(
+                        activeCompany.id,
+                        activeCompany.companyName,
+                        activeCompany.domain
+                      )
+                    }
+                    className="p-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-zinc-200 transition-colors active:scale-95"
+                    title="Re-crawl intelligence"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5 text-violet-400" />
+                  </button>
+                  <button
+                    onClick={() => setDeleteTarget(activeCompany)}
+                    className="p-1.5 rounded-lg bg-zinc-800 hover:bg-rose-500/15 text-zinc-400 hover:text-rose-400 transition-colors active:scale-95"
+                    title={language === "ru" ? "Удалить историю компании" : "Delete company history"}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
 
               {/* Direct links */}
@@ -716,10 +735,10 @@ function CompanyIntelContent() {
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleDelete(item.id);
+                        setDeleteTarget(item);
                       }}
-                      className="p-1 rounded text-zinc-500 hover:text-rose-400 transition-colors"
-                      title="Delete"
+                      className="p-1.5 rounded-lg text-zinc-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors active:scale-95"
+                      title={language === "ru" ? "Удалить историю" : "Delete history"}
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -732,7 +751,6 @@ function CompanyIntelContent() {
 
         {/* ── Right Column: Decision Makers & Inline AI Pitch Generator (2/3 width) ── */}
         <div className="lg:col-span-8 space-y-5">
-          {/* Header Bar with Filter Tabs */}
           <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-2xl p-4 backdrop-blur-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <Users className="w-4 h-4 text-emerald-400" />
@@ -813,19 +831,15 @@ function CompanyIntelContent() {
                           {contact.name.slice(0, 2).toUpperCase()}
                         </div>
                         <div className="min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <h4
-                              onClick={() => openDossier(contact)}
-                              className="text-sm font-bold text-zinc-100 hover:text-violet-400 cursor-pointer transition-colors truncate"
-                            >
-                              {contact.name}
-                            </h4>
-                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/25">
-                              {contact.seniority ?? (language === "ru" ? "Руководитель" : "Leader")}
-                            </span>
-                          </div>
+                          <h4
+                            onClick={() => openDossier(contact)}
+                            className="text-sm font-bold text-zinc-100 hover:text-violet-400 cursor-pointer transition-colors truncate"
+                          >
+                            {contact.name}
+                          </h4>
                           <p className="text-xs text-zinc-400 mt-0.5">
                             {contact.role} · {activeCompany?.companyName}
+                            {contact.seniority ? ` · ${contact.seniority}` : ""}
                           </p>
                         </div>
                       </div>
@@ -988,6 +1002,92 @@ function CompanyIntelContent() {
           )}
         </div>
       </div>
+
+      {/* ── Delete Company History Confirmation Modal ── */}
+      <AnimatePresence>
+        {deleteTarget && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18 }}
+            onClick={() => !deleting && setDeleteTarget(null)}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md"
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 12 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              transition={{ type: "spring", bounce: 0, duration: 0.28 }}
+              onClick={(e) => e.stopPropagation()}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="delete-intel-title"
+              className="w-full max-w-md rounded-2xl bg-zinc-900/95 border border-zinc-800 p-6 shadow-2xl space-y-4"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400 shrink-0">
+                    <Trash2 className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 id="delete-intel-title" className="text-base font-semibold text-zinc-100">
+                      {language === "ru"
+                        ? "Удалить историю компании?"
+                        : "Delete company history?"}
+                    </h3>
+                    <p className="text-xs text-zinc-400 mt-0.5">
+                      {deleteTarget.companyName}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => !deleting && setDeleteTarget(null)}
+                  disabled={deleting}
+                  className="p-1.5 rounded-lg text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800 transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <p className="text-xs text-zinc-300 leading-relaxed">
+                {language === "ru"
+                  ? `Вы уверены, что хотите удалить сохраненное досье "${deleteTarget.companyName}" и связанные контакты (${deleteTarget.contacts.length}) из истории? Это действие необратимо.`
+                  : `Are you sure you want to remove "${deleteTarget.companyName}" and its ${deleteTarget.contacts.length} discovered contacts from your intelligence history? This action cannot be undone.`}
+              </p>
+
+              <div className="flex items-center justify-end gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setDeleteTarget(null)}
+                  disabled={deleting}
+                  className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium transition-colors active:scale-[0.98] disabled:opacity-50"
+                >
+                  {language === "ru" ? "Отмена" : "Cancel"}
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmDelete}
+                  disabled={deleting}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold transition-colors active:scale-[0.98] disabled:opacity-50"
+                >
+                  {deleting ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      {language === "ru" ? "Удаление..." : "Deleting..."}
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="w-3.5 h-3.5" />
+                      {language === "ru" ? "Удалить" : "Delete History"}
+                    </>
+                  )}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Recruiter Dossier Modal */}
       <RecruiterDossierModal

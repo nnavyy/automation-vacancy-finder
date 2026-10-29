@@ -34,7 +34,7 @@ const QUERY_DELAY_MS = 800;
 const MAX_PAGES_PER_QUERY = 3;
 
 /** Max vacancies the system will store per user at any one time */
-export const MAX_VACANCIES_PER_USER = 100;
+export const MAX_VACANCIES_PER_USER = 200;
 
 // ── Utility Helpers ───────────────────────────────────────────
 

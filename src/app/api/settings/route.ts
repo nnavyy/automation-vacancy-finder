@@ -115,7 +115,7 @@ export async function GET() {
 
   try {
     // Fast parallel batch query: preferences, telegram link, and basic counts
-    const [prefRecord, tgLink, totalVacancies, appliedCount] = await Promise.all([
+    const [prefRecord, tgLink, totalVacancies, appliedCount, scoreAgg] = await Promise.all([
       prisma.searchPreference.findFirst({
         where:   { userId: user.id, isActive: true },
         orderBy: { updatedAt: "desc" },
@@ -125,7 +125,8 @@ export async function GET() {
         orderBy: { createdAt: "desc" },
       }),
       prisma.vacancy.count({ where: { userId: user.id } }),
-      prisma.vacancy.count({ where: { userId: user.id, status: "applied" } }),
+      prisma.vacancy.count({ where: { userId: user.id, status: { in: ["applied_manual", "applied_hh", "applied_auto"] } } }),
+      prisma.vacancyAnalysis.aggregate({ where: { vacancy: { userId: user.id } }, _avg: { matchScore: true } }),
     ]);
 
     let pref = prefRecord;
@@ -184,7 +185,7 @@ export async function GET() {
       stats: {
         totalVacancies,
         appliedCount,
-        avgScore: totalVacancies > 0 ? 78 : 0,
+        avgScore: Math.round(scoreAgg._avg.matchScore ?? 0),
       },
     });
   } catch (err) {

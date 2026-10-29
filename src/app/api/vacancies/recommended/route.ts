@@ -9,7 +9,7 @@ import { checkVacancyStillOpen } from "@/lib/hhPublicVacancyClient";
 import { PENDING_AI_STATUSES } from "@/lib/pendingAiRetry";
 
 const LIMIT = 10;
-const KEEP_STATUSES = ["saved", "applied_manual"];
+const KEEP_STATUSES = ["saved", "applied_manual", "applied_hh", "applied_auto"];
 
 export async function GET() {
   const user = await getApiUser();
@@ -32,7 +32,7 @@ export async function GET() {
         },
       },
       orderBy: { analysis: { matchScore: "desc" } },
-      take: LIMIT * 2,
+      take: LIMIT + 2, // each candidate costs one live HH probe
       select: {
         id: true, hhId: true, title: true, company: true, area: true, salary: true, url: true, status: true,
         analysis: { select: { matchScore: true, recommendation: true, summary: true, matchReasons: true } },

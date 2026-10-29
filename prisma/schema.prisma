@@ -341,6 +341,7 @@ model PoolVacancy {
   url             String?
   description     String?
   descriptionHash String?
+  hasFullDescription Boolean @default(false)
   queries         String[] // search queries that surfaced this vacancy
   lastSeenAt      DateTime @default(now())
   checkedAt       DateTime @default(now())

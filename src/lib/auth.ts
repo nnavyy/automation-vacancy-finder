@@ -43,14 +43,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         if (!passwordMatch) return null;
 
-        // Verify OTP code if submitted
+        // OTP is mandatory: a password alone must never create a session
         const code = credentials.code as string | undefined;
-        if (code) {
-          const { verifySubmittedCode } = await import("@/lib/verificationCode");
-          const verifyResult = await verifySubmittedCode(email, code, "sign_in");
-          if (!verifyResult.success) {
-            throw new Error(verifyResult.error || "Invalid verification code.");
-          }
+        if (!code) return null;
+        const { verifySubmittedCode } = await import("@/lib/verificationCode");
+        const verifyResult = await verifySubmittedCode(email, code, "sign_in");
+        if (!verifyResult.success) {
+          throw new Error(verifyResult.error || "Invalid verification code.");
         }
 
         return {

@@ -157,7 +157,8 @@ export async function getSimilarFeedbackExamples(
 export async function saveFeedback(
   vacancyId: string,
   userAction: string,
-  reason?: string
+  reason?: string,
+  statusOverride?: string
 ): Promise<void> {
   try {
     // 1. Persist the feedback entry
@@ -186,7 +187,7 @@ export async function saveFeedback(
       interview: "applied_manual",
       rejected:  "ignored",
     };
-    const newStatus = statusMap[userAction] ?? "notified";
+    const newStatus = statusOverride ?? statusMap[userAction] ?? "notified";
 
     await prisma.vacancy.update({
       where: { id: vacancyId },

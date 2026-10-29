@@ -1,10 +1,10 @@
 // ============================================================
-// wingkiiy Job AI — Cron: Collect & Analyze Vacancies (Multi-User)
+// wingkiiy Job AI — Cron: Collect & Analyze Vacancies (Multi-User Load-Balanced)
 // ============================================================
 // GET /api/cron/collect-vacancies
 // Protected by Authorization: Bearer {CRON_SECRET}
-// Loops through ALL users with an active SearchPreference
-// and runs the collection pipeline for each.
+// Prioritizes least-recently-synced users first (fair round-robin)
+// and allocates balanced AI & time charge budgets per user.
 // ============================================================
 
 import { NextRequest, NextResponse } from "next/server";
@@ -16,7 +16,6 @@ import { safeEqual } from "@/lib/timingSafe";
 export const maxDuration = 300;
 
 export async function GET(req: NextRequest) {
-  // ── Auth ──────────────────────────────────────────────────
   const cronSecret = process.env.CRON_SECRET;
   const authHeader = req.headers.get("authorization") || "";
 
@@ -24,32 +23,47 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
   }
 
-  // ── Find all users with an active preference ──────────────
   try {
     const activePrefs = await prisma.searchPreference.findMany({
-      where:  { isActive: true },
-      select: { userId: true },
+      where: { isActive: true },
+      select: { userId: true, collectionStatus: true, updatedAt: true },
       distinct: ["userId"],
     });
 
     if (activePrefs.length === 0) {
-      return NextResponse.json({ success: false, error: "No active users with search preferences." }, { status: 400 });
+      return NextResponse.json(
+        { success: false, error: "No active users with search preferences." },
+        { status: 400 }
+      );
     }
 
-    // Keep the shared pool small: drop stale/closed/over-cap rows before users read from it
+    // Fair Load Balancer: sort users so least-recently-synced profiles run first
+    activePrefs.sort((a, b) => {
+      const statusA = a.collectionStatus as { finishedAt?: string } | null;
+      const statusB = b.collectionStatus as { finishedAt?: string } | null;
+      const timeA = statusA?.finishedAt ? new Date(statusA.finishedAt).getTime() : 0;
+      const timeB = statusB?.finishedAt ? new Date(statusB.finishedAt).getTime() : 0;
+      return timeA - timeB;
+    });
+
     const purged = await purgePool().catch((e) => {
       console.error("[Cron] purgePool failed:", e);
       return null;
     });
 
-    const results: Record<string, unknown> = { pool: purged };
-    const cronDeadline = Date.now() + 250_000; // 250s max to safely return before 300s gateway timeout
+    // Allocate fair AI charge per user so no single user exhausts the shared LLM quota
+    const aiChargePerUser = Math.max(15, Math.min(40, Math.floor(80 / activePrefs.length)));
+
+    const results: Record<string, unknown> = { pool: purged, aiChargePerUser };
+    const cronDeadline = Date.now() + 250_000;
 
     for (let i = 0; i < activePrefs.length; i++) {
       const { userId } = activePrefs[i];
       const remainingTime = cronDeadline - Date.now();
       if (remainingTime < 15_000) {
-        console.warn(`[Cron] Approaching cron timeout. Scheduled remaining ${activePrefs.length - i} users for next run.`);
+        console.warn(
+          `[Cron] Approaching cron timeout. Scheduled remaining ${activePrefs.length - i} users for next run.`
+        );
         results[userId] = { skipped: true, reason: "cron_timeout_budget" };
         break;
       }
@@ -57,8 +71,13 @@ export async function GET(req: NextRequest) {
       const usersLeft = activePrefs.length - i;
       const budgetForUser = Math.min(180_000, Math.max(30_000, Math.floor(remainingTime / usersLeft)));
 
-      console.log(`[Cron] Running pipeline for user ${userId} with budget ${budgetForUser}ms...`);
-      const result = await runCollectionPipeline(userId, { maxDurationMs: budgetForUser });
+      console.log(
+        `[Cron] Running pipeline for user ${userId} (time=${budgetForUser}ms, aiCharge=${aiChargePerUser})...`
+      );
+      const result = await runCollectionPipeline(userId, {
+        maxDurationMs: budgetForUser,
+        maxAiCalls: aiChargePerUser,
+      });
       results[userId] = result;
     }
 

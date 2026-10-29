@@ -1,15 +1,16 @@
 import React from "react";
-import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
-import UnderConstruction404 from "@/components/UnderConstruction404";
+import { auth } from "@/lib/auth";
+import prisma from "@/lib/db";
 import LandingView from "@/components/landing/LandingView";
-import { IS_MAINTENANCE_LOCKDOWN, isEmailWhitelisted } from "@/lib/maintenance";
 
 export const metadata = {
   title: "HH Job Copilot — Autonomous Local Job Search & AI Scoring",
   description:
     "Open-source, self-hosted job search copilot for HeadHunter (hh.ru). Caches vacancies matching your developer profile, evaluates compatibility with multi-tier AI, verifies vacancy liveness, and dispatches to Telegram.",
 };
+
+const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 
 interface HomePageProps {
   searchParams?: Promise<{ preview?: string }> | { preview?: string };
@@ -18,20 +19,23 @@ interface HomePageProps {
 export default async function Home({ searchParams }: HomePageProps) {
   const session = await auth();
   const userEmail = session?.user?.email?.toLowerCase();
-  const isWhitelisted = isEmailWhitelisted(userEmail);
   const resolvedParams = searchParams ? await searchParams : {};
   const isPreview = resolvedParams.preview === "true" || resolvedParams.preview === "landing";
 
-  // If maintenance lockdown is active, authorized testers are routed to /dashboard unless previewing
-  if (IS_MAINTENANCE_LOCKDOWN && isWhitelisted && !isPreview) {
-    redirect("/dashboard");
+  // If the user is signed in and registered over 7 days ago, automatically redirect to the main dashboard
+  if (userEmail && !isPreview) {
+    const dbUser = await prisma.user
+      .findUnique({
+        where: { email: userEmail },
+        select: { createdAt: true },
+      })
+      .catch(() => null);
+
+    if (dbUser && Date.now() - dbUser.createdAt.getTime() >= SEVEN_DAYS_MS) {
+      redirect("/dashboard");
+    }
   }
 
-  // When maintenance lockdown is active, public/guests always see Under Construction / Coming Soon
-  if (IS_MAINTENANCE_LOCKDOWN && !isPreview) {
-    return <UnderConstruction404 is404={false} />;
-  }
-
-  // Showcase Landing Page (rendered when maintenance is disabled or when ?preview=true is passed)
+  // First-time visitors and users registered for less than 7 days see the Landing showcase
   return <LandingView userEmail={userEmail} />;
 }

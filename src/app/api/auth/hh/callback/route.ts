@@ -36,6 +36,13 @@ export async function GET(req: NextRequest) {
       return NextResponse.redirect(new URL("/login", baseUrl));
     }
 
+    // login route sends user.id as `state`; reject forged callbacks (CSRF)
+    if (searchParams.get("state") !== user.id) {
+      return NextResponse.redirect(
+        new URL(`/dashboard/settings?oauth_error=${encodeURIComponent("Invalid OAuth state.")}`, baseUrl)
+      );
+    }
+
     const clientId = process.env.HH_CLIENT_ID;
     const clientSecret = process.env.HH_CLIENT_SECRET;
 
@@ -118,7 +125,7 @@ export async function GET(req: NextRequest) {
       await prisma.searchPreference.update({
         where: { id: pref.id },
         data: {
-          hhToken: encrypt(accessToken),
+          hhToken: encrypt(`oauth:${accessToken}`), // prefix makes hhPrivateClient use Bearer auth
           hhSessionStatus: "active",
           hhLastVerifiedAt: new Date(),
           hhExpiresAt: expiresAt,

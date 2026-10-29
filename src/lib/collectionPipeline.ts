@@ -1,8 +1,9 @@
 // ============================================================
-// HH Job Copilot — Collection Pipeline (Multi-User)
+// HH Job Copilot — Collection Pipeline (Multi-User + Load-Balanced)
 // ============================================================
 // Runs for a specific userId's active SearchPreference.
-// All vacancies are stored with userId for data isolation.
+// Pulls from the shared PoolVacancy vault, enforces the 200-vacancy
+// per-profile rolling cap, and applies per-run AI charge balancing.
 // ============================================================
 
 import crypto from "crypto";
@@ -17,6 +18,18 @@ import { analyzeVacancy } from "@/lib/aiAnalyzer";
 import { sendVacancyNotificationToUser } from "@/lib/telegram";
 import { isSafePublicUrl } from "@/lib/security";
 import type { NormalizedVacancy, SearchPreferenceData } from "@/types";
+
+// ── Global Load-Balancing Semaphore ──────────────────────────
+const MAX_CONCURRENT_PIPELINES = 3;
+let activePipelineCount = 0;
+
+export function getActivePipelineLoad(): { active: number; max: number; canAcceptAuto: boolean } {
+  return {
+    active: activePipelineCount,
+    max: MAX_CONCURRENT_PIPELINES,
+    canAcceptAuto: activePipelineCount < MAX_CONCURRENT_PIPELINES,
+  };
+}
 
 // ── Type Helpers ──────────────────────────────────────────────
 
@@ -59,20 +72,18 @@ export interface PipelineResult {
     analyzed: number;
     notified: number;
     errors: number;
+    aiChargesUsed?: number;
   };
 }
 
 // ── Main Pipeline ─────────────────────────────────────────────
 
-/**
- * Runs the full vacancy collection + analysis pipeline for a specific user.
- * Includes time-budget guard to prevent serverless execution timeouts.
- */
 export async function runCollectionPipeline(
   userId: string,
-  options?: { maxDurationMs?: number }
+  options?: { maxDurationMs?: number; maxAiCalls?: number }
 ): Promise<PipelineResult> {
   const maxDurationMs = options?.maxDurationMs ?? 240_000;
+  const maxAiCalls = options?.maxAiCalls ?? 35;
   const deadline = Date.now() + maxDurationMs;
 
   // ── Step 1: Load user's active SearchPreference ───────────
@@ -95,7 +106,7 @@ export async function runCollectionPipeline(
 
   if (currentStatus?.running && currentStatus.startedAt) {
     const elapsedMs = Date.now() - new Date(currentStatus.startedAt).getTime();
-    const STALE_LOCK_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes stale lock breaker
+    const STALE_LOCK_TIMEOUT_MS = 5 * 60 * 1000;
     if (!isNaN(elapsedMs) && elapsedMs < STALE_LOCK_TIMEOUT_MS) {
       return {
         success: false,
@@ -105,6 +116,7 @@ export async function runCollectionPipeline(
     console.warn(`[Pipeline] Stale collection lock detected (${Math.round(elapsedMs / 1000)}s old), resetting.`);
   }
 
+  activePipelineCount++;
   const pref = toSearchPrefData(prefRaw);
 
   // Pre-fetch candidate's portfolio text once for the entire batch (SSRF protected)
@@ -113,6 +125,7 @@ export async function runCollectionPipeline(
       const res = await fetch(pref.portfolioUrl, { signal: AbortSignal.timeout(4000) });
       if (res.ok) {
         const html = await res.text();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (pref as any).cachedPortfolioContent = html
           .replace(/<[^>]*>?/gm, " ")
           .replace(/\s\s+/g, " ")
@@ -130,10 +143,17 @@ export async function runCollectionPipeline(
   });
   const chatId = telegramLink?.telegramChatId ?? undefined;
 
-  const summary = { processed: 0, saved: 0, ignored: 0, analyzed: 0, notified: 0, errors: 0 };
+  const summary = {
+    processed: 0,
+    saved: 0,
+    ignored: 0,
+    analyzed: 0,
+    notified: 0,
+    errors: 0,
+    aiChargesUsed: 0,
+  };
   const startedAt = new Date().toISOString();
 
-  // Mark status as running
   await prisma.searchPreference.update({
     where: { id: prefRaw.id },
     data: { collectionStatus: { running: true, processed: 0, analyzed: 0, saved: 0, total: 0, startedAt } },
@@ -142,21 +162,19 @@ export async function runCollectionPipeline(
   let vacancies: NormalizedVacancy[] = [];
 
   try {
-    // ── Step 2: Collect vacancies from HH API ─────────────────
+    // ── Step 2: Collect vacancies from shared PoolVacancy vault ──
     try {
-      // Serve from the shared DB pool; HH is only crawled for stale queries.
       vacancies = await getPoolVacancies(pref, buildSearchQueries(pref));
     } catch (err) {
-      console.error("[Pipeline] collectAllVacancies failed:", err);
+      console.error("[Pipeline] getPoolVacancies failed:", err);
       return {
         success: false,
         error: `Failed to collect vacancies: ${err instanceof Error ? err.message : String(err)}`,
       };
     }
 
-    console.log(`[Pipeline] Collected ${vacancies.length} vacancies for user ${userId}`);
+    console.log(`[Pipeline] Collected ${vacancies.length} pool vacancies for user ${userId}`);
 
-    // Update total count
     await prisma.searchPreference.update({
       where: { id: prefRaw.id },
       data: { collectionStatus: { running: true, processed: 0, analyzed: 0, saved: 0, total: vacancies.length, startedAt } },
@@ -197,7 +215,7 @@ export async function runCollectionPipeline(
       }
     };
 
-    // ── 100-vacancy cap guard (hoisted once outside loop to eliminate query explosion) ──
+    // ── 200-vacancy cap guard per profile ──
     let activeVacancyCount = await prisma.vacancy.count({
       where: {
         userId,
@@ -205,6 +223,23 @@ export async function runCollectionPipeline(
         NOT: { hhId: { startsWith: "manual-" } },
       },
     });
+
+    // Rolling eviction: park lowest-scored unacted vacancies so fresh ones can enter
+    if (activeVacancyCount >= MAX_VACANCIES_PER_USER) {
+      const evict = await prisma.vacancy.findMany({
+        where: { userId, status: { in: ["new", "analyzed"] }, NOT: { hhId: { startsWith: "manual-" } } },
+        orderBy: [{ analysis: { matchScore: "asc" } }, { createdAt: "asc" }],
+        take: activeVacancyCount - MAX_VACANCIES_PER_USER + 25,
+        select: { id: true },
+      });
+      if (evict.length) {
+        await prisma.vacancy.updateMany({
+          where: { id: { in: evict.map((v) => v.id) } },
+          data: { status: "low_priority" },
+        });
+        activeVacancyCount -= evict.length;
+      }
+    }
 
     const processSingleVacancy = async (vacancy: NormalizedVacancy) => {
       if (Date.now() > deadline) return;
@@ -277,7 +312,7 @@ export async function runCollectionPipeline(
             },
           });
           dbVacancyId = created.id;
-          activeVacancyCount++; // was never incremented, so the cap never triggered
+          activeVacancyCount++;
           summary.saved++;
           summary.processed++;
           await reportProgress();
@@ -293,6 +328,7 @@ export async function runCollectionPipeline(
               filterReason: filterResult.reason ?? null,
             },
           });
+          if (!existing) activeVacancyCount--;
           summary.ignored++;
           await reportProgress();
           return;
@@ -301,6 +337,7 @@ export async function runCollectionPipeline(
         // ── Rule score pre-check on basic snippet/title ────────
         const preScore = calculateRuleScore(vacancy, pref);
         if (preScore.score < 10) {
+          if (!existing) activeVacancyCount--;
           await prisma.vacancy.update({
             where: { id: dbVacancyId },
             data: { status: "low_priority" },
@@ -310,11 +347,21 @@ export async function runCollectionPipeline(
         }
 
         // ── Enrich with full description if available ──────────
-        if (vacancy.url) {
+        if (vacancy.url && !(vacancy.rawData as { poolFull?: boolean } | undefined)?.poolFull) {
           const fullDesc = await fetchVacancyJsonLd(vacancy.url);
           if (fullDesc && fullDesc.length > (vacancy.description?.length || 0)) {
             vacancy.description = fullDesc;
             vacancy.descriptionHash = crypto.createHash("md5").update(fullDesc).digest("hex");
+            await prisma.poolVacancy
+              .updateMany({
+                where: { hhId: vacancy.hhId },
+                data: {
+                  description: fullDesc,
+                  descriptionHash: vacancy.descriptionHash,
+                  hasFullDescription: true,
+                },
+              })
+              .catch(() => {});
             await prisma.vacancy.update({
               where: { id: dbVacancyId },
               data: { description: vacancy.description, descriptionHash: vacancy.descriptionHash },
@@ -325,6 +372,7 @@ export async function runCollectionPipeline(
         // ── Rule score check after enrichment ──────────────────
         const ruleScore = calculateRuleScore(vacancy, pref);
         if (ruleScore.score < 20) {
+          if (!existing) activeVacancyCount--;
           await prisma.vacancy.update({ where: { id: dbVacancyId }, data: { status: "low_priority" } });
           await reportProgress();
           return;
@@ -348,9 +396,25 @@ export async function runCollectionPipeline(
           },
         });
 
+        // ── Load-Balanced AI Charge Check ──────────────────────
+        // If this user run has consumed its per-tick AI charge quota, leave the vacancy
+        // in `pending_ai` so the background retry worker or next sync tick enriches it
+        // without starving other users on the platform.
+        if (summary.aiChargesUsed >= maxAiCalls) {
+          await prisma.vacancy.update({ where: { id: dbVacancyId }, data: { status: "analyzed" } });
+          summary.analyzed++;
+          await reportProgress();
+          return;
+        }
+        summary.aiChargesUsed++;
+
         // ── AI analysis ────────────────────────────────────────
         const { positive, negative } = await getSimilarFeedbackExamples(vacancy, pref.userId);
-        const { analysis, provider, model, aiStatus } = await analyzeVacancy(vacancy, [...positive, ...negative], pref);
+        const { analysis, provider, model, aiStatus } = await analyzeVacancy(
+          vacancy,
+          [...positive, ...negative],
+          pref
+        );
 
         const analysisData = {
           matchScore:          analysis.match_score,
@@ -380,7 +444,6 @@ export async function runCollectionPipeline(
         await reportProgress();
 
         // ── Telegram notification ──────────────────────────────
-        // Defer notification if AI status is pending retry to prevent degraded rule-only alerts
         const isPendingAi = aiStatus === "pending_ai" || aiStatus === "pending_limit";
         const shouldNotify =
           !isPendingAi &&
@@ -388,6 +451,7 @@ export async function runCollectionPipeline(
           todayNotifiedCount < pref.maxNotificationsPerDay;
 
         if (shouldNotify && chatId) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const userLang = telegramLink?.language || (pref as any).language || (pref.coverLetterLanguage === "Russian" ? "ru" : "en");
           const sent = await sendVacancyNotificationToUser(vacancy, analysis, dbVacancyId, chatId, userLang);
           if (sent) {
@@ -439,6 +503,7 @@ export async function runCollectionPipeline(
     console.log("[Pipeline] Done —", summary);
     return { success: true, data: summary };
   } finally {
+    activePipelineCount = Math.max(0, activePipelineCount - 1);
     try {
       await prisma.searchPreference.update({
         where: { id: prefRaw.id },

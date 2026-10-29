@@ -6,6 +6,8 @@
 import DashboardOverview from "@/components/DashboardOverview";
 import prisma, { withRetry } from "@/lib/db";
 import { requireUser } from "@/lib/auth-helpers";
+import { buildProfileVacancyWhere } from "@/lib/ruleFilter";
+import { MAX_VACANCIES_PER_USER } from "@/lib/hhPublicVacancyClient";
 
 export default async function DashboardPage() {
   const user = await requireUser();
@@ -20,7 +22,9 @@ export default async function DashboardPage() {
   let lowCount = 0;
   let analyzedCount = 0;
   let lastSyncIso: string | undefined;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let topMatches: any[] = [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let userPref: any = null;
   let threshold = 65;
 
@@ -33,11 +37,12 @@ export default async function DashboardPage() {
     userPref = pref;
     threshold = pref?.minimumScoreToNotify ?? 65;
 
-    const baseGenuineFilter = {
-      userId: user.id,
-      NOT: { hhId: { startsWith: "manual-" } },
-      url: { startsWith: "http" },
-    };
+    // Profile-aware filter: matches target roles + adjacent domains (Web Design, Vibe Coding, etc.)
+    // and excludes irrelevant noise (e.g. Media Buyer, Sales, Call Center)
+    const baseGenuineFilter = buildProfileVacancyWhere(user.id, pref);
+
+    // 5-day maximum window for Overview Top Matches
+    const fiveDaysAgo = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000);
 
     const [
       allCount,
@@ -82,6 +87,7 @@ export default async function DashboardPage() {
         prisma.vacancy.findMany({
           where: {
             ...baseGenuineFilter,
+            createdAt: { gte: fiveDaysAgo },
             status: { notIn: ["ignored", "low_priority", "skipped"] },
             analysis: {
               matchScore: { gte: threshold },
@@ -89,7 +95,10 @@ export default async function DashboardPage() {
             },
           },
           take: 6,
-          orderBy: { analysis: { matchScore: "desc" } },
+          orderBy: [
+            { analysis: { matchScore: "desc" } },
+            { createdAt: "desc" },
+          ],
           select: {
             id: true,
             hhId: true,
@@ -115,19 +124,23 @@ export default async function DashboardPage() {
 
     let finalTopMatches = filteredTopVacancies;
     if (finalTopMatches.length === 0) {
-      // Fallback: If no vacancy passes the strict threshold yet, show top analyzed matching roles >= 50
+      // Fallback: Still strictly within the 5-day max window, show highest-scoring profile-related roles
       finalTopMatches = await withRetry(() =>
         prisma.vacancy.findMany({
           where: {
-            userId: user.id,
+            ...baseGenuineFilter,
+            createdAt: { gte: fiveDaysAgo },
             status: { notIn: ["ignored", "low_priority", "skipped"] },
             analysis: {
-              matchScore: { gte: 50 },
+              matchScore: { gte: 45 },
               recommendation: { not: "skip" },
             },
           },
-          take: 5,
-          orderBy: { analysis: { matchScore: "desc" } },
+          take: 6,
+          orderBy: [
+            { analysis: { matchScore: "desc" } },
+            { createdAt: "desc" },
+          ],
           select: {
             id: true,
             hhId: true,
@@ -151,11 +164,11 @@ export default async function DashboardPage() {
       );
     }
 
-    total = allCount;
+    total = Math.min(allCount, MAX_VACANCIES_PER_USER);
     topMatches = finalTopMatches;
     aiPending = pendingCount;
     avgScore = scoreAgg._avg.matchScore ? Math.round(scoreAgg._avg.matchScore) : 0;
-    analyzedCount = scoreAgg._count.matchScore ?? 0;
+    analyzedCount = Math.min(scoreAgg._count.matchScore ?? 0, MAX_VACANCIES_PER_USER);
     highCount = highScoreCount;
     maybeCount = maybeScoreCount;
     lowCount = lowScoreCount;

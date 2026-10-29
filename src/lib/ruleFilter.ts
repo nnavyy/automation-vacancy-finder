@@ -1,9 +1,10 @@
 // ============================================================
-// Vacancy AI Assistant — Rule-Based Pre-Filter
+// Vacancy AI Assistant — Rule-Based Pre-Filter & Profile Matcher
 // ============================================================
-// Runs BEFORE AI analysis to disqualify obviously bad vacancies.
-// Saves AI quota by rejecting scams, incompatible roles, and
-// strict constraint conflicts early.
+// Runs BEFORE AI analysis to disqualify obviously bad vacancies,
+// and builds Prisma profile-relevance filters so each profile
+// only displays related roles (including adjacent domains like
+// Web Design, UI/UX, and Vibe Coding for Full Stack profiles).
 // ============================================================
 
 import type { NormalizedVacancy, SearchPreferenceData } from "@/types";
@@ -53,8 +54,15 @@ const OTP_PASSPORT_PATTERNS: string[] = [
 /** HH experience IDs that indicate a senior-level role (6+ years) */
 const SENIOR_EXPERIENCE_IDS: string[] = ["more6", "moreThan6"];
 
-/** Irrelevant non-development / non-target roles that HH.ru fuzzy search often incorrectly returns */
-const IRRELEVANT_ROLE_PATTERNS: string[] = [
+/** Irrelevant non-development / non-target roles that HH.ru fuzzy search often returns */
+export const IRRELEVANT_ROLE_PATTERNS: string[] = [
+  "media buyer",
+  "медиабайер",
+  "медиа байер",
+  "арбитражник",
+  "трафик-менеджер",
+  "traffic manager",
+  "закупщик рекламы",
   "техник",
   "техническ специалист",
   "технической поддержки",
@@ -109,14 +117,11 @@ const IRRELEVANT_ROLE_PATTERNS: string[] = [
   "smm",
   "таргетолог",
   "телемаркетолог",
+  "бухгалтер",
 ];
 
 // ── Helper ────────────────────────────────────────────────────
 
-/**
- * Case-insensitive substring search across a list of patterns.
- * Returns the first matched pattern string, or null if no match.
- */
 function containsAny(text: string, patterns: string[]): string | null {
   const lower = text.toLowerCase();
   for (const pattern of patterns) {
@@ -127,23 +132,167 @@ function containsAny(text: string, patterns: string[]): string | null {
   return null;
 }
 
-// ── Main Filter ───────────────────────────────────────────────
+/**
+ * Expands a user's active profile into a list of related role/title tokens.
+ * For Full Stack / Frontend / Web profiles, automatically includes adjacent
+ * creative & AI-assisted roles (Vibe Coding, No-Code/Low-Code, Web Design, UI/UX).
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function buildProfileRelatedKeywords(pref: any): string[] {
+  if (!pref) return [];
+
+  const asStringArray = (val: unknown): string[] =>
+    Array.isArray(val) ? val.filter((x): x is string => typeof x === "string") : [];
+
+  const base = [
+    ...asStringArray(pref.targetRoles),
+    ...asStringArray(pref.searchKeywordsEn),
+    ...asStringArray(pref.searchKeywordsRu),
+    ...asStringArray(pref.requiredSkills),
+    ...asStringArray(pref.niceToHaveSkills),
+  ]
+    .map((s) => s.trim().toLowerCase())
+    .filter((s) => s.length >= 2);
+
+  const joined = base.join(" ");
+  const isWebOrEngineering =
+    /full[\s-]?stack|frontend|front[\s-]?end|backend|back[\s-]?end|react|next|typescript|javascript|node|web|software|ai|сайт|фронтенд|фулстек|бэкенд|разработчик|программист/i.test(
+      joined,
+    );
+
+  const expanded = isWebOrEngineering
+    ? [
+        ...base,
+        // Core Full Stack / Web Engineering
+        "fullstack",
+        "full stack",
+        "full-stack",
+        "frontend",
+        "front-end",
+        "backend",
+        "back-end",
+        "react",
+        "next.js",
+        "nextjs",
+        "typescript",
+        "javascript",
+        "node.js",
+        "nodejs",
+        "vue",
+        "python",
+        "web developer",
+        "software engineer",
+        "разработчик",
+        "программист",
+        "фронтенд",
+        "фулстек",
+        // Adjacent: Vibe Coding / AI Coding / No-Code & Low-Code
+        "vibe",
+        "ai engineer",
+        "ai developer",
+        "llm",
+        "prompt",
+        "cursor",
+        "no-code",
+        "nocode",
+        "low-code",
+        "webflow",
+        "framer",
+        "tilda",
+        "тильда",
+        "bubble",
+        // Adjacent: Website Design & UI/UX
+        "web design",
+        "website design",
+        "ui/ux",
+        "ux/ui",
+        "product designer",
+        "figma",
+        "веб-дизайн",
+        "дизайнер",
+        "верстальщик",
+        "лендинг",
+      ]
+    : base;
+
+  return Array.from(new Set(expanded)).slice(0, 45);
+}
 
 /**
- * Pre-filters a vacancy against hard disqualification rules before AI analysis.
- *
- * Returns `{ passes: false, reason }` for any definite disqualifier,
- * or `{ passes: true }` if the vacancy should proceed to AI scoring.
- *
- * @param vacancy - Normalized vacancy to evaluate
- * @param pref    - Active search preferences
- * @returns Filter result — { passes: true } or { passes: false, reason }
+ * Builds a Prisma `VacancyWhereInput` that scopes queries to genuine HH vacancies
+ * related to the user's active profile (including adjacent roles like Vibe Coding & Web Design)
+ * while excluding irrelevant roles (e.g. Media Buyer, Sales, Call Center).
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function buildProfileVacancyWhere(userId: string, pref?: any): Record<string, any> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const where: Record<string, any> = {
+    userId,
+    NOT: { hhId: { startsWith: "manual-" } },
+    url: { startsWith: "http" },
+  };
+
+  if (!pref) return where;
+
+  const asStringArray = (val: unknown): string[] =>
+    Array.isArray(val) ? val.filter((x): x is string => typeof x === "string") : [];
+
+  const userExcludes = asStringArray(pref.excludeKeywords)
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+
+  const userWantsSupportOrSales = asStringArray(pref.targetRoles).some((role) =>
+    /поддержк|support|helpdesk|продаж|sales|оператор|media buyer|медиабайер|таргетолог|smm/i.test(
+      role,
+    ),
+  );
+
+  const blockedTitleTerms = [
+    ...userExcludes,
+    ...(userWantsSupportOrSales ? [] : IRRELEVANT_ROLE_PATTERNS),
+  ].slice(0, 60);
+
+  const relatedTerms = buildProfileRelatedKeywords(pref);
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const andConditions: Record<string, any>[] = [];
+
+  if (blockedTitleTerms.length > 0) {
+    andConditions.push({
+      NOT: {
+        OR: blockedTitleTerms.map((term) => ({
+          title: { contains: term, mode: "insensitive" },
+        })),
+      },
+    });
+  }
+
+  if (relatedTerms.length > 0) {
+    andConditions.push({
+      OR: [
+        ...relatedTerms.map((term) => ({
+          title: { contains: term, mode: "insensitive" },
+        })),
+        ...relatedTerms.slice(0, 20).map((term) => ({
+          sourceKeyword: { contains: term, mode: "insensitive" },
+        })),
+      ],
+    });
+  }
+
+  if (andConditions.length > 0) {
+    where.AND = andConditions;
+  }
+
+  return where;
+}
+
+// ── Main Filter ───────────────────────────────────────────────
+
 export function passesBasicFilter(
   vacancy: NormalizedVacancy,
-  pref: SearchPreferenceData
+  pref: SearchPreferenceData,
 ): { passes: boolean; reason?: string } {
-  // Build a single lowercase search corpus from all text fields
   const combinedText = [
     vacancy.title ?? "",
     vacancy.description ?? "",
@@ -189,7 +338,6 @@ export function passesBasicFilter(
   }
 
   // ── Rule 4: Russian citizenship mandatory requirement ─────
-  // Ensure we don't disqualify if it says "гражданство РФ не требуется"
   if (
     !combinedText.includes("не требуется") &&
     !combinedText.includes("не имеет значения")
@@ -230,7 +378,7 @@ export function passesBasicFilter(
     };
   }
 
-  // ── Rule 8: Disqualify irrelevant non-target / support / sales / call-center roles ──
+  // ── Rule 8: Disqualify irrelevant non-target / support / sales / media buyer roles ──
   const titleLower = (vacancy.title ?? "").toLowerCase();
   const userWantsSupportOrSales = pref.targetRoles?.some((role) => {
     const r = role.toLowerCase();
@@ -240,7 +388,9 @@ export function passesBasicFilter(
       r.includes("helpdesk") ||
       r.includes("продаж") ||
       r.includes("sales") ||
-      r.includes("оператор")
+      r.includes("оператор") ||
+      r.includes("media buyer") ||
+      r.includes("медиабайер")
     );
   });
 
@@ -254,6 +404,5 @@ export function passesBasicFilter(
     }
   }
 
-  // All checks passed — vacancy may proceed to AI analysis
   return { passes: true };
 }

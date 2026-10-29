@@ -55,16 +55,8 @@ export async function POST(
     
     await applyToVacancy(rawToken, pref.hhResumeId, hhVacancyId, coverLetterText);
 
-    // 4. Update local state using saveFeedback (treat as applied_hh)
-    // We will map it to "applied_hh" to distinguish from "apply" (manual)
-    // But since "apply" maps to applied_manual in ruleFilters... actually let's just use "apply" but add a note.
-    await saveFeedback(id, "apply", "Automated apply via HH.ru with AI Cover Letter");
-    
-    // We can manually update the status to "applied_hh" if we want to differentiate
-    await prisma.vacancy.update({
-      where: { id },
-      data: { status: "applied_hh" }
-    });
+    // 4. Single write: record feedback and set status "applied_hh" (distinct from manual apply)
+    await saveFeedback(id, "apply", "Automated apply via HH.ru with AI Cover Letter", "applied_hh");
 
     // Return the updated vacancy
     const updated = await prisma.vacancy.findUnique({

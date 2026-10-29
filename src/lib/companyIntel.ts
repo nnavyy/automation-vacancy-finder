@@ -4,7 +4,7 @@
 // ============================================================
 
 import * as cheerio from 'cheerio';
-import Groq from 'groq-sdk';
+import { isSafePublicUrl } from "@/lib/security";
 import { callAI } from '@/lib/aiProviderRouter';
 
 export interface ContactResult {
@@ -331,6 +331,7 @@ export async function crawlCompanyWebsite(
   contacts: ContactResult[];
 }> {
   const website = `https://${domain}`;
+  if (!isSafePublicUrl(website)) return { website, generalEmails: [], contacts: [] };
   const contacts: ContactResult[] = [];
   const generalEmails = new Set<string>();
   let careersUrl: string | undefined;

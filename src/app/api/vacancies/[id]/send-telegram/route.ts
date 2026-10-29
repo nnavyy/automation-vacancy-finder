@@ -75,7 +75,7 @@ export async function POST(
     const link = await prisma.telegramLink.findFirst({
       where: { userId: user.id, isActive: true },
     });
-    const chatId = link?.telegramChatId || process.env.TELEGRAM_CHAT_ID;
+    const chatId = link?.telegramChatId;
     if (!chatId) {
       return NextResponse.json(
         {
