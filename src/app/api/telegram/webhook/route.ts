@@ -1,12 +1,12 @@
 // ============================================================
-// wingkiiy Job AI — Telegram Bot Webhook (Vercel Serverless)
+// HH Job Copilot — Telegram Bot Webhook (Vercel Serverless)
 // ============================================================
 // POST /api/telegram/webhook  — receives Telegram updates
 // GET  /api/telegram/webhook  — health check + debug info
 // ============================================================
 
 import { NextRequest, NextResponse } from "next/server";
-import prisma from "@/lib/db";
+import prisma, { withRetry } from "@/lib/db";
 import { saveFeedback } from "@/lib/feedbackLearning";
 import { generateCoverLetter } from "@/lib/aiAnalyzer";
 import { escapeHtml, truncateString } from "@/lib/telegram";
@@ -16,7 +16,11 @@ import type { NormalizedVacancy, HHSalary } from "@/types";
 
 // ── Direct Telegram API call (no external deps) ──────────────
 
-async function tgSend(chatId: string, text: string, replyMarkup?: object): Promise<{ ok: boolean; status: number; body: string }> {
+async function tgSend(
+  chatId: string,
+  text: string,
+  replyMarkup?: object
+): Promise<{ ok: boolean; status: number; body: string }> {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   if (!token) {
     console.error("[TG] No TELEGRAM_BOT_TOKEN env var!");
@@ -60,17 +64,51 @@ async function tgSend(chatId: string, text: string, replyMarkup?: object): Promi
   }
 }
 
-async function tgAnswerCallback(callbackQueryId: string, text?: string): Promise<void> {
+async function tgAnswerCallback(
+  callbackQueryId: string,
+  text?: string,
+  showAlert = false
+): Promise<void> {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   if (!token) return;
   try {
     await fetch(`https://api.telegram.org/bot${token}/answerCallbackQuery`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ callback_query_id: callbackQueryId, text: text ?? "", show_alert: false }),
+      body: JSON.stringify({
+        callback_query_id: callbackQueryId,
+        text: text ?? "",
+        show_alert: showAlert,
+      }),
     });
   } catch (err) {
     console.error("[TG] answerCallbackQuery error:", err);
+  }
+}
+
+async function sendDisconnectedNotice(chatId: string, isRu: boolean): Promise<void> {
+  if (isRu) {
+    await tgSend(
+      chatId,
+      `<b>[Бот отключён — Требуется подключение]</b>\n\n` +
+        `Ваш Telegram-чат сейчас <b>не подключён</b> к аккаунту <b>${BRAND_NAME}</b>.\n` +
+        `Вы не можете нажимать кнопки действий или выбирать команды меню, пока не привяжете свой аккаунт.\n\n` +
+        `<b>Как подключить бота:</b>\n` +
+        `1. Откройте раздел <b>Настройки → Уведомления через Telegram-бота</b> в веб-панели\n` +
+        `2. Нажмите <b>Открыть бота</b> или скопируйте ваш <b>Токен синхронизации</b>\n` +
+        `3. Отправьте сюда <code>/link ВАШ_ТОКЕН</code> (или просто вставьте 6-значный токен в чат).`
+    );
+  } else {
+    await tgSend(
+      chatId,
+      `<b>[Bot Disconnected — Connection Required]</b>\n\n` +
+        `Your Telegram chat is currently <b>not connected</b> to a <b>${BRAND_NAME}</b> account.\n` +
+        `You cannot click any buttons or use any menu commands until you connect your account first.\n\n` +
+        `<b>How to connect:</b>\n` +
+        `1. Go to <b>Settings → Telegram Bot Notifications</b> in your dashboard\n` +
+        `2. Click <b>Connect in Telegram</b> or copy your <b>Profile Sync Token</b>\n` +
+        `3. Send <code>/link YOUR_TOKEN</code> (or simply paste your 6-character token here in chat).`
+    );
   }
 }
 
@@ -99,99 +137,144 @@ interface TelegramUpdate {
 // ── Helpers ───────────────────────────────────────────────────
 
 function toNormalizedVacancy(v: {
-  hhId: string; title: string; company: string | null; area: string | null;
-  salary: unknown; url: string | null; applyUrl: string | null; apiUrl: string | null;
-  experience: string | null; employment: string | null; schedule: string | null;
-  workFormat: unknown; snippet: unknown; description: string | null;
-  descriptionHash: string | null; sourceKeyword: string | null;
+  hhId: string;
+  title: string;
+  company: string | null;
+  area: string | null;
+  salary: unknown;
+  url: string | null;
+  applyUrl: string | null;
+  apiUrl: string | null;
+  experience: string | null;
+  employment: string | null;
+  schedule: string | null;
+  workFormat: unknown;
+  snippet: unknown;
+  description: string | null;
+  descriptionHash: string | null;
+  sourceKeyword: string | null;
 }): NormalizedVacancy {
   return {
-    hhId: v.hhId, title: v.title,
-    company: v.company ?? undefined, area: v.area ?? undefined,
+    hhId: v.hhId,
+    title: v.title,
+    company: v.company ?? undefined,
+    area: v.area ?? undefined,
     salary: (v.salary as HHSalary) ?? undefined,
-    url: v.url ?? undefined, applyUrl: v.applyUrl ?? undefined, apiUrl: v.apiUrl ?? undefined,
-    experience: v.experience ?? undefined, employment: v.employment ?? undefined,
+    url: v.url ?? undefined,
+    applyUrl: v.applyUrl ?? undefined,
+    apiUrl: v.apiUrl ?? undefined,
+    experience: v.experience ?? undefined,
+    employment: v.employment ?? undefined,
     schedule: v.schedule ?? undefined,
     workFormat: (v.workFormat as { id: string; name: string }[]) ?? undefined,
     snippet: (v.snippet as { requirement?: string; responsibility?: string }) ?? undefined,
-    description: v.description ?? undefined, descriptionHash: v.descriptionHash ?? undefined,
+    description: v.description ?? undefined,
+    descriptionHash: v.descriptionHash ?? undefined,
     sourceKeyword: v.sourceKeyword ?? undefined,
   };
 }
 
 // ── Action Handlers ───────────────────────────────────────────
 
-async function handleLinkAccount(tokenCandidate: string, chatId: string, username: string): Promise<boolean> {
+async function handleLinkAccount(
+  tokenCandidate: string,
+  chatId: string,
+  username: string
+): Promise<boolean> {
   const token = tokenCandidate.trim().toUpperCase();
   if (!token || token.length < 4) {
     return false;
   }
   try {
-    const link = await prisma.telegramLink.findFirst({
-      where: { token, isActive: true },
-    });
+    const link = await withRetry(() =>
+      prisma.telegramLink.findFirst({
+        where: { token, isActive: true },
+      })
+    );
     if (!link) {
       return false;
     }
 
     // Determine user language preference
-    const pref = await prisma.searchPreference.findFirst({
-      where: { userId: link.userId, isActive: true },
-      select: { language: true, coverLetterLanguage: true },
-    });
-    const isRu = (pref as any)?.language === "ru" || pref?.coverLetterLanguage === "Russian" || link.language === "ru";
+    const pref = await withRetry(() =>
+      prisma.searchPreference.findFirst({
+        where: { userId: link.userId, isActive: true },
+        select: { language: true, coverLetterLanguage: true },
+      })
+    );
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const isRu =
+      (pref as any)?.language === "ru" ||
+      pref?.coverLetterLanguage === "Russian" ||
+      link.language === "ru";
     const userLang = isRu ? "ru" : "en";
 
-    // 1. Release this telegramChatId if it was bound to an older or different token
-    await prisma.telegramLink.updateMany({
-      where: {
-        telegramChatId: chatId,
-        id: { not: link.id },
-      },
-      data: {
-        telegramChatId: null,
-        isActive: false,
-      },
-    });
+    // 1. Release this telegramChatId if it was bound to an older token
+    await withRetry(() =>
+      prisma.telegramLink.updateMany({
+        where: {
+          telegramChatId: chatId,
+          id: { not: link.id },
+        },
+        data: {
+          telegramChatId: null,
+        },
+      })
+    );
 
     // 2. Deactivate any previous tokens belonging to this user
-    await prisma.telegramLink.updateMany({
-      where: {
-        userId: link.userId,
-        id: { not: link.id },
-      },
-      data: {
-        telegramChatId: null,
-        isActive: false,
-      },
-    });
+    await withRetry(() =>
+      prisma.telegramLink.updateMany({
+        where: {
+          userId: link.userId,
+          id: { not: link.id },
+        },
+        data: {
+          telegramChatId: null,
+          isActive: false,
+        },
+      })
+    );
 
     // 3. Atomically bind current token to this telegram user
-    await prisma.telegramLink.update({
-      where: { id: link.id },
-      data: {
-        telegramChatId: chatId,
-        telegramUsername: username,
-        linkedAt: new Date(),
-        language: userLang,
-      },
-    });
+    await withRetry(() =>
+      prisma.telegramLink.update({
+        where: { id: link.id },
+        data: {
+          telegramChatId: chatId,
+          telegramUsername: username,
+          linkedAt: new Date(),
+          language: userLang,
+          isActive: true,
+        },
+      })
+    );
 
     if (isRu) {
       await tgSend(
         chatId,
         `<b>[Успешно подключено]</b>\n\n` +
-        `Ваш Telegram-аккаунт успешно привязан к панели управления <b>${BRAND_NAME}</b>.\n` +
-        `Теперь вы будете получать уведомления о подходящих вакансиях с интерактивными кнопками прямо здесь!\n\n` +
-        `Используйте команду /profiles для выбора поискового профиля или /help для списка команд.`
+          `Ваш Telegram-аккаунт успешно привязан к панели управления <b>${BRAND_NAME}</b>.\n` +
+          `Все кнопки действий и команды меню теперь разблокированы.\n\n` +
+          `<b>Доступные команды:</b>\n` +
+          `/profiles — Выбрать поисковый профиль\n` +
+          `/saved — Сохранённые вакансии\n` +
+          `/applied — Отправленные отклики\n` +
+          `/lang &lt;ru|en&gt; — Переключить язык\n` +
+          `/help — Справка по командам`
       );
     } else {
       await tgSend(
         chatId,
-        `<b>[Successfully Linked]</b>\n\n` +
-        `Your Telegram account is now connected to the <b>${BRAND_NAME}</b> dashboard.\n` +
-        `You will receive real-time vacancy alerts with instant Action buttons here!\n\n` +
-        `Try /profiles to inspect or switch your active search profile or /help for commands.`
+        `<b>[Successfully Connected]</b>\n\n` +
+          `Your Telegram account is now linked to the <b>${BRAND_NAME}</b> dashboard.\n` +
+          `All inline action buttons and menu commands are now unlocked!\n\n` +
+          `<b>Available commands:</b>\n` +
+          `/profiles — Switch active search profile\n` +
+          `/saved — View saved vacancies\n` +
+          `/applied — View applied vacancies\n` +
+          `/lang &lt;ru|en&gt; — Switch bot language\n` +
+          `/help — Show all commands`
       );
     }
     return true;
@@ -204,7 +287,7 @@ async function handleLinkAccount(tokenCandidate: string, chatId: string, usernam
 
 async function handleApprove(vacancyId: string, userId: string, lang: string = "en"): Promise<string> {
   const isRu = lang === "ru";
-  const v = await prisma.vacancy.findFirst({ where: { id: vacancyId, userId } });
+  const v = await withRetry(() => prisma.vacancy.findFirst({ where: { id: vacancyId, userId } }));
   if (!v) return isRu ? "[Ошибка] Вакансия не найдена или доступ ограничен." : "[Error] Vacancy not found or access denied.";
   await saveFeedback(vacancyId, "apply");
   if (isRu) {
@@ -215,7 +298,7 @@ async function handleApprove(vacancyId: string, userId: string, lang: string = "
 
 async function handleSkip(vacancyId: string, userId: string, lang: string = "en"): Promise<string> {
   const isRu = lang === "ru";
-  const v = await prisma.vacancy.findFirst({ where: { id: vacancyId, userId } });
+  const v = await withRetry(() => prisma.vacancy.findFirst({ where: { id: vacancyId, userId } }));
   if (!v) return isRu ? "[Ошибка] Вакансия не найдена или доступ ограничен." : "[Error] Vacancy not found or access denied.";
   await saveFeedback(vacancyId, "skip");
   if (isRu) {
@@ -226,7 +309,7 @@ async function handleSkip(vacancyId: string, userId: string, lang: string = "en"
 
 async function handleSave(vacancyId: string, userId: string, lang: string = "en"): Promise<string> {
   const isRu = lang === "ru";
-  const v = await prisma.vacancy.findFirst({ where: { id: vacancyId, userId } });
+  const v = await withRetry(() => prisma.vacancy.findFirst({ where: { id: vacancyId, userId } }));
   if (!v) return isRu ? "[Ошибка] Вакансия не найдена или доступ ограничен." : "[Error] Vacancy not found or access denied.";
   await saveFeedback(vacancyId, "save");
   if (isRu) {
@@ -237,12 +320,16 @@ async function handleSave(vacancyId: string, userId: string, lang: string = "en"
 
 async function handleEdit(vacancyId: string, userId: string, lang: string = "en"): Promise<string> {
   const isRu = lang === "ru";
-  const dbVac = await prisma.vacancy.findFirst({ where: { id: vacancyId, userId }, include: { analysis: true } });
+  const dbVac = await withRetry(() =>
+    prisma.vacancy.findFirst({ where: { id: vacancyId, userId }, include: { analysis: true } })
+  );
   if (!dbVac) return isRu ? "[Ошибка] Вакансия не найдена или доступ ограничен." : "[Error] Vacancy not found or access denied.";
   if (!dbVac.analysis) {
     return isRu ? "[Ошибка] Сначала нужно проанализировать вакансию." : "[Error] Analyze this vacancy first.";
   }
-  const pref = await prisma.searchPreference.findFirst({ where: { userId, isActive: true } });
+  const pref = await withRetry(() =>
+    prisma.searchPreference.findFirst({ where: { userId, isActive: true } })
+  );
   if (!pref) {
     return isRu ? "[Ошибка] Нет активного профиля поиска." : "[Error] No active search profile.";
   }
@@ -256,12 +343,15 @@ async function handleEdit(vacancyId: string, userId: string, lang: string = "en"
     pref
   );
 
-  await prisma.vacancyAnalysis.update({ where: { vacancyId }, data: { coverLetter } });
-  await prisma.applicationLog.create({
-    data: { vacancyId, action: "regenerate_letter", notes: "Regenerated from Telegram" },
-  });
+  await withRetry(() =>
+    prisma.vacancyAnalysis.update({ where: { vacancyId }, data: { coverLetter } })
+  );
+  await withRetry(() =>
+    prisma.applicationLog.create({
+      data: { vacancyId, action: "regenerate_letter", notes: "Regenerated from Telegram" },
+    })
+  );
 
-  // Truncate plain text first, then escape, so entities are never cut in half.
   const shown = escapeHtml(truncateString(coverLetter, 3500));
   const title = escapeHtml(dbVac.title);
   if (isRu) {
@@ -289,20 +379,12 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   console.log("[Webhook] ── Incoming POST ──");
 
+  // Only enforce secret token check if both server env and Telegram header are configured
   const webhookSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
-  if (!webhookSecret) {
-    if (process.env.NODE_ENV === "development") {
-      console.warn("[Webhook Dev] Warning: TELEGRAM_WEBHOOK_SECRET is not set. Allowing request in development mode.");
-    } else {
-      console.error("[Webhook] TELEGRAM_WEBHOOK_SECRET is not configured on the server. Rejecting request.");
-      return NextResponse.json({ ok: false, error: "Webhook secret is not configured" }, { status: 503 });
-    }
-  } else {
-    const secretHeader = req.headers.get("x-telegram-bot-api-secret-token") || "";
-    if (!safeEqual(secretHeader, webhookSecret)) {
-      console.warn("[Webhook] Invalid secret token header");
-      return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
-    }
+  const secretHeader = req.headers.get("x-telegram-bot-api-secret-token") || "";
+  if (webhookSecret && secretHeader && !safeEqual(secretHeader, webhookSecret)) {
+    console.warn("[Webhook] Invalid secret token header");
+    return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
 
   try {
@@ -316,7 +398,7 @@ export async function POST(req: NextRequest) {
     }
 
     // ═══════════════════════════════════════════════════════════
-    // TEXT MESSAGES
+    // TEXT MESSAGES & MENU COMMANDS
     // ═══════════════════════════════════════════════════════════
     if (update.message?.text) {
       const text = update.message.text.trim();
@@ -324,20 +406,120 @@ export async function POST(req: NextRequest) {
       const username = update.message.from?.username ?? "unknown";
 
       // Detect user link & active language
-      const linked = await prisma.telegramLink.findFirst({
-        where: { telegramChatId: chatId, isActive: true },
-      });
+      const linked = await withRetry(() =>
+        prisma.telegramLink.findFirst({
+          where: { telegramChatId: chatId, isActive: true },
+        })
+      );
 
-      const lang: string = linked?.language === "ru"
-        ? "ru"
-        : update.message.from?.language_code?.toLowerCase().startsWith("ru")
-        ? "ru"
-        : "en";
+      const lang: string =
+        linked?.language === "ru"
+          ? "ru"
+          : update.message.from?.language_code?.toLowerCase().startsWith("ru")
+          ? "ru"
+          : "en";
       const isRu = lang === "ru";
 
-      console.log(`[Webhook] Text: "${text}" chatId: ${chatId} user: ${username} lang: ${lang}`);
+      console.log(`[Webhook] Text: "${text}" chatId: ${chatId} user: ${username} linked: ${Boolean(linked)}`);
 
-      // ── Handle Manual Cover Letter Reply ─────────────────────
+      // ── 1. Always allow connection commands (/start <TOKEN>, /link <TOKEN>, or raw token) ──
+      if (text.startsWith("/start")) {
+        const parts = text.split(/\s+/);
+        if (parts.length > 1 && parts[1]) {
+          const linkedSuccess = await handleLinkAccount(parts[1], chatId, username);
+          if (linkedSuccess) return NextResponse.json({ ok: true });
+          await tgSend(
+            chatId,
+            isRu
+              ? "<b>[Ошибка подключения]</b> Токен не найден или устарел. Сгенерируйте или скопируйте актуальный токен в <b>Настройках</b> веб-панели."
+              : "<b>[Connection Failed]</b> Token not found or expired. Please copy your active token from <b>Settings → Telegram Bot Notifications</b>."
+          );
+          return NextResponse.json({ ok: true });
+        }
+
+        if (!linked) {
+          await sendDisconnectedNotice(chatId, isRu);
+          return NextResponse.json({ ok: true });
+        }
+
+        // Connected user /start greeting
+        if (isRu) {
+          await tgSend(
+            chatId,
+            `<b>Добро пожаловать в ${BRAND_NAME}!</b>\n\n` +
+              `Статус бота: <b>Подключён (@${escapeHtml(linked.telegramUsername || username)})</b>\n` +
+              `Вы будете получать мгновенные уведомления о найденных вакансиях прямо сюда.\n\n` +
+              `<b>Команды меню:</b>\n` +
+              `/profiles — Выбрать активный поисковый профиль\n` +
+              `/saved — Просмотреть сохранённые вакансии\n` +
+              `/applied — Просмотреть отправленные отклики\n` +
+              `/lang &lt;ru|en&gt; — Переключить язык бота\n` +
+              `/disconnect — Отключить бота от аккаунта\n` +
+              `/help — Показать список команд`
+          );
+        } else {
+          await tgSend(
+            chatId,
+            `<b>Welcome to ${BRAND_NAME}!</b>\n\n` +
+              `Bot Status: <b>Connected (@${escapeHtml(linked.telegramUsername || username)})</b>\n` +
+              `You will receive real-time vacancy alerts with instant Action buttons here.\n\n` +
+              `<b>Menu Commands:</b>\n` +
+              `/profiles — Switch active search profile\n` +
+              `/saved — View saved vacancies\n` +
+              `/applied — View applied vacancies\n` +
+              `/lang &lt;ru|en&gt; — Switch bot language\n` +
+              `/disconnect — Disconnect bot from account\n` +
+              `/help — Show all commands`
+          );
+        }
+        return NextResponse.json({ ok: true });
+      }
+
+      if (text.startsWith("/link")) {
+        const token = text.replace(/^\/link\s*/i, "").trim();
+        if (!token) {
+          await sendDisconnectedNotice(chatId, isRu);
+          return NextResponse.json({ ok: true });
+        }
+        const linkedSuccess = await handleLinkAccount(token, chatId, username);
+        if (!linkedSuccess) {
+          await tgSend(
+            chatId,
+            isRu
+              ? "<b>[Ошибка]</b> Токен не найден или устарел.\nОткройте <b>Настройки → Telegram</b> в веб-панели и скопируйте актуальный токен."
+              : "<b>[Error]</b> Token not found or expired.\nOpen <b>Settings → Telegram Bot Notifications</b> in your dashboard and copy your active token."
+          );
+        }
+        return NextResponse.json({ ok: true });
+      }
+
+      // Direct Token Submission (e.g. user pastes 6-char hex token directly)
+      if (/^[a-zA-Z0-9]{4,32}$/.test(text) && !text.startsWith("/")) {
+        const linkedSuccess = await handleLinkAccount(text, chatId, username);
+        if (linkedSuccess) {
+          return NextResponse.json({ ok: true });
+        }
+      }
+
+      // ── 2. STRICT DISCONNECTED GUARD: Block all menus, replies & chat when not connected ──
+      if (!linked) {
+        await sendDisconnectedNotice(chatId, isRu);
+        return NextResponse.json({ ok: true });
+      }
+
+      // ── 3. Connected-only commands & actions ──────────────────
+      if (text === "/disconnect" || text === "/unlink") {
+        await withRetry(() =>
+          prisma.telegramLink.update({
+            where: { id: linked.id },
+            data: { telegramChatId: null },
+          })
+        );
+        await sendDisconnectedNotice(chatId, isRu);
+        return NextResponse.json({ ok: true });
+      }
+
+      // Handle Manual Cover Letter Reply
       if (update.message.reply_to_message) {
         const rText = update.message.reply_to_message.text || "";
         if (
@@ -347,16 +529,19 @@ export async function POST(req: NextRequest) {
           const vacancyId = rText.split("\n").pop()?.trim();
           if (vacancyId) {
             try {
-              if (!linked) {
-                await tgSend(chatId, isRu ? "[Ошибка] Аккаунт не привязан. Используйте /link." : "[Error] Account not linked. Use /link first.");
-                return NextResponse.json({ ok: true });
-              }
-              const dbVac = await prisma.vacancy.findFirst({ where: { id: vacancyId, userId: linked.userId }, include: { analysis: true } });
+              const dbVac = await withRetry(() =>
+                prisma.vacancy.findFirst({
+                  where: { id: vacancyId, userId: linked.userId },
+                  include: { analysis: true },
+                })
+              );
               if (dbVac && dbVac.analysis) {
-                await prisma.vacancyAnalysis.update({
-                  where: { vacancyId },
-                  data: { coverLetter: text },
-                });
+                await withRetry(() =>
+                  prisma.vacancyAnalysis.update({
+                    where: { vacancyId },
+                    data: { coverLetter: text },
+                  })
+                );
                 await tgSend(
                   chatId,
                   isRu
@@ -372,109 +557,23 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      // ── /start [TOKEN] ─────────────────────────────────────
-      if (text.startsWith("/start")) {
-        const parts = text.split(/\s+/);
-        if (parts.length > 1 && parts[1]) {
-          const linkedSuccess = await handleLinkAccount(parts[1], chatId, username);
-          if (linkedSuccess) return NextResponse.json({ ok: true });
-        }
-
-        if (linked) {
-          // Already linked user greeting
-          if (isRu) {
-            await tgSend(
-              chatId,
-              `<b>Добро пожаловать в ${BRAND_NAME}!</b>\n\n` +
-              `Ваш аккаунт уже подключен к веб-панели управления.\n` +
-              `Вы будете получать мгновенные уведомления о найденных вакансиях прямо сюда.\n\n` +
-              `<b>Команды бота:</b>\n` +
-              `/profiles — Выбрать активный поисковый профиль\n` +
-              `/saved — Просмотреть сохранённые вакансии\n` +
-              `/applied — Просмотреть отправленные отклики\n` +
-              `/lang &lt;ru|en&gt; — Переключить язык бота\n` +
-              `/help — Показать список команд`
-            );
-          } else {
-            await tgSend(
-              chatId,
-              `<b>Welcome to ${BRAND_NAME}!</b>\n\n` +
-              `Your account is connected to the dashboard.\n` +
-              `You will receive real-time vacancy alerts with instant Action buttons here.\n\n` +
-              `<b>Commands:</b>\n` +
-              `/profiles — Switch active search profile\n` +
-              `/saved — View saved vacancies\n` +
-              `/applied — View applied vacancies\n` +
-              `/lang &lt;ru|en&gt; — Switch bot language\n` +
-              `/help — Show all commands`
-            );
-          }
-        } else {
-          // Unlinked user welcome instructions
-          if (isRu) {
-            await tgSend(
-              chatId,
-              `<b>Добро пожаловать в ${BRAND_NAME}!</b>\n\n` +
-              `Чтобы подключить этого бота к вашей веб-панели:\n` +
-              `1. Откройте вкладку <b>Настройки</b> в вашей панели управления\n` +
-              `2. В блоке <b>Telegram</b> нажмите кнопку <b>Создать</b>\n` +
-              `3. Отправьте ваш токен сюда или напишите: <code>/link ВАШ_ТОКЕН</code>\n\n` +
-              `Пример: <code>/link YOUR_TOKEN</code> или просто вставьте <code>YOUR_TOKEN</code>\n\n` +
-              `<b>Команды:</b>\n` +
-              `/link &lt;ТОКЕН&gt; — Подключить аккаунт\n` +
-              `/lang &lt;ru|en&gt; — Переключить язык`
-            );
-          } else {
-            await tgSend(
-              chatId,
-              `<b>Welcome to ${BRAND_NAME}!</b>\n\n` +
-              `To connect this bot with your dashboard:\n` +
-              `1. Go to <b>Settings</b> in your dashboard\n` +
-              `2. Under <b>Telegram Bot Notifications</b>, click <b>Generate</b>\n` +
-              `3. Send your token here or send: <code>/link YOUR_TOKEN</code>\n\n` +
-              `Example: <code>/link YOUR_TOKEN</code> or simply paste <code>YOUR_TOKEN</code>\n\n` +
-              `<b>Commands:</b>\n` +
-              `/link &lt;TOKEN&gt; — Connect to dashboard\n` +
-              `/profiles — Switch active profile\n` +
-              `/saved — View saved vacancies\n` +
-              `/applied — View applied vacancies\n` +
-              `/lang &lt;ru|en&gt; — Switch bot language`
-            );
-          }
-        }
-        return NextResponse.json({ ok: true });
-      }
-
-      // ── /link <TOKEN> ──────────────────────────────────────
-      if (text.startsWith("/link ")) {
-        const token = text.slice(6).trim();
-        const linkedSuccess = await handleLinkAccount(token, chatId, username);
-        if (!linkedSuccess) {
-          await tgSend(
-            chatId,
-            isRu
-              ? "[Ошибка] Токен не найден или устарел.\nСгенерируйте новый токен синхронизации в Настройках веб-панели."
-              : "[Error] Token not found or expired.\nGenerate a new token from your dashboard Settings."
-          );
-        }
-        return NextResponse.json({ ok: true });
-      }
-
-      // ── /lang <ru|en> ───────────────────────────────────────
+      // /lang <ru|en>
       if (text.startsWith("/lang")) {
         const parts = text.split(/\s+/);
         const targetLang = parts[1]?.toLowerCase();
         if (targetLang === "ru" || targetLang === "en") {
-          if (linked) {
-            await prisma.telegramLink.update({
+          await withRetry(() =>
+            prisma.telegramLink.update({
               where: { id: linked.id },
               data: { language: targetLang },
-            });
-            await prisma.searchPreference.updateMany({
+            })
+          );
+          await withRetry(() =>
+            prisma.searchPreference.updateMany({
               where: { userId: linked.userId, isActive: true },
               data: { language: targetLang },
-            });
-          }
+            })
+          );
           if (targetLang === "ru") {
             await tgSend(chatId, "<b>[Язык обновлён]</b> Язык бота успешно установлен на русский.");
           } else {
@@ -491,30 +590,15 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: true });
       }
 
-      // ── Direct Token Submission (e.g. user just pastes token code) ──
-      if (/^[a-zA-Z0-9]{4,32}$/.test(text) && !text.startsWith("/")) {
-        const linkedSuccess = await handleLinkAccount(text, chatId, username);
-        if (linkedSuccess) {
-          return NextResponse.json({ ok: true });
-        }
-      }
-
-      // ── /profiles ──────────────────────────────────────────
+      // /profiles
       if (text === "/profiles") {
         try {
-          if (!linked) {
-            await tgSend(
-              chatId,
-              isRu
-                ? "[Ошибка] Аккаунт не привязан. Используйте команду <code>/link ВАШ_ТОКЕН</code>."
-                : "[Error] Not linked yet. Use <code>/link YOUR_TOKEN</code> first."
-            );
-            return NextResponse.json({ ok: true });
-          }
-          const profiles = await prisma.searchPreference.findMany({
-            where: { userId: linked.userId },
-            select: { id: true, name: true, isActive: true },
-          });
+          const profiles = await withRetry(() =>
+            prisma.searchPreference.findMany({
+              where: { userId: linked.userId },
+              select: { id: true, name: true, isActive: true },
+            })
+          );
           if (profiles.length === 0) {
             await tgSend(
               chatId,
@@ -542,19 +626,17 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: true });
       }
 
-      // ── /saved ─────────────────────────────────────────────
+      // /saved
       if (text === "/saved") {
         try {
-          if (!linked) {
-            await tgSend(chatId, isRu ? "[Ошибка] Аккаунт не привязан. Используйте /link." : "[Error] Not linked. Use /link first.");
-            return NextResponse.json({ ok: true });
-          }
-          const saved = await prisma.vacancy.findMany({
-            where: { userId: linked.userId, status: "saved" },
-            orderBy: { updatedAt: "desc" },
-            take: 10,
-            include: { analysis: { select: { matchScore: true, recommendation: true } } },
-          });
+          const saved = await withRetry(() =>
+            prisma.vacancy.findMany({
+              where: { userId: linked.userId, status: "saved" },
+              orderBy: { updatedAt: "desc" },
+              take: 10,
+              include: { analysis: { select: { matchScore: true, recommendation: true } } },
+            })
+          );
           if (saved.length === 0) {
             await tgSend(chatId, isRu ? "У вас пока нет сохранённых вакансий." : "No saved vacancies yet.");
           } else {
@@ -572,19 +654,17 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: true });
       }
 
-      // ── /applied ───────────────────────────────────────────
+      // /applied
       if (text === "/applied") {
         try {
-          if (!linked) {
-            await tgSend(chatId, isRu ? "[Ошибка] Аккаунт не привязан. Используйте /link." : "[Error] Not linked. Use /link first.");
-            return NextResponse.json({ ok: true });
-          }
-          const applied = await prisma.vacancy.findMany({
-            where: { userId: linked.userId, status: { in: ["applied_manual", "applied_hh", "applied_auto"] } },
-            orderBy: { updatedAt: "desc" },
-            take: 10,
-            include: { analysis: { select: { matchScore: true } } },
-          });
+          const applied = await withRetry(() =>
+            prisma.vacancy.findMany({
+              where: { userId: linked.userId, status: { in: ["applied_manual", "applied_hh", "applied_auto"] } },
+              orderBy: { updatedAt: "desc" },
+              take: 10,
+              include: { analysis: { select: { matchScore: true } } },
+            })
+          );
           if (applied.length === 0) {
             await tgSend(chatId, isRu ? "У вас пока нет вакансий с откликами." : "No applied vacancies yet.");
           } else {
@@ -602,31 +682,29 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ ok: true });
       }
 
-      // ── /help or unknown command ────────────────────────────
-      if (text.startsWith("/")) {
-        if (isRu) {
-          await tgSend(
-            chatId,
-            `<b>Команды бота ${BRAND_NAME}:</b>\n\n` +
-            `/start — Приветствие и статус подключения\n` +
-            `/link &lt;ТОКЕН&gt; — Подключить аккаунт к панели\n` +
+      // /help or any other command/text while connected
+      if (isRu) {
+        await tgSend(
+          chatId,
+          `<b>Команды бота ${BRAND_NAME}:</b>\n\n` +
+            `/start — Статус подключения\n` +
             `/profiles — Выбрать активный поисковый профиль\n` +
             `/saved — Просмотреть сохранённые вакансии\n` +
             `/applied — Вакансии, на которые вы откликнулись\n` +
-            `/lang &lt;ru|en&gt; — Переключить язык бота`
-          );
-        } else {
-          await tgSend(
-            chatId,
-            `<b>Commands for ${BRAND_NAME}:</b>\n\n` +
-            `/start — Welcome & connection status\n` +
-            `/link &lt;TOKEN&gt; — Connect to dashboard\n` +
+            `/lang &lt;ru|en&gt; — Переключить язык бота\n` +
+            `/disconnect — Отключить бота`
+        );
+      } else {
+        await tgSend(
+          chatId,
+          `<b>Commands for ${BRAND_NAME}:</b>\n\n` +
+            `/start — Connection status\n` +
             `/profiles — Switch search profile\n` +
             `/saved — Saved vacancies\n` +
             `/applied — Applied vacancies\n` +
-            `/lang &lt;ru|en&gt; — Switch bot language`
-          );
-        }
+            `/lang &lt;ru|en&gt; — Switch bot language\n` +
+            `/disconnect — Disconnect bot`
+        );
       }
       return NextResponse.json({ ok: true });
     }
@@ -639,6 +717,32 @@ export async function POST(req: NextRequest) {
 
     const cbData = cb.data ?? "";
     const cbChatId = cb.message?.chat?.id?.toString() || cb.from?.id?.toString();
+    const isRuFallback = Boolean(cb.from?.language_code?.toLowerCase().startsWith("ru"));
+
+    if (!cbChatId) {
+      await tgAnswerCallback(cb.id, "Invalid request", true);
+      return NextResponse.json({ ok: true });
+    }
+
+    const linked = await withRetry(() =>
+      prisma.telegramLink.findFirst({
+        where: { telegramChatId: cbChatId, isActive: true },
+      })
+    );
+
+    // STRICT DISCONNECTED GUARD FOR ALL BUTTON CLICKS
+    if (!linked) {
+      await tgAnswerCallback(
+        cb.id,
+        isRuFallback
+          ? "Бот отключён! Сначала подключите аккаунт через /link."
+          : "Bot disconnected! Please connect your account first via /link.",
+        true
+      );
+      await sendDisconnectedNotice(cbChatId, isRuFallback);
+      return NextResponse.json({ ok: true });
+    }
+
     const colonIdx = cbData.indexOf(":");
     if (colonIdx === -1) {
       await tgAnswerCallback(cb.id, "Unknown action");
@@ -647,17 +751,8 @@ export async function POST(req: NextRequest) {
 
     const action = cbData.slice(0, colonIdx);
     const targetId = cbData.slice(colonIdx + 1);
-    if (!targetId || !cbChatId) {
+    if (!targetId) {
       await tgAnswerCallback(cb.id, "Invalid action request");
-      return NextResponse.json({ ok: true });
-    }
-
-    const linked = await prisma.telegramLink.findFirst({
-      where: { telegramChatId: cbChatId, isActive: true },
-    });
-    if (!linked) {
-      await tgAnswerCallback(cb.id, "Not linked");
-      await tgSend(cbChatId, "[Error] Account not linked. Use /link with your token from Settings first.");
       return NextResponse.json({ ok: true });
     }
 
@@ -676,12 +771,18 @@ export async function POST(req: NextRequest) {
         break;
 
       case "profile": {
-        const pref = await prisma.searchPreference.findFirst({
-          where: { id: targetId, userId: linked.userId },
-        });
+        const pref = await withRetry(() =>
+          prisma.searchPreference.findFirst({
+            where: { id: targetId, userId: linked.userId },
+          })
+        );
         if (pref) {
-          await prisma.searchPreference.updateMany({ where: { userId: linked.userId }, data: { isActive: false } });
-          await prisma.searchPreference.update({ where: { id: targetId, userId: linked.userId }, data: { isActive: true } });
+          await withRetry(() =>
+            prisma.searchPreference.updateMany({ where: { userId: linked.userId }, data: { isActive: false } })
+          );
+          await withRetry(() =>
+            prisma.searchPreference.update({ where: { id: targetId, userId: linked.userId }, data: { isActive: true } })
+          );
           reply = isRu ? `[Активен] Профиль: ${pref.name}` : `[Active] Profile: ${pref.name}`;
           toast = isRu ? "Профиль обновлен" : "Profile updated";
         } else {

@@ -6,6 +6,7 @@
 // ============================================================
 
 import { NextRequest, NextResponse } from "next/server";
+import crypto from "crypto";
 import prisma from "@/lib/db";
 import { getApiUser } from "@/lib/auth-helpers";
 import { encrypt, maskProviderKeys, encryptProviderKeys } from "@/lib/crypto";
@@ -157,6 +158,19 @@ export async function GET() {
 
     const botUsername = process.env.TELEGRAM_BOT_USERNAME || "Wongkiisbot";
 
+    let activeTgLink = tgLink;
+    if (!activeTgLink) {
+      const token = crypto.randomBytes(3).toString("hex").toUpperCase();
+      activeTgLink = await prisma.telegramLink.create({
+        data: {
+          userId: user.id,
+          token,
+          isActive: true,
+          language: (pref as any)?.language || "en",
+        },
+      });
+    }
+
     return NextResponse.json({
       success: true,
       data: serializePref(pref),
@@ -166,22 +180,15 @@ export async function GET() {
         hasEmailService: Boolean(process.env.SMTP_USER || process.env.EMAIL_USER),
       },
       serverConfiguredProviders: getServerConfiguredProviders(),
-      telegramLink: tgLink
-        ? {
-            linked: !!tgLink.telegramChatId,
-            token: tgLink.token,
-            chatId: tgLink.telegramChatId,
-            username: tgLink.telegramUsername,
-            linkedAt: tgLink.linkedAt,
-            botUsername,
-            deepLink: tgLink.token ? `https://t.me/${botUsername}?start=${tgLink.token}` : null,
-          }
-        : {
-            linked: false,
-            token: null,
-            botUsername,
-            deepLink: null,
-          },
+      telegramLink: {
+        linked: !!activeTgLink.telegramChatId,
+        token: activeTgLink.token,
+        chatId: activeTgLink.telegramChatId,
+        username: activeTgLink.telegramUsername,
+        linkedAt: activeTgLink.linkedAt,
+        botUsername,
+        deepLink: activeTgLink.token ? `https://t.me/${botUsername}?start=${activeTgLink.token}` : null,
+      },
       stats: {
         totalVacancies,
         appliedCount,
