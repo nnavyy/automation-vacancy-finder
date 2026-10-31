@@ -16,15 +16,15 @@ export default function ArchitectureSection() {
   const specs = [
     {
       icon: Cpu,
-      title: "Task-Specific BYOK AI Router",
+      title: "Service-Managed AI",
       subtitle: "Multi-Model Cost & Latency Optimization",
-      desc: "Assigns low-latency models (Groq Llama 3.3, Gemini 2.5 Flash) for rapid 300ms batch scoring, while reserving high-reasoning engines (Claude 3.7 Sonnet, GPT-4o) exclusively for customized cover letters and recruiter dossiers.",
+      desc: "Scores job matches and drafts personalized cover letters using AI configured by the service. No API keys or model setup are required from customers.",
     },
     {
       icon: Lock,
       title: "AES-256-GCM Cryptography",
       subtitle: "Authenticated Encryption for Sensitive Keys",
-      desc: "All HeadHunter session cookies, OAuth tokens, and user-provided AI keys are encrypted at rest with AES-256-GCM using unique initialization vectors. Encryption keys never touch browser storage.",
+      desc: "Stored HeadHunter session cookies and OAuth tokens are encrypted at rest with AES-256-GCM using unique initialization vectors. Encryption keys never touch browser storage.",
     },
     {
       icon: Server,
@@ -72,7 +72,7 @@ export default function ArchitectureSection() {
             System Specifications &amp; Architecture
           </h2>
           <p className="text-sm sm:text-base text-zinc-400 leading-relaxed">
-            Engineered with the precision and reliability of local-first distributed systems. Every component is inspectable and auditable.
+            A hosted service for job discovery, matching, and application tracking. Company Intel is available with paid access.
           </p>
         </div>
 

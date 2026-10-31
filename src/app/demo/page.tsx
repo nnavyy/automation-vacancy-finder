@@ -36,6 +36,7 @@ import {
   DollarSign
 } from "lucide-react";
 import { BrandLogo } from "@/components/BrandLogo";
+import CompanyIntelPaywall from "@/components/CompanyIntelPaywall";
 
 interface MockVacancy {
   id: string;
@@ -51,13 +52,6 @@ interface MockVacancy {
   saved?: boolean;
   tags: string[];
   description: string;
-  recruiter: {
-    name: string;
-    role: string;
-    telegram: string;
-    email: string;
-    confidence: string;
-  };
   scoreBreakdown: {
     stackSynergy: number;
     architectureFit: number;
@@ -81,13 +75,6 @@ const INITIAL_VACANCIES: MockVacancy[] = [
     tags: ["React 19", "Next.js", "TypeScript", "Node.js", "PostgreSQL"],
     description:
       "We are looking for a strong Fullstack Developer to lead client-side architecture on high-load fintech products. You will build SSR web applications with Next.js App Router, implement complex client state management, and write robust PostgreSQL queries via Prisma.",
-    recruiter: {
-      name: "Daria Ivanova",
-      role: "Lead Tech Recruiter",
-      telegram: "@daria_desten_hr",
-      email: "d.ivanova@desten-partners.ru",
-      confidence: "Verified (Corporate Domain)",
-    },
     scoreBreakdown: {
       stackSynergy: 38,
       architectureFit: 34,
@@ -108,13 +95,6 @@ const INITIAL_VACANCIES: MockVacancy[] = [
     tags: ["React", "TypeScript", "Micro-frontends", "Performance", "WebSockets"],
     description:
       "Join the cloud portal console team. Focus on sub-millisecond interaction responsiveness, complex distributed dashboard visualizations, and high-security role-based access control interfaces.",
-    recruiter: {
-      name: "Konstantin Smirnov",
-      role: "Engineering Talent Partner",
-      telegram: "@ksmirnov_yacloud",
-      email: "ksmirnov@yandex-team.ru",
-      confidence: "Verified (Official Portal)",
-    },
     scoreBreakdown: {
       stackSynergy: 40,
       architectureFit: 35,
@@ -136,13 +116,6 @@ const INITIAL_VACANCIES: MockVacancy[] = [
     tags: ["Next.js", "TailwindCSS", "Jest / Playwright", "GraphQL"],
     description:
       "Responsible for leading a cross-functional squad building customer onboarding and self-service portals. High emphasis on code quality, testing suites, and seamless mobile-responsive performance.",
-    recruiter: {
-      name: "Ekaterina Morozova",
-      role: "Senior IT Recruiter",
-      telegram: "@morozova_tbank_hr",
-      email: "e.morozova@tbank.ru",
-      confidence: "Verified (OSINT Confirmed)",
-    },
     scoreBreakdown: {
       stackSynergy: 37,
       architectureFit: 33,
@@ -163,13 +136,6 @@ const INITIAL_VACANCIES: MockVacancy[] = [
     tags: ["TypeScript", "Node.js", "Kafka", "PostgreSQL", "Docker"],
     description:
       "Building high-throughput merchant tools for order lifecycle tracking. Demands reliable transactional flows and microservice coordination.",
-    recruiter: {
-      name: "Pavel Sidorov",
-      role: "HR Business Partner",
-      telegram: "@pavel_ozon_talent",
-      email: "p.sidorov@ozon.ru",
-      confidence: "Verified (Corporate DNS)",
-    },
     scoreBreakdown: {
       stackSynergy: 35,
       architectureFit: 31,
@@ -291,10 +257,10 @@ export default function DemoPage() {
       {/* Top Demo Notification Header Bar with Generous Padding */}
       <header className="bg-[#0e0e12] border-b border-white/[0.08] px-6 py-3.5 flex flex-wrap items-center justify-between gap-4 text-xs shrink-0 z-40">
         <div className="flex items-center gap-2.5 text-zinc-300">
-          <span className="font-semibold text-white">Live Dashboard Sandbox Demo</span>
+          <span className="font-semibold text-white">Free account preview</span>
           <span className="text-zinc-600 hidden sm:inline">&middot;</span>
           <span className="text-zinc-400 hidden sm:inline">
-            Interactive preview of the autonomous HeadHunter pipeline and recruiter intelligence.
+            Sample data. Search, matching, cover letters, and Analytics are free.
           </span>
         </div>
 
@@ -342,7 +308,7 @@ export default function DemoPage() {
             {/* User Profile Info */}
             <div className="px-3.5 py-2.5 rounded-xl bg-zinc-900/80 border border-white/[0.06] flex items-center justify-between text-xs">
               <div className="truncate font-medium text-zinc-200">
-                Nanda Zhafran - Frontend / Full-Stack
+                Demo account · Free plan
               </div>
             </div>
 
@@ -518,7 +484,7 @@ export default function DemoPage() {
                 {activeTab === "applied" && "Applied Responses"}
                 {activeTab === "company-intel" && "Company Intelligence"}
                 {activeTab === "analytics" && "Synergy Analytics"}
-                {activeTab === "settings" && "Search Parameters & AI Settings"}
+                {activeTab === "settings" && "Search Settings"}
               </h1>
               <p className="text-xs text-zinc-400 mt-1">
                 {activeTab === "overview" && "Autonomous job search and pipeline intelligence at a glance"}
@@ -960,28 +926,7 @@ export default function DemoPage() {
           )}
 
           {/* View: Company Intel */}
-          {activeTab === "company-intel" && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {[
-                { name: "Яндекс (Yandex)", domain: "yandex.ru", stack: "React, TypeScript, Go", recruiter: "Konstantin Smirnov", hrContact: "@ksmirnov_yacloud" },
-                { name: "Т-Банк (Tinkoff)", domain: "tbank.ru", stack: "Next.js, TypeScript, Kafka", recruiter: "Ekaterina Morozova", hrContact: "@morozova_tbank_hr" },
-                { name: "Ozon", domain: "ozon.ru", stack: "React, Go, PostgreSQL", recruiter: "Pavel Sidorov", hrContact: "@pavel_ozon_talent" },
-                { name: "Дэстэн Партнерс", domain: "desten-partners.ru", stack: "Next.js, Node.js, Prisma", recruiter: "Daria Ivanova", hrContact: "@daria_desten_hr" },
-              ].map((comp, idx) => (
-                <div key={idx} className="p-5 rounded-2xl bg-[#0f0f13] border border-white/[0.08] space-y-3">
-                  <div className="flex items-center justify-between pb-2 border-b border-white/[0.06]">
-                    <span className="font-bold text-white text-sm">{comp.name}</span>
-                    <span className="text-xs font-mono text-zinc-400">{comp.domain}</span>
-                  </div>
-                  <div className="text-xs text-zinc-400 space-y-1">
-                    <div>Primary Tech Stack: <strong className="text-zinc-200">{comp.stack}</strong></div>
-                    <div>Hiring Partner: <strong className="text-zinc-200">{comp.recruiter}</strong></div>
-                    <div>Direct Channel: <strong className="text-sky-400 font-mono">{comp.hrContact}</strong></div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+          {activeTab === "company-intel" && <CompanyIntelPaywall returnHref="/demo" />}
 
           {/* View: Analytics */}
           {activeTab === "analytics" && (
@@ -1059,7 +1004,7 @@ export default function DemoPage() {
           )}
 
           {/* Inspection Drawer / Detailed Inspector (Always available for selected vacancy) */}
-          {selectedVacancy && (
+          {selectedVacancy && ["overview", "vacancies", "saved", "applied"].includes(activeTab) && (
             <div className="bg-[#0e0e12] border border-white/10 rounded-2xl p-6 shadow-2xl space-y-6 mt-6">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-white/[0.08]">
                 <div className="space-y-1">
@@ -1153,60 +1098,10 @@ export default function DemoPage() {
                   </div>
                 </div>
 
-                <div className="bg-[#09090c] border border-white/[0.06] rounded-xl p-5 space-y-3">
-                  <div className="flex items-center justify-between text-xs font-semibold text-white">
-                    <span className="flex items-center gap-1.5">
-                      <Shield className="w-3.5 h-3.5 text-sky-400" />
-                      <span>Extracted Recruiter OSINT Dossier</span>
-                    </span>
-                    <span className="text-[10px] font-mono text-sky-400">
-                      {selectedVacancy.recruiter.confidence}
-                    </span>
-                  </div>
-
-                  <div className="space-y-2.5 text-xs">
-                    <div className="flex items-center justify-between p-2.5 rounded-lg bg-zinc-900 border border-white/[0.04]">
-                      <div className="flex items-center gap-2">
-                        <Send className="w-3.5 h-3.5 text-sky-400" />
-                        <div>
-                          <div className="text-[10px] text-zinc-500">Telegram Direct Contact</div>
-                          <div className="font-mono font-medium text-white">
-                            {selectedVacancy.recruiter.telegram}
-                          </div>
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => showToast(`Copied ${selectedVacancy.recruiter.telegram} to clipboard.`)}
-                        className="px-2 py-1 rounded bg-zinc-800 text-[10px] text-zinc-300 hover:text-white cursor-pointer"
-                      >
-                        Copy
-                      </button>
-                    </div>
-
-                    <div className="flex items-center justify-between p-2.5 rounded-lg bg-zinc-900 border border-white/[0.04]">
-                      <div className="flex items-center gap-2">
-                        <Mail className="w-3.5 h-3.5 text-violet-400" />
-                        <div>
-                          <div className="text-[10px] text-zinc-500">Verified Corporate Email</div>
-                          <div className="font-mono font-medium text-white">
-                            {selectedVacancy.recruiter.email}
-                          </div>
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => showToast(`Copied ${selectedVacancy.recruiter.email} to clipboard.`)}
-                        className="px-2 py-1 rounded bg-zinc-800 text-[10px] text-zinc-300 hover:text-white cursor-pointer"
-                      >
-                        Copy
-                      </button>
-                    </div>
-
-                    <div className="text-[11px] text-zinc-400 leading-relaxed pt-1">
-                      Hiring contact: <strong className="text-zinc-200">{selectedVacancy.recruiter.name}</strong> ({selectedVacancy.recruiter.role}). Bypasses the 300+ portal resume queue.
-                    </div>
-                  </div>
+                <div className="flex flex-col justify-center gap-4 rounded-xl border border-zinc-800 bg-zinc-950 p-5">
+                  <h3 className="text-sm font-semibold text-zinc-100">Company Intel is a paid feature</h3>
+                  <p className="text-xs leading-relaxed text-zinc-400">Company research, recruiter contacts, and outreach drafts are available for $3 per month. Your job search and Analytics stay free.</p>
+                  <button type="button" onClick={() => setActiveTab("company-intel")} className="self-start rounded-lg bg-emerald-400 px-4 py-2 text-xs font-semibold text-zinc-950 hover:bg-emerald-300">View Company Intel</button>
                 </div>
               </div>
 

@@ -3,6 +3,7 @@ import axios from "axios";
 import prisma from "@/lib/db";
 import { encrypt } from "@/lib/crypto";
 import { getApiUser } from "@/lib/auth-helpers";
+import { safeEqual } from "@/lib/timingSafe";
 
 /**
  * GET /api/auth/hh/callback
@@ -15,13 +16,16 @@ export async function GET(req: NextRequest) {
     const error = searchParams.get("error");
     const errorDescription = searchParams.get("error_description");
 
-    const host = req.headers.get("x-forwarded-host") || req.headers.get("host") || "localhost:3000";
-    const protocol = req.headers.get("x-forwarded-proto") || (host.includes("localhost") ? "http" : "https");
-    const baseUrl = `${protocol}://${host}`;
-    const redirectUri = `${baseUrl}/api/auth/hh/callback`;
+    const baseUrl = process.env.APP_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || req.nextUrl.origin;
+    const redirectUri = new URL("/api/auth/hh/callback", baseUrl).toString();
+    const redirect = (target: URL): NextResponse => {
+      const response = NextResponse.redirect(target);
+      response.cookies.set("hh_oauth_state", "", { httpOnly: true, sameSite: "lax", path: "/api/auth/hh", maxAge: 0 });
+      return response;
+    };
 
     if (error || !code) {
-      return NextResponse.redirect(
+      return redirect(
         new URL(
           `/dashboard/settings?oauth_error=${encodeURIComponent(
             errorDescription || error || "Authorization cancelled by user."
@@ -33,12 +37,14 @@ export async function GET(req: NextRequest) {
 
     const user = await getApiUser();
     if (!user) {
-      return NextResponse.redirect(new URL("/login", baseUrl));
+      return redirect(new URL("/login", baseUrl));
     }
 
-    // login route sends user.id as `state`; reject forged callbacks (CSRF)
-    if (searchParams.get("state") !== user.id) {
-      return NextResponse.redirect(
+    // Require the unpredictable state issued to this browser and user.
+    const state = searchParams.get("state") || "";
+    const stateCookie = req.cookies.get("hh_oauth_state")?.value || "";
+    if (!/^[a-f0-9]{64}$/.test(state) || !safeEqual(stateCookie, `${user.id}:${state}`)) {
+      return redirect(
         new URL(`/dashboard/settings?oauth_error=${encodeURIComponent("Invalid OAuth state.")}`, baseUrl)
       );
     }
@@ -47,7 +53,7 @@ export async function GET(req: NextRequest) {
     const clientSecret = process.env.HH_CLIENT_SECRET;
 
     if (!clientId || !clientSecret) {
-      return NextResponse.redirect(
+      return redirect(
         new URL(`/dashboard/settings?oauth_error=${encodeURIComponent("OAuth configuration is incomplete.")}`, baseUrl)
       );
     }
@@ -67,8 +73,8 @@ export async function GET(req: NextRequest) {
     });
 
     if (tokenRes.status !== 200 || !tokenRes.data?.access_token) {
-      console.error("[HH OAuth] Token exchange error:", tokenRes.data);
-      return NextResponse.redirect(
+      console.error("[HH OAuth] Token exchange failed:", tokenRes.status);
+      return redirect(
         new URL(
           `/dashboard/settings?oauth_error=${encodeURIComponent(
             tokenRes.data?.error_description || "Failed to exchange authorization token with HeadHunter."
@@ -135,7 +141,7 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    return NextResponse.redirect(new URL("/dashboard/settings?oauth_success=true", baseUrl));
+    return redirect(new URL("/dashboard/settings?oauth_success=true", baseUrl));
   } catch (error: any) {
     console.error("[GET /api/auth/hh/callback]", error);
     return NextResponse.redirect(new URL("/dashboard/settings?oauth_error=" + encodeURIComponent(error.message), req.url));

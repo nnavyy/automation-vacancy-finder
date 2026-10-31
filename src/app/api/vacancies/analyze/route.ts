@@ -129,11 +129,12 @@ export async function POST(req: NextRequest) {
       update: analysisData,
     });
 
-    let finalStatus = "analyzed";
+    const canAdvanceStatus = ["new", "analyzed"].includes(dbVacancy.status);
+    let finalStatus = canAdvanceStatus ? "analyzed" : dbVacancy.status;
 
     // ── Dispatch Telegram notification if score meets threshold ──
     const minScoreToNotify = pref.minimumScoreToNotify ?? 75;
-    if (analysis.match_score >= minScoreToNotify) {
+    if (canAdvanceStatus && aiStatus === "completed" && analysis.match_score >= minScoreToNotify) {
       const link = await prisma.telegramLink.findFirst({
         where: { userId: user.id, isActive: true },
       });

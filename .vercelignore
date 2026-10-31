@@ -1,0 +1,25 @@
+private-assets/**
+scratch/**
+screenshots/**
+.agents/**
+.qodo/**
+.vs/**
+.vscode/**
+docs/**
+tools/**
+revisi/**
+vc low code/**
+n8n/**
+FIX_PLAN.md
+HH_DEV_REGISTRATION_GUIDE.md
+IMPROVEMENT_SUGGESTIONS.md
+PRD.md
+README.coming-soon*.md
+TECHNICAL_GUIDE.md
+scripts/capture-*.ts
+scripts/retake-recent-screenshots.ts
+scripts/populate-analytics-and-capture.ts
+scripts/test-browser.ts
+.env
+.env.local
+.env.*.local

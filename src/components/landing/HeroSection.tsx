@@ -1,24 +1,13 @@
 "use client";
 
 import React, { useState } from "react";
-import { Download, RefreshCw, Send, MapPin, ArrowRight, Sparkles, ShieldCheck, Eye, Terminal, Maximize2 } from "lucide-react";
+import Link from "next/link";
+import { Send, MapPin, ArrowRight, Sparkles, ShieldCheck, Eye, Terminal, Maximize2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 export default function HeroSection() {
-  const [downloading, setDownloading] = useState(false);
   const [windowView, setWindowView] = useState<"card" | "dashboard">("card");
   const [imageModalOpen, setImageModalOpen] = useState(false);
-
-  const triggerDirectDownload = () => {
-    setDownloading(true);
-    const link = document.createElement("a");
-    link.href = "/api/download?type=source";
-    link.download = "hh-job-copilot-v1.0.0-source.zip";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    setTimeout(() => setDownloading(false), 2000);
-  };
 
   const techLogos = [
     { name: "HeadHunter", src: "/assets/hh-logo.png", isPng: true },
@@ -69,24 +58,13 @@ export default function HeroSection() {
           transition={{ duration: 0.5, delay: 0.16 }}
           className="flex flex-col sm:flex-row items-center justify-center gap-3.5 max-w-md mx-auto mb-12"
         >
-          <button
-            type="button"
-            onClick={triggerDirectDownload}
-            disabled={downloading}
-            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-full text-xs font-medium text-black bg-white hover:bg-zinc-200 active:scale-[0.97] transition-all shadow-md disabled:opacity-50 cursor-pointer"
+          <Link
+            href="/register"
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-full text-xs font-medium text-black bg-white hover:bg-zinc-200 active:scale-[0.97] transition-all shadow-md"
           >
-            {downloading ? (
-              <>
-                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                <span>Downloading ZIP...</span>
-              </>
-            ) : (
-              <>
-                <Download className="w-3.5 h-3.5" />
-                <span>Download Source Archive</span>
-              </>
-            )}
-          </button>
+            <span>Start Free</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
 
           <a
             href="#preview"

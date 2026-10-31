@@ -5,6 +5,7 @@
 
 import * as cheerio from 'cheerio';
 import { isSafePublicUrl } from "@/lib/security";
+import { fetchPublicPage } from "@/lib/publicFetch";
 import { callAI } from '@/lib/aiProviderRouter';
 
 export interface ContactResult {
@@ -176,6 +177,7 @@ export function isValidCareersUrl(
   if (!candidateUrl) return false;
   try {
     const parsed = new URL(candidateUrl);
+    if (!["http:", "https:"].includes(parsed.protocol)) return false;
     const host = parsed.hostname.toLowerCase();
     const pathname = parsed.pathname.toLowerCase();
 
@@ -188,7 +190,7 @@ export function isValidCareersUrl(
     }
 
     // 2. Recognized ATS platforms
-    const isAts = KNOWN_ATS_DOMAINS.some((ats) => host.includes(ats));
+    const isAts = KNOWN_ATS_DOMAINS.some((ats) => host === ats || host.endsWith(`.${ats}`));
     if (isAts) {
       // Must match company slug or name in pathname or subdomain
       if (cleanName) {
@@ -352,13 +354,7 @@ export async function crawlCompanyWebsite(
   for (const path of candidatePaths) {
     const pageUrl = `${website}${path}`;
     try {
-      const res = await fetch(pageUrl, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        },
-        signal: AbortSignal.timeout(6000),
-      });
+      const res = await fetchPublicPage(pageUrl, 6000);
 
       if (!res.ok) continue;
       const html = await res.text();
@@ -448,10 +444,7 @@ export async function crawlCompanyWebsite(
   // Also inspect external careers page if available
   if (careersUrl && careersUrl.startsWith('http') && !careersUrl.includes(domain)) {
     try {
-      const res = await fetch(careersUrl, {
-        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
-        signal: AbortSignal.timeout(6000),
-      });
+      const res = await fetchPublicPage(careersUrl, 6000);
       if (res.ok) {
         const text = await res.text();
         const emailRegex = /([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/g;

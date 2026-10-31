@@ -5,11 +5,16 @@
 import { NextResponse } from "next/server";
 import prisma from "@/lib/db";
 import { getApiUser } from "@/lib/auth-helpers";
+import { hasCompanyIntelAccess } from "@/lib/entitlements";
 
 export async function GET() {
   const user = await getApiUser();
   if (!user?.id) {
     return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+  }
+
+  if (!hasCompanyIntelAccess(user.id)) {
+    return NextResponse.json({ success: false, code: "COMPANY_INTEL_REQUIRED", error: "Company Intel requires paid access." }, { status: 403 });
   }
 
   try {

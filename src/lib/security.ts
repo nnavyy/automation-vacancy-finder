@@ -8,71 +8,29 @@
  * Rejects localhost, loopbacks, private RFC1918 subnets, and AWS/cloud metadata services (169.254.169.254).
  */
 export function isSafePublicUrl(inputUrl: string): boolean {
-  if (!inputUrl || typeof inputUrl !== "string") return false;
-
+  if (typeof inputUrl !== "string" || !inputUrl) return false;
   try {
-    const parsed = new URL(inputUrl);
-
-    // Only allow HTTP and HTTPS protocols
-    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-      return false;
+    const url = new URL(inputUrl);
+    if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) return false;
+    const hostname = url.hostname.toLowerCase().replace(/\.$/, "");
+    if (["localhost", "local", "internal", "lan"].some((suffix) => hostname === suffix || hostname.endsWith(`.${suffix}`))) return false;
+    if (hostname.startsWith("[")) {
+      // Only global-unicast IPv6; excludes mapped IPv4, loopback, ULA and link-local.
+      return /^\[[23][0-9a-f]{0,3}:/.test(hostname)
+        && !/^\[(?:2002:|2001:(?:db8:|0*:|10:|20:))/.test(hostname);
     }
-
-    const hostname = parsed.hostname.toLowerCase();
-
-    // Block localhost, local domains, and internal hostnames
-    if (
-      hostname === "localhost" ||
-      hostname.endsWith(".localhost") ||
-      hostname.endsWith(".local") ||
-      hostname.endsWith(".internal") ||
-      hostname.endsWith(".lan") ||
-      hostname === "metadata.google.internal"
-    ) {
-      return false;
+    const parts = hostname.split(".");
+    if (parts.length === 4 && parts.every((part) => /^\d+$/.test(part))) {
+      const [a, b, c] = parts.map(Number);
+      return a !== 0 && a !== 10 && a !== 127 && a < 224
+        && !(a === 100 && b >= 64 && b <= 127)
+        && !(a === 169 && b === 254)
+        && !(a === 172 && b >= 16 && b <= 31)
+        && !(a === 192 && (b === 168 || (b === 0 && (c === 0 || c === 2))))
+        && !(a === 198 && (b === 18 || b === 19 || (b === 51 && c === 100)))
+        && !(a === 203 && b === 0 && c === 113);
     }
-
-    // IPv4 checks
-    const ipv4Regex = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/;
-    const ipMatch = hostname.match(ipv4Regex);
-    if (ipMatch) {
-      const a = parseInt(ipMatch[1], 10);
-      const b = parseInt(ipMatch[2], 10);
-
-      // 0.0.0.0/8
-      if (a === 0) return false;
-
-      // Loopback (127.0.0.0/8)
-      if (a === 127) return false;
-
-      // Private networks: 10.0.0.0/8
-      if (a === 10) return false;
-
-      // Private networks: 172.16.0.0/12 (172.16 - 172.31)
-      if (a === 172 && b >= 16 && b <= 31) return false;
-
-      // Private networks: 192.168.0.0/16
-      if (a === 192 && b === 168) return false;
-
-      // Cloud Metadata & Link-Local: 169.254.0.0/16 (e.g. 169.254.169.254)
-      if (a === 169 && b === 254) return false;
-    }
-
-    // IPv6 checks (localhost ::1, unique local fc00::/7, link-local fe80::/10)
-    if (
-      hostname === "[::1]" ||
-      hostname === "::1" ||
-      hostname.startsWith("[fc") ||
-      hostname.startsWith("[fd") ||
-      hostname.startsWith("[fe8") ||
-      hostname.startsWith("[fe9") ||
-      hostname.startsWith("[fea") ||
-      hostname.startsWith("[feb")
-    ) {
-      return false;
-    }
-
-    return true;
+    return hostname.includes(".") && !hostname.endsWith(".test") && !hostname.endsWith(".invalid");
   } catch {
     return false;
   }

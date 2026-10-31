@@ -35,16 +35,16 @@ export default function DubCtaSection() {
             </h2>
 
             <p className="text-sm sm:text-base text-zinc-400 leading-relaxed font-normal max-w-xl mx-auto">
-              See why HH Job Copilot is the local-first automation platform of choice for software engineers looking for high-synergy vacancies without subscription bloat.
+              See why HH Job Copilot is the hosted job search service. Search, matching, cover letters, and Analytics are free. Company Intel adds company research and outreach tools for $3 per month.
             </p>
 
             {/* Action Buttons Row */}
             <div className="pt-2 flex flex-col sm:flex-row items-center justify-center gap-3.5">
               <Link
-                href="#self-host"
+                href="/register"
                 className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-full text-xs font-semibold text-black bg-white hover:bg-zinc-200 active:scale-[0.98] transition-all shadow-lg"
               >
-                <span>Start Free Locally</span>
+                <span>Start Free</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </Link>
 
@@ -66,7 +66,7 @@ export default function DubCtaSection() {
                     <Star key={i} className="w-3 h-3 fill-current" />
                   ))}
                 </div>
-                <span className="text-[11px] text-zinc-500 font-mono">Open Source</span>
+                <span className="text-[11px] text-zinc-500 font-mono">Hosted Service</span>
               </div>
 
               {/* Product Hunt */}

@@ -97,3 +97,21 @@ docs/
 /graphify-out
 graphify-out/
 ARCHITECTURE_PLAN.md
+# Private reference assets must never be published
+/private-assets/
+
+# Local review notes, legacy docs, and duplicated promotional assets
+/screenshots/
+/FIX_PLAN.md
+/HH_DEV_REGISTRATION_GUIDE.md
+/IMPROVEMENT_SUGGESTIONS.md
+/PRD.md
+/README.coming-soon.md
+/README.coming-soon.ru.md
+/TECHNICAL_GUIDE.md
+/n8n/
+/scripts/capture-*.ts
+/scripts/retake-recent-screenshots.ts
+/scripts/populate-analytics-and-capture.ts
+/scripts/test-browser.ts
+/.vs/

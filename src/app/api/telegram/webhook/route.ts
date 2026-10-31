@@ -379,10 +379,10 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   console.log("[Webhook] ── Incoming POST ──");
 
-  // Only enforce secret token check if both server env and Telegram header are configured
+  // Fail closed: a missing header must never bypass Telegram authentication.
   const webhookSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
   const secretHeader = req.headers.get("x-telegram-bot-api-secret-token") || "";
-  if (webhookSecret && secretHeader && !safeEqual(secretHeader, webhookSecret)) {
+  if (!webhookSecret || !secretHeader || !safeEqual(secretHeader, webhookSecret)) {
     console.warn("[Webhook] Invalid secret token header");
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }

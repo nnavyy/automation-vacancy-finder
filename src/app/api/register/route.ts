@@ -234,13 +234,7 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      if (targetRoles.length > 0 || searchKeywordsEn.length > 0) {
-        await prisma.searchPreference.updateMany({
-          where: { userId: existing.id, isActive: true },
-          data: profileData,
-        });
-      }
-
+      // Existing accounts may request a sign-in code; preferences require an authenticated session.
       const code = await createVerificationCode(normalizedEmail, "sign_in", 10);
       after(async () => {
         await sendVerificationEmail({
@@ -260,25 +254,12 @@ export async function POST(req: NextRequest) {
 
     const passwordHash = await bcrypt.hash(password, 12);
 
-    const user = await prisma.user.create({
-      data: { name: cleanName, email: normalizedEmail, passwordHash },
-    });
-
-    await prisma.searchPreference.create({
+    // Nested writes prevent orphaned accounts if profile or Telegram-link creation fails.
+    await prisma.user.create({
       data: {
-        userId: user.id,
-        ...profileData,
-        aiProviderOrder: ["groq", "gemini", "openrouter"],
-        isActive: true,
-      },
-    });
-
-    await prisma.telegramLink.create({
-      data: {
-        userId: user.id,
-        token: crypto.randomBytes(3).toString("hex").toUpperCase(),
-        isActive: true,
-        language: preferredAppLang,
+        name: cleanName, email: normalizedEmail, passwordHash,
+        searchPreferences: { create: { ...profileData, aiProviderOrder: [], isActive: true } },
+        telegramLinks: { create: { token: crypto.randomBytes(24).toString("hex").toUpperCase(), isActive: true, language: preferredAppLang } },
       },
     });
 

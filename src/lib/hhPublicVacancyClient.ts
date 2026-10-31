@@ -440,13 +440,13 @@ export async function checkVacancyStillOpen(hhId: string): Promise<boolean> {
       maxRedirects: 3,
     });
 
-    if (response.status === 404) {
-      console.log(`[HH Validity] Vacancy ${hhId} returned 404 — marking closed`);
+    if (response.status === 404 || response.status === 410) {
+      console.log(`[HH Validity] Vacancy ${hhId} returned ${response.status} — marking closed`);
       return false;
     }
 
-    // 200 or redirect = still accessible
-    return response.status < 400;
+    // Bot challenges, rate limits and upstream outages are not proof of closure.
+    return true;
   } catch {
     // Network error — assume open to avoid false positives
     return true;

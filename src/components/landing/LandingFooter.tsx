@@ -184,8 +184,8 @@ export default function LandingFooter() {
                 </Link>
               </li>
               <li>
-                <Link href="#self-host" className="hover:text-white transition-colors">
-                  Self-Hosting Guide
+                <Link href="/register" className="hover:text-white transition-colors">
+                  Create Free Account
                 </Link>
               </li>
               <li>
@@ -224,7 +224,7 @@ export default function LandingFooter() {
               </li>
               <li>
                 <a href="https://github.com/nnavyy" target="_blank" rel="noreferrer" className="hover:text-white transition-colors">
-                  Open Source Sponsorship
+                  Creator Projects
                 </a>
               </li>
             </ul>
@@ -234,7 +234,7 @@ export default function LandingFooter() {
         {/* Bottom Bar without fake status badges */}
         <div className="pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-[11px]">
           <div className="text-zinc-500">
-            Open-source and self-hosted. HeadHunter vacancy analytics and automated telegram delivery engine.
+            Hosted HeadHunter job search. Free Analytics. Company Intel is $3 per month.
           </div>
 
           <div className="flex items-center gap-4 text-zinc-500">

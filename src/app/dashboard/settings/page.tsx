@@ -10,7 +10,7 @@
 // - Strict Design Rule: NO circular red/green dot badges anywhere
 // ============================================================
 
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import {
   Save,
   RefreshCw,
@@ -30,18 +30,9 @@ import {
   ChevronRight,
   RotateCw,
   Sparkles,
-  ArrowUp,
-  ArrowDown,
   Terminal,
-  Key,
-  Eye,
-  EyeOff,
-  Cpu,
-  Zap,
-  Play,
   X,
 } from "lucide-react";
-import { AIProvider, CustomAiProviderConfig, AiPreferenceConfig } from "@/types";
 import TagInput from "@/components/ui/TagInput";
 import {
   ROLES,
@@ -70,8 +61,6 @@ interface FormState {
   redFlagKeywords: string[];
   salaryMinimum: string;
   salaryCurrency: string;
-  aiProviderOrder: string[];
-  aiCustomConfig?: AiPreferenceConfig;
   coverLetterLanguage: string;
   resumeText: string;
   portfolioUrl: string;
@@ -93,82 +82,6 @@ interface Msg {
 
 // ── Default State & Options ───────────────────────────────────
 
-const AI_PROVIDERS_CONFIG: Array<{
-  id: AIProvider;
-  label: string;
-  tag: string;
-  defaultModel: string;
-  presets: string[];
-  keyPlaceholder: string;
-  desc: string;
-  isLocal?: boolean;
-}> = [
-  {
-    id: "deepseek",
-    label: "DeepSeek",
-    tag: "High Reasoning / Cost-Efficient",
-    defaultModel: "deepseek-chat",
-    presets: ["deepseek-chat", "deepseek-reasoner"],
-    keyPlaceholder: "sk-...",
-    desc: "Direct DeepSeek engine (deepseek-chat for fast scoring, deepseek-reasoner R1 for deep analysis).",
-  },
-  {
-    id: "openai",
-    label: "OpenAI",
-    tag: "Standard Reference",
-    defaultModel: "gpt-4o-mini",
-    presets: ["gpt-4o-mini", "gpt-4o", "o3-mini"],
-    keyPlaceholder: "sk-proj-...",
-    desc: "OpenAI foundation models with state-of-the-art instruction compliance and multilingual fluency.",
-  },
-  {
-    id: "anthropic",
-    label: "Anthropic Claude",
-    tag: "Nuanced & Natural Writing",
-    defaultModel: "claude-3-5-haiku-20241022",
-    presets: ["claude-3-5-haiku-20241022", "claude-3-7-sonnet-20250219"],
-    keyPlaceholder: "sk-ant-...",
-    desc: "Claude models known for empathetic, tailored cover letters without mechanical robotic phrasing.",
-  },
-  {
-    id: "gemini",
-    label: "Google Gemini",
-    tag: "Long Context Window",
-    defaultModel: "gemini-2.5-flash",
-    presets: ["gemini-2.5-flash", "gemini-2.5-pro"],
-    keyPlaceholder: "AIzaSy...",
-    desc: "Google AI Gemini with large context support for cross-referencing complex candidate resumes.",
-  },
-  {
-    id: "groq",
-    label: "Groq",
-    tag: "Sub-Second Inference",
-    defaultModel: "llama-3.3-70b-versatile",
-    presets: ["llama-3.3-70b-versatile", "qwen-2.5-32b"],
-    keyPlaceholder: "gsk_...",
-    desc: "Sub-second inference powered by Groq LPUs, ideal for lightning-fast vacancy filtration.",
-  },
-  {
-    id: "openrouter",
-    label: "OpenRouter",
-    tag: "Universal Gateway",
-    defaultModel: "anthropic/claude-3.5-sonnet",
-    presets: ["anthropic/claude-3.5-sonnet", "deepseek/deepseek-r1", "meta-llama/llama-3.3-70b-instruct"],
-    keyPlaceholder: "sk-or-v1-...",
-    desc: "Universal proxy routing to 200+ models with unified balance.",
-  },
-  {
-    id: "custom",
-    label: "Custom / Localhost",
-    tag: "Ollama / vLLM / LM Studio",
-    defaultModel: "llama3.2",
-    presets: ["llama3.2", "qwen2.5:14b", "deepseek-r1:8b", "mistral-small"],
-    keyPlaceholder: "Optional API Bearer token",
-    desc: "OpenAI-compatible local server (e.g. Ollama, LM Studio, vLLM) for offline, privacy-first processing.",
-    isLocal: true,
-  },
-];
-
 const DEFAULT_FORM: FormState = {
   name: "Default",
   targetRoles: [],
@@ -184,15 +97,6 @@ const DEFAULT_FORM: FormState = {
   redFlagKeywords: ["паспорт", "залог", "unpaid"],
   salaryMinimum: "",
   salaryCurrency: "RUR",
-  aiProviderOrder: ["groq", "gemini", "openrouter"],
-  aiCustomConfig: {
-    order: ["groq", "gemini", "openrouter"],
-    taskRouting: {
-      deepAnalysis: "groq",
-      coverLetter: "groq",
-    },
-    customProviders: {},
-  },
   coverLetterLanguage: "Auto (Match Vacancy Language)",
   resumeText: "",
   portfolioUrl: "",
@@ -273,7 +177,6 @@ function getWorkFormatLabel(value: string, lang: string): string {
 // ── Main Page Component ───────────────────────────────────────
 
 
-const SETTINGS_CACHE_KEY = "hh_settings_cache_v2";
 
 export default function SettingsPage() {
   const { language, setLanguage, t } = useLanguage();
@@ -359,159 +262,6 @@ export default function SettingsPage() {
     avgScore: 0,
   });
 
-  // AI Configurator & BYOK state
-  const [serverConfiguredProviders, setServerConfiguredProviders] = useState<string[]>(["groq", "gemini", "openrouter"]);
-  const [selectedAiTab, setSelectedAiTab] = useState<AIProvider>("groq");
-  const [showAiKeys, setShowAiKeys] = useState<Record<string, boolean>>({});
-  const [testingAi, setTestingAi] = useState(false);
-  const [testAiResult, setTestAiResult] = useState<{
-    provider: string;
-    success: boolean;
-    message: string;
-    latencyMs?: number;
-    modelUsed?: string;
-  } | null>(null);
-
-  // Check if a provider has active credentials (via server env or user BYOK)
-  const isProviderConfigured = useCallback(
-    (providerId: AIProvider): boolean => {
-      if (serverConfiguredProviders.includes(providerId)) return true;
-      const customProv = form.aiCustomConfig?.customProviders?.[providerId];
-      if (customProv?.apiKey && customProv.apiKey.trim().length > 3 && !customProv.apiKey.startsWith("sk-...")) {
-        return true;
-      }
-      if (providerId === "custom" && customProv?.baseUrl && customProv.baseUrl.trim().length > 3) {
-        return true;
-      }
-      return false;
-    },
-    [serverConfiguredProviders, form.aiCustomConfig?.customProviders]
-  );
-
-  // Registered providers list with active credentials only
-  const registeredProviders = useMemo(() => {
-    const list = AI_PROVIDERS_CONFIG.filter((prov) => isProviderConfigured(prov.id));
-    return list.length > 0 ? list : AI_PROVIDERS_CONFIG.filter((p) => ["groq", "gemini", "openrouter"].includes(p.id));
-  }, [isProviderConfigured]);
-
-  // Model name active for a given provider
-  const getActiveModelForProvider = useCallback(
-    (providerId: AIProvider): string => {
-      const provMeta = AI_PROVIDERS_CONFIG.find((p) => p.id === providerId);
-      const customModel = form.aiCustomConfig?.customProviders?.[providerId]?.model?.trim();
-      return customModel || provMeta?.defaultModel || "default";
-    },
-    [form.aiCustomConfig?.customProviders]
-  );
-
-  // AI Helper: Update provider config (API key, model, baseUrl)
-  const updateProviderConfig = (provider: AIProvider, patch: Partial<CustomAiProviderConfig>) => {
-    setForm((prev) => {
-      const currentConfig = prev.aiCustomConfig || {
-        order: prev.aiProviderOrder as AIProvider[],
-        taskRouting: { deepAnalysis: "deepseek", coverLetter: "deepseek" },
-        customProviders: {},
-      };
-      const existingProviderConfig = currentConfig.customProviders?.[provider] || {};
-
-      const updatedConfig: AiPreferenceConfig = {
-        ...currentConfig,
-        customProviders: {
-          ...currentConfig.customProviders,
-          [provider]: {
-            ...existingProviderConfig,
-            ...patch,
-          },
-        },
-      };
-
-      return {
-        ...prev,
-        aiCustomConfig: updatedConfig,
-      };
-    });
-  };
-
-  // AI Helper: Update dedicated task routing (deepAnalysis vs coverLetter)
-  const updateTaskRouting = (task: "deepAnalysis" | "coverLetter", provider: AIProvider) => {
-    setForm((prev) => {
-      const currentConfig = prev.aiCustomConfig || {
-        order: prev.aiProviderOrder as AIProvider[],
-        taskRouting: { deepAnalysis: "deepseek", coverLetter: "deepseek" },
-        customProviders: {},
-      };
-
-      return {
-        ...prev,
-        aiCustomConfig: {
-          ...currentConfig,
-          taskRouting: {
-            ...currentConfig.taskRouting,
-            [task]: provider,
-          },
-        },
-      };
-    });
-  };
-
-  // AI Helper: Move provider in cascade priority chain
-  const moveProvider = (index: number, direction: "up" | "down") => {
-    setForm((prev) => {
-      const list = [...prev.aiProviderOrder];
-      const targetIdx = direction === "up" ? index - 1 : index + 1;
-      if (targetIdx < 0 || targetIdx >= list.length) return prev;
-      const temp = list[index];
-      list[index] = list[targetIdx];
-      list[targetIdx] = temp;
-
-      return {
-        ...prev,
-        aiProviderOrder: list,
-        aiCustomConfig: {
-          ...(prev.aiCustomConfig || {
-            order: list as AIProvider[],
-            taskRouting: { deepAnalysis: list[0] as AIProvider, coverLetter: list[0] as AIProvider },
-            customProviders: {},
-          }),
-          order: list as AIProvider[],
-        },
-      };
-    });
-  };
-
-  // AI Helper: Ping/test live connection to provider
-  const handleTestAi = async (provider: AIProvider) => {
-    setTestingAi(true);
-    setTestAiResult(null);
-    try {
-      const currentConfig = form.aiCustomConfig?.customProviders?.[provider];
-      const res = await fetch("/api/settings/test-ai", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          provider,
-          config: currentConfig,
-        }),
-      });
-      const data = await res.json();
-      setTestAiResult({
-        provider,
-        success: Boolean(data.success),
-        message: data.message || (data.success ? "Connection established successfully!" : "Connection failed."),
-        latencyMs: data.latencyMs,
-        modelUsed: data.modelUsed,
-      });
-    } catch {
-      setTestAiResult({
-        provider,
-        success: false,
-        message: "Network error trying to reach AI test API.",
-      });
-    } finally {
-      setTestingAi(false);
-    }
-  };
-
   // Refs for tracking changes, in-flight queue, and unload flush
   const isLoadedRef = useRef(false);
   const isSavingRef = useRef(false);
@@ -541,8 +291,6 @@ export default function SettingsPage() {
       salaryMinimum:
         formData.salaryMinimum.trim() !== "" ? parseInt(formData.salaryMinimum, 10) || null : null,
       salaryCurrency: formData.salaryCurrency,
-      aiProviderOrder: formData.aiProviderOrder,
-      aiCustomConfig: formData.aiCustomConfig,
       coverLetterLanguage: formData.coverLetterLanguage,
       language: lang,
       resumeText: formData.resumeText,
@@ -559,76 +307,28 @@ export default function SettingsPage() {
     };
   }, []);
 
-  // ── Load Settings on Mount (with instant 0ms cache hydration) ────
+  // ── Load Settings on Mount ────
   useEffect(() => {
     let isMounted = true;
 
-    // Fast instant hydration from client cache
-    try {
-      const cached = localStorage.getItem(SETTINGS_CACHE_KEY);
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        if (parsed?.form && parsed.form.id) {
-          setForm(parsed.form);
-          setHasLoadedFromCache(true);
-        }
-        if (parsed?.stats) {
-          setStats(parsed.stats);
-        }
-        if (parsed?.telegramLink) {
-          if (parsed.telegramLink.token) setTgToken(parsed.telegramLink.token);
-          setTgLinked(Boolean(parsed.telegramLink.linked));
-          if (parsed.telegramLink.username) setTgUsername(parsed.telegramLink.username);
-          if (parsed.telegramLink.botUsername) setTgBotUsername(parsed.telegramLink.botUsername);
-        }
-      }
-    } catch {}
+    // Discard legacy caches containing account data or credentials.
+    try { localStorage.removeItem("hh_settings_cache_v2"); } catch {}
 
     const load = async () => {
       try {
         const res = await fetch("/api/settings");
+        if (!res.ok) throw new Error("Settings request failed");
         if (res.ok) {
           const json = await res.json();
+          if (!json.success || !json.data) throw new Error("Invalid settings response");
           if (json.success && json.data && isMounted) {
             if (json.stats) {
               setStats(json.stats);
-            }
-            if (Array.isArray(json.serverConfiguredProviders)) {
-              setServerConfiguredProviders(json.serverConfiguredProviders);
             }
             if (json.systemCapabilities && typeof json.systemCapabilities.hasOfficialHhOAuth === "boolean") {
               setHasOfficialHhOAuth(json.systemCapabilities.hasOfficialHhOAuth);
             }
             const d = json.data;
-            const serverList = Array.isArray(json.serverConfiguredProviders) && json.serverConfiguredProviders.length > 0
-              ? (json.serverConfiguredProviders as string[])
-              : ["groq", "gemini", "openrouter"];
-
-            const isConfiguredAtLoad = (p: string) => {
-              if (serverList.includes(p)) return true;
-              const cp = d.aiCustomConfig?.customProviders?.[p];
-              if (cp?.apiKey && cp.apiKey.trim().length > 3 && !cp.apiKey.startsWith("sk-...")) return true;
-              if (p === "custom" && cp?.baseUrl && cp.baseUrl.trim().length > 3) return true;
-              return false;
-            };
-
-            const rawOrder = Array.isArray(d.aiProviderOrder) && d.aiProviderOrder.length > 0
-              ? d.aiProviderOrder
-              : DEFAULT_FORM.aiProviderOrder;
-
-            const filteredOrder = rawOrder.filter(isConfiguredAtLoad);
-            const parsedOrder = filteredOrder.length > 0 ? filteredOrder : serverList;
-
-            const rawDeep = d.aiCustomConfig?.taskRouting?.deepAnalysis;
-            const effectiveDeepOnLoad = (rawDeep && isConfiguredAtLoad(rawDeep))
-              ? (rawDeep as AIProvider)
-              : (parsedOrder[0] as AIProvider || "groq");
-
-            const rawCover = d.aiCustomConfig?.taskRouting?.coverLetter;
-            const effectiveCoverOnLoad = (rawCover && isConfiguredAtLoad(rawCover))
-              ? (rawCover as AIProvider)
-              : (parsedOrder[0] as AIProvider || "groq");
-
             if (d.language && (d.language === "ru" || d.language === "en")) {
               setLanguage(d.language);
             }
@@ -656,15 +356,6 @@ export default function SettingsPage() {
               redFlagKeywords: Array.isArray(d.redFlagKeywords) ? d.redFlagKeywords : [],
               salaryMinimum: d.salaryMinimum != null ? String(d.salaryMinimum) : "",
               salaryCurrency: d.salaryCurrency ?? DEFAULT_FORM.salaryCurrency,
-              aiProviderOrder: parsedOrder,
-              aiCustomConfig: {
-                order: parsedOrder as AIProvider[],
-                taskRouting: {
-                  deepAnalysis: effectiveDeepOnLoad,
-                  coverLetter: effectiveCoverOnLoad,
-                },
-                customProviders: d.aiCustomConfig?.customProviders || {},
-              },
               coverLetterLanguage: d.coverLetterLanguage ?? DEFAULT_FORM.coverLetterLanguage,
               resumeText: d.resumeText ?? "",
               portfolioUrl: d.portfolioUrl ?? "",
@@ -686,25 +377,15 @@ export default function SettingsPage() {
             setHasLoadedFromCache(true);
             isLoadedRef.current = true;
 
-            // Persist to local cache for 0ms loads in future visits
-            try {
-              localStorage.setItem(
-                SETTINGS_CACHE_KEY,
-                JSON.stringify({
-                  form: updatedForm,
-                  stats: json.stats || stats,
-                  telegramLink: json.telegramLink,
-                })
-              );
-            } catch {}
+
           }
         }
       } catch (err) {
         console.error("Failed to load settings:", err);
+        if (isMounted) setMsg({ text: "Settings could not be loaded. Reload the page before saving.", type: "error" });
       } finally {
         if (isMounted) {
           setLoading(false);
-          isLoadedRef.current = true;
         }
       }
     };
@@ -725,6 +406,7 @@ export default function SettingsPage() {
         setMsg({ text: `OAuth Error: ${oauthError}`, type: "error" });
         window.history.replaceState({}, document.title, window.location.pathname);
       } else if (importToken) {
+        window.history.replaceState({}, document.title, window.location.pathname);
         setMsg({ text: "Syncing session from 1-Click Sync... Validating resumes...", type: "warn" });
         fetch("/api/settings/validate-hh", {
           method: "POST",
@@ -775,6 +457,10 @@ export default function SettingsPage() {
   // ── Core Save Execution (with in-flight queue & sidebar sync) ────
   const executeSave = useCallback(
     async (formData: FormState, isManual = false) => {
+      if (!isLoadedRef.current) {
+        if (isManual) setMsg({ text: "Settings could not be loaded. Reload the page before saving.", type: "error" });
+        return;
+      }
       if (isSavingRef.current) {
         queuedSaveRef.current = { form: formData, isManual };
         return;
@@ -805,17 +491,7 @@ export default function SettingsPage() {
           setAutoSaveStatus("saved");
           const nowStr = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
           setLastSavedTime(nowStr);
-          try {
-            localStorage.setItem(
-              SETTINGS_CACHE_KEY,
-              JSON.stringify({
-                form: { ...formData, id: formData.id || json.data?.id },
-                stats,
-                telegramLink: { token: tgToken, linked: tgLinked, username: tgUsername, botUsername: tgBotUsername },
-              })
-            );
-            window.dispatchEvent(new CustomEvent("hh-profile-updated"));
-          } catch {}
+          window.dispatchEvent(new CustomEvent("hh-profile-updated"));
           if (isManual) {
             setMsg({ text: "Settings saved successfully!", type: "success" });
             setTimeout(() => setMsg(null), 3000);
@@ -1236,9 +912,6 @@ export default function SettingsPage() {
           data.cover_letter_language ||
           null;
 
-        const newAiCustomConfig = data.aiCustomConfig || form.aiCustomConfig;
-        const newAiOrder = data.aiCustomConfig?.order || data.aiProviderOrder || form.aiProviderOrder;
-
         setForm((prev) => ({
           ...prev,
           name: data.profileName || data.name || prev.name,
@@ -1256,8 +929,6 @@ export default function SettingsPage() {
           salaryMinimum: newSalaryMin !== null ? newSalaryMin : prev.salaryMinimum,
           salaryCurrency: newSalaryCurr || prev.salaryCurrency,
           coverLetterLanguage: newCoverLetterLang || prev.coverLetterLanguage,
-          aiCustomConfig: newAiCustomConfig,
-          aiProviderOrder: Array.isArray(newAiOrder) ? newAiOrder : prev.aiProviderOrder,
           resumeText: newBio,
           portfolioUrl: newPortfolio,
         }));
@@ -1303,8 +974,6 @@ export default function SettingsPage() {
         excludeKeywords: form.excludeKeywords,
         redFlagKeywords: form.redFlagKeywords,
       },
-      aiProviderOrder: form.aiProviderOrder,
-      aiCustomConfig: form.aiCustomConfig,
       coverLetterContext: {
         resumeBackgroundText: form.resumeText,
         portfolioWebsiteUrl: form.portfolioUrl,
@@ -2206,435 +1875,7 @@ export default function SettingsPage() {
             </div>
           </section>
 
-          {/* ── 7. AI Model Strategy, BYOK & Task Routing ── */}
-          <section className="bg-zinc-900/70 border border-zinc-800/90 rounded-xl p-5 backdrop-blur-sm space-y-5">
-            <div className="flex items-center gap-2 pb-3 border-b border-zinc-800/60">
-              <Bot size={16} className="text-emerald-400" />
-              <h2 className="text-sm font-semibold text-zinc-100">
-                {language === "ru" ? "Стратегия моделей ИИ и конфигурация BYOK" : "AI Model Strategy & BYOK Configuration"}
-              </h2>
-            </div>
 
-            <p className="text-xs text-zinc-400 leading-relaxed">
-              {language === "ru"
-                ? "Назначайте специализированные ИИ-модели под конкретные задачи (глубокий анализ вакансий vs составление писем), подключайте свои API-ключи (BYOK), локальные модели (Ollama/vLLM) и настраивайте каскадный переход при сбоях."
-                : "Assign dedicated AI engines to specific tasks (Deep Context Analysis vs. Cover Letter Drafting), bring your own API keys (BYOK) from any provider, connect local models (Ollama/vLLM), and configure cascade failover priority."}
-            </p>
-
-            {/* Subsection 1: Task-Specific Routing */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Deep Context & Scoring Analysis */}
-              <div className="bg-zinc-950/80 border border-zinc-800/90 rounded-lg p-4 space-y-3">
-                <div className="flex items-center gap-2 text-zinc-200">
-                  <Cpu size={15} className="text-blue-400" />
-                  <span className="text-xs font-semibold">
-                    {language === "ru" ? "Глубокий анализ контекста и скоринг" : "Deep Context & Scoring"}
-                  </span>
-                </div>
-                <p className="text-[11px] text-zinc-400">
-                  {language === "ru"
-                    ? "Модель для оценки соответствия резюме вакансии, выявления стоп-факторов и анализа требований."
-                    : "Engine used to score job-resume compatibility, identify red flags, and analyze vacancy requirements."}
-                </p>
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-[11px] font-mono text-zinc-400 block">
-                      {language === "ru" ? "Назначенный провайдер" : "Assigned Provider"}
-                    </label>
-                    <span className="text-[10px] font-mono text-zinc-500">
-                      {registeredProviders.length} {language === "ru" ? "доступно" : "configured"}
-                    </span>
-                  </div>
-                  <select
-                    value={
-                      registeredProviders.some((p) => p.id === (form.aiCustomConfig?.taskRouting?.deepAnalysis || form.aiProviderOrder[0]))
-                        ? (form.aiCustomConfig?.taskRouting?.deepAnalysis || form.aiProviderOrder[0])
-                        : (registeredProviders[0]?.id || "groq")
-                    }
-                    onChange={(e) => updateTaskRouting("deepAnalysis", e.target.value as AIProvider)}
-                    className="w-full bg-zinc-900 border border-zinc-700/80 rounded-lg px-3 py-2 text-xs text-zinc-100 focus:outline-none focus:border-blue-500"
-                  >
-                    {registeredProviders.map((prov) => {
-                      const activeModel = getActiveModelForProvider(prov.id);
-                      return (
-                        <option key={prov.id} value={prov.id}>
-                          {prov.label} ({activeModel})
-                        </option>
-                      );
-                    })}
-                  </select>
-                </div>
-              </div>
-
-              {/* Cover Letter Generation */}
-              <div className="bg-zinc-950/80 border border-zinc-800/90 rounded-lg p-4 space-y-3">
-                <div className="flex items-center gap-2 text-zinc-200">
-                  <Zap size={15} className="text-emerald-400" />
-                  <span className="text-xs font-semibold">
-                    {language === "ru" ? "Генерация сопроводительных писем" : "Cover Letter Generation"}
-                  </span>
-                </div>
-                <p className="text-[11px] text-zinc-400">
-                  {language === "ru"
-                    ? "Модель для составления персонализированных сопроводительных писем с учетом резюме и портфолио."
-                    : "Engine used to draft tailored, human-sounding cover letters adapted to your portfolio and resume."}
-                </p>
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-[11px] font-mono text-zinc-400 block">
-                      {language === "ru" ? "Назначенный провайдер" : "Assigned Provider"}
-                    </label>
-                    <span className="text-[10px] font-mono text-zinc-500">
-                      {registeredProviders.length} {language === "ru" ? "доступно" : "configured"}
-                    </span>
-                  </div>
-                  <select
-                    value={
-                      registeredProviders.some((p) => p.id === (form.aiCustomConfig?.taskRouting?.coverLetter || form.aiProviderOrder[0]))
-                        ? (form.aiCustomConfig?.taskRouting?.coverLetter || form.aiProviderOrder[0])
-                        : (registeredProviders[0]?.id || "groq")
-                    }
-                    onChange={(e) => updateTaskRouting("coverLetter", e.target.value as AIProvider)}
-                    className="w-full bg-zinc-900 border border-zinc-700/80 rounded-lg px-3 py-2 text-xs text-zinc-100 focus:outline-none focus:border-emerald-500"
-                  >
-                    {registeredProviders.map((prov) => {
-                      const activeModel = getActiveModelForProvider(prov.id);
-                      return (
-                        <option key={prov.id} value={prov.id}>
-                          {prov.label} ({activeModel})
-                        </option>
-                      );
-                    })}
-                  </select>
-                </div>
-              </div>
-            </div>
-
-            {/* Subsection 2: BYOK Provider Configurator */}
-            <div className="bg-zinc-950/90 border border-zinc-800/90 rounded-xl p-4 space-y-4">
-              <div className="flex items-center justify-between border-b border-zinc-800/60 pb-3">
-                <div className="flex items-center gap-2">
-                  <Key size={14} className="text-amber-400" />
-                  <span className="text-xs font-semibold text-zinc-200">
-                    {language === "ru" ? "Пользовательские ключи API (BYOK)" : "Custom Provider Credentials (BYOK)"}
-                  </span>
-                </div>
-                <span className="text-[10px] font-mono text-zinc-400">
-                  {language === "ru" ? "Хранится в профиле" : "Config stored per profile"}
-                </span>
-              </div>
-
-              {/* Provider Tab Bar */}
-              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
-                {AI_PROVIDERS_CONFIG.map((prov) => {
-                  const isCurrent = selectedAiTab === prov.id;
-                  const isConfigured = isProviderConfigured(prov.id);
-
-                  return (
-                    <button
-                      key={prov.id}
-                      type="button"
-                      onClick={() => {
-                        setSelectedAiTab(prov.id);
-                        setTestAiResult(null);
-                      }}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-colors border ${
-                        isCurrent
-                          ? "bg-zinc-800 text-zinc-100 border-emerald-500/50 shadow-sm"
-                          : "bg-zinc-900/60 text-zinc-400 border-zinc-800 hover:text-zinc-200 hover:border-zinc-700"
-                      }`}
-                    >
-                      <span>{prov.label}</span>
-                      {isConfigured && (
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" title={language === "ru" ? "Ключ настроен" : "Key configured"} />
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Selected Tab Form Panel */}
-              {(() => {
-                const provMeta = AI_PROVIDERS_CONFIG.find((p) => p.id === selectedAiTab) || AI_PROVIDERS_CONFIG[0];
-                const currentProvConfig = form.aiCustomConfig?.customProviders?.[selectedAiTab] || {};
-                const isKeyVisible = Boolean(showAiKeys[selectedAiTab]);
-
-                return (
-                  <div className="space-y-3.5 pt-2">
-                    <div>
-                      <div className="text-xs font-semibold text-zinc-100 flex items-center gap-2">
-                        <span>{provMeta.label} {language === "ru" ? "Конфигурация" : "Configuration"}</span>
-                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-300 border border-zinc-700">
-                          {provMeta.tag}
-                        </span>
-                      </div>
-                      <p className="text-[11px] text-zinc-400 mt-0.5">{provMeta.desc}</p>
-                    </div>
-
-                    {/* API Key */}
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between">
-                        <label className="text-[11px] font-mono text-zinc-300">
-                          {provMeta.isLocal
-                            ? (language === "ru" ? "Bearer Token (Опционально для Localhost)" : "Bearer Token (Optional for Localhost)")
-                            : (language === "ru" ? "Ключ API (BYOK)" : "API Key (BYOK)")}
-                        </label>
-                        <span className="text-[10px] text-zinc-500">
-                          {currentProvConfig.apiKey
-                            ? (language === "ru" ? "Активен пользовательский ключ" : "Custom key active")
-                            : serverConfiguredProviders.includes(selectedAiTab)
-                              ? (language === "ru" ? "Используется системный ключ (.env)" : "System key active (.env)")
-                              : (language === "ru" ? "Ключ не настроен" : "No key configured")}
-                        </span>
-                      </div>
-                      <div className="relative">
-                        <input
-                          type={isKeyVisible ? "text" : "password"}
-                          value={currentProvConfig.apiKey || ""}
-                          onChange={(e) => updateProviderConfig(selectedAiTab, { apiKey: e.target.value })}
-                          placeholder={provMeta.keyPlaceholder}
-                          className="w-full bg-zinc-900 border border-zinc-700/80 rounded-lg pl-3 pr-10 py-2 text-xs font-mono text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-emerald-500"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowAiKeys((prev) => ({ ...prev, [selectedAiTab]: !prev[selectedAiTab] }))}
-                          aria-label="Toggle API Key visibility"
-                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-200 transition-colors"
-                        >
-                          {isKeyVisible ? <EyeOff size={14} /> : <Eye size={14} />}
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Base URL (if custom) */}
-                    {provMeta.isLocal && (
-                      <div className="space-y-1">
-                        <label className="text-[11px] font-mono text-zinc-300">Base URL</label>
-                        <input
-                          type="text"
-                          value={currentProvConfig.baseUrl || ""}
-                          onChange={(e) => updateProviderConfig(selectedAiTab, { baseUrl: e.target.value })}
-                          placeholder="http://localhost:11434/v1"
-                          className="w-full bg-zinc-900 border border-zinc-700/80 rounded-lg px-3 py-2 text-xs font-mono text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-emerald-500"
-                        />
-                        <span className="text-[10px] text-zinc-500">
-                          e.g. Ollama: http://localhost:11434/v1 &bull; LM Studio: http://localhost:1234/v1 &bull; vLLM: http://localhost:8000/v1
-                        </span>
-                      </div>
-                    )}
-
-                    {/* Model Name & Presets */}
-                    <div className="space-y-1.5">
-                      <label className="text-[11px] font-mono text-zinc-300">
-                        {language === "ru" ? "Название модели" : "Model Name"}
-                      </label>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="text"
-                          value={currentProvConfig.model || ""}
-                          onChange={(e) => updateProviderConfig(selectedAiTab, { model: e.target.value })}
-                          placeholder={`${language === "ru" ? "По умолчанию" : "Default"}: ${provMeta.defaultModel}`}
-                          className="flex-1 bg-zinc-900 border border-zinc-700/80 rounded-lg px-3 py-2 text-xs font-mono text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-emerald-500"
-                        />
-                        {currentProvConfig.model && (
-                          <button
-                            type="button"
-                            onClick={() => updateProviderConfig(selectedAiTab, { model: "" })}
-                            className="px-2.5 py-2 rounded-lg bg-zinc-800 text-zinc-400 hover:text-zinc-200 text-xs border border-zinc-700 transition-colors"
-                          >
-                            {language === "ru" ? "Сброс" : "Reset"}
-                          </button>
-                        )}
-                      </div>
-
-                      {/* Quick Model Presets */}
-                      <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
-                        <span className="text-[10px] font-mono text-zinc-500">
-                          {language === "ru" ? "Пресеты:" : "Presets:"}
-                        </span>
-                        {provMeta.presets.map((preset) => (
-                          <button
-                            key={preset}
-                            type="button"
-                            onClick={() => updateProviderConfig(selectedAiTab, { model: preset })}
-                            className={`text-[10px] font-mono px-2 py-0.5 rounded border transition-colors ${
-                              currentProvConfig.model === preset || (!currentProvConfig.model && preset === provMeta.defaultModel)
-                                ? "bg-emerald-500/15 border-emerald-500/40 text-emerald-400"
-                                : "bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:border-zinc-700"
-                            }`}
-                          >
-                            {preset}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Test Connection Button & Result */}
-                    <div className="pt-2 flex items-center justify-between border-t border-zinc-800/60">
-                      <button
-                        type="button"
-                        onClick={() => handleTestAi(selectedAiTab)}
-                        disabled={testingAi}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-100 text-xs font-medium border border-zinc-700 transition-colors disabled:opacity-50"
-                      >
-                        {testingAi ? <RefreshCw size={13} className="animate-spin text-emerald-400" /> : <Play size={13} />}
-                        <span>
-                          {testingAi
-                            ? (language === "ru" ? "Тестирование..." : "Testing Ping...")
-                            : (language === "ru" ? "Проверить подключение" : "Test Connection")}
-                        </span>
-                      </button>
-
-                      {testAiResult && testAiResult.provider === selectedAiTab && (
-                        <div
-                          className={`flex items-center gap-2 text-xs font-mono px-2.5 py-1 rounded border ${
-                            testAiResult.success
-                              ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
-                              : "bg-red-500/10 border-red-500/30 text-red-400"
-                          }`}
-                        >
-                          {testAiResult.success ? <Check size={12} /> : <AlertTriangle size={12} />}
-                          <span>
-                            {testAiResult.message}
-                            {testAiResult.latencyMs ? ` (${testAiResult.latencyMs}ms)` : ""}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })()}
-            </div>
-
-            {/* Subsection 3: Cascade Failover Order */}
-            <div className="space-y-2.5 pt-2">
-              <div className="flex items-center justify-between">
-                <div>
-                  <span className="text-xs font-semibold text-zinc-200">
-                    {language === "ru" ? "Каскадный приоритет переключения" : "Cascade Failover Priority"}
-                  </span>
-                  <p className="text-[11px] text-zinc-400">
-                    {language === "ru"
-                      ? "Последовательность переключения при лимитах запросов или сетевых ошибках."
-                      : "Failover sequence if primary engines encounter rate limits or temporary network errors."}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const currentSet = new Set(form.aiProviderOrder);
-                    const next = registeredProviders.find((p) => !currentSet.has(p.id));
-                    if (next) {
-                      const updated = [...form.aiProviderOrder, next.id];
-                      setForm((prev) => ({
-                        ...prev,
-                        aiProviderOrder: updated,
-                        aiCustomConfig: {
-                          ...(prev.aiCustomConfig || {
-                            order: updated,
-                            taskRouting: { deepAnalysis: updated[0] as AIProvider, coverLetter: updated[0] as AIProvider },
-                            customProviders: {},
-                          }),
-                          order: updated as AIProvider[],
-                        },
-                      }));
-                    }
-                  }}
-                  disabled={registeredProviders.every((p) => form.aiProviderOrder.includes(p.id))}
-                  className="text-[11px] px-2.5 py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                >
-                  {language === "ru" ? "+ Добавить в цепочку" : "+ Add Provider to Chain"}
-                </button>
-              </div>
-
-              <div className="space-y-2">
-                {form.aiProviderOrder.map((providerKey, idx) => {
-                  const provMeta = AI_PROVIDERS_CONFIG.find((p) => p.id === providerKey) || {
-                    id: providerKey as AIProvider,
-                    label: providerKey,
-                    tag: "Custom Engine",
-                    defaultModel: "Default Model",
-                    presets: [],
-                    keyPlaceholder: "",
-                    desc: "External API Provider",
-                  };
-
-                  const customModel = form.aiCustomConfig?.customProviders?.[providerKey as AIProvider]?.model;
-                  const activeModel = customModel || provMeta.defaultModel;
-
-                  return (
-                    <div
-                      key={`${providerKey}-${idx}`}
-                      className="flex items-center justify-between bg-zinc-950 border border-zinc-800/90 rounded-lg p-3 hover:border-zinc-700 transition-colors"
-                    >
-                      <div className="flex items-center gap-3">
-                        <span className="w-6 h-6 rounded flex items-center justify-center bg-zinc-900 border border-zinc-800 text-xs font-mono font-bold text-zinc-300">
-                          {idx + 1}
-                        </span>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-semibold text-zinc-100">{provMeta.label}</span>
-                            <span className="text-[10px] font-mono text-zinc-400">({activeModel})</span>
-                            {idx === 0 && (
-                              <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 uppercase font-semibold">
-                                {language === "ru" ? "Основной" : "Primary"}
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-[11px] text-zinc-500 mt-0.5">{provMeta.tag}</div>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => moveProvider(idx, "up")}
-                          disabled={idx === 0}
-                          aria-label={`Move ${provMeta.label} up`}
-                          className="p-1.5 rounded bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-zinc-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                        >
-                          <ArrowUp size={13} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => moveProvider(idx, "down")}
-                          disabled={idx === form.aiProviderOrder.length - 1}
-                          aria-label={`Move ${provMeta.label} down`}
-                          className="p-1.5 rounded bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 border border-zinc-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                        >
-                          <ArrowDown size={13} />
-                        </button>
-                        {form.aiProviderOrder.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const updated = form.aiProviderOrder.filter((_, i) => i !== idx);
-                              setForm((prev) => ({
-                                ...prev,
-                                aiProviderOrder: updated,
-                                aiCustomConfig: {
-                                  ...(prev.aiCustomConfig || {
-                                    order: updated,
-                                    taskRouting: { deepAnalysis: updated[0] as AIProvider, coverLetter: updated[0] as AIProvider },
-                                    customProviders: {},
-                                  }),
-                                  order: updated as AIProvider[],
-                                },
-                              }));
-                            }}
-                            title="Remove from cascade chain"
-                            className="p-1.5 rounded bg-zinc-900 hover:bg-red-950/40 text-zinc-500 hover:text-red-400 border border-zinc-800 transition-colors"
-                          >
-                            &times;
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </section>
 
           {/* ── 8. Telegram Bot Notifications ── */}
           <section id="section-telegram" className="bg-zinc-900/70 border border-zinc-800/90 rounded-xl p-5 backdrop-blur-sm space-y-4">
@@ -2899,8 +2140,8 @@ export default function SettingsPage() {
                 <span className="font-mono text-zinc-200">{form.maxNotificationsPerDay} / {language === "ru" ? "день" : "day"}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-zinc-400">{language === "ru" ? "Основной провайдер" : "Primary Provider"}</span>
-                <span className="font-mono text-zinc-200 uppercase">{form.aiProviderOrder[0] || "groq"}</span>
+                <span className="text-zinc-400">{language === "ru" ? "Обработка ИИ" : "AI Processing"}</span>
+                <span className="font-mono text-zinc-200 uppercase">{language === "ru" ? "Управляется сервисом" : "Managed by service"}</span>
               </div>
             </div>
           </div>

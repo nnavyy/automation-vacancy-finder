@@ -11,8 +11,8 @@ import { getApiUser } from "@/lib/auth-helpers";
 import crypto from "crypto";
 
 function generateToken(): string {
-  // Generate friendly 6-character uppercase token (e.g. 7AF044)
-  return crypto.randomBytes(3).toString("hex").toUpperCase();
+  // Generate a high-entropy token for account linking.
+  return crypto.randomBytes(24).toString("hex").toUpperCase();
 }
 
 function getBotUsername(): string {

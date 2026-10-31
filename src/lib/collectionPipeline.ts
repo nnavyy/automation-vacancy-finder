@@ -1,3 +1,5 @@
+import { Prisma } from "@prisma/client";
+import { fetchPublicPage } from "@/lib/publicFetch";
 // ============================================================
 // HH Job Copilot — Collection Pipeline (Multi-User + Load-Balanced)
 // ============================================================
@@ -123,52 +125,45 @@ export async function runCollectionPipeline(
     console.warn(`[Pipeline] Stale collection lock detected (${Math.round(elapsedMs / 1000)}s old), resetting.`);
   }
 
-  activePipelineCount++;
-  const pref = toSearchPrefData(prefRaw);
-
-  // Pre-fetch candidate's portfolio text once for the entire batch (SSRF protected)
-  if (pref.portfolioUrl && isSafePublicUrl(pref.portfolioUrl)) {
-    try {
-      const res = await fetch(pref.portfolioUrl, { signal: AbortSignal.timeout(4000) });
-      if (res.ok) {
-        const html = await res.text();
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (pref as any).cachedPortfolioContent = html
-          .replace(/<[^>]*>?/gm, " ")
-          .replace(/\s\s+/g, " ")
-          .trim()
-          .slice(0, 1500);
-      }
-    } catch (err) {
-      console.warn("[Pipeline] Failed to pre-fetch portfolio URL:", err);
-    }
-  }
-
-  // Get user's linked Telegram chatId for notifications
-  const telegramLink = await prisma.telegramLink.findFirst({
-    where: { userId, isActive: true, telegramChatId: { not: null } },
-  });
-  const chatId = telegramLink?.telegramChatId ?? undefined;
-
-  const summary = {
-    processed: 0,
-    saved: 0,
-    ignored: 0,
-    analyzed: 0,
-    notified: 0,
-    errors: 0,
-    aiChargesUsed: 0,
-  };
   const startedAt = new Date().toISOString();
-
-  await prisma.searchPreference.update({
-    where: { id: prefRaw.id },
+  const claimed = await prisma.searchPreference.updateMany({
+    where: { id: prefRaw.id, collectionStatus: { equals: prefRaw.collectionStatus ?? Prisma.DbNull } },
     data: { collectionStatus: { running: true, processed: 0, analyzed: 0, saved: 0, total: 0, startedAt } },
   });
+  if (claimed.count !== 1) {
+    return { success: false, error: "A collection run is already in progress for this profile." };
+  }
 
+  activePipelineCount++;
+  const summary = { processed: 0, saved: 0, ignored: 0, analyzed: 0, notified: 0, errors: 0, aiChargesUsed: 0 };
   let vacancies: NormalizedVacancy[] = [];
-
   try {
+    const pref = toSearchPrefData(prefRaw);
+
+    // Pre-fetch candidate's portfolio text once for the entire batch (SSRF protected)
+    if (pref.portfolioUrl && isSafePublicUrl(pref.portfolioUrl)) {
+      try {
+        const res = await fetchPublicPage(pref.portfolioUrl, 4000);
+        if (res.ok) {
+          const html = await res.text();
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (pref as any).cachedPortfolioContent = html
+            .replace(/<[^>]*>?/gm, " ")
+            .replace(/\s\s+/g, " ")
+            .trim()
+            .slice(0, 1500);
+        }
+      } catch (err) {
+        console.warn("[Pipeline] Failed to pre-fetch portfolio URL:", err);
+      }
+    }
+
+    // Get user's linked Telegram chatId for notifications
+    const telegramLink = await prisma.telegramLink.findFirst({
+      where: { userId, isActive: true, telegramChatId: { not: null } },
+    });
+    const chatId = telegramLink?.telegramChatId ?? undefined;
+
     // ── Step 2: Collect vacancies from shared PoolVacancy vault ──
     try {
       vacancies = await getPoolVacancies(pref, buildSearchQueries(pref));
@@ -512,8 +507,8 @@ export async function runCollectionPipeline(
   } finally {
     activePipelineCount = Math.max(0, activePipelineCount - 1);
     try {
-      await prisma.searchPreference.update({
-        where: { id: prefRaw.id },
+      await prisma.searchPreference.updateMany({
+        where: { id: prefRaw.id, collectionStatus: { path: ["startedAt"], equals: startedAt } },
         data: {
           collectionStatus: {
             running: false,

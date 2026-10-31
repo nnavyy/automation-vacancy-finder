@@ -9,7 +9,8 @@ import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import prisma from "@/lib/db";
 import { getApiUser } from "@/lib/auth-helpers";
-import { encrypt, maskProviderKeys, encryptProviderKeys } from "@/lib/crypto";
+import { encrypt } from "@/lib/crypto";
+import type { SearchPreference } from "@prisma/client";
 import { recordPreferenceCatalogTerms } from "@/lib/catalog/dynamic";
 import type { SearchPreferenceData } from "@/types";
 
@@ -39,71 +40,51 @@ const PREF_DEFAULTS = {
 
 // ── Helpers ───────────────────────────────────────────────────
 
-function pick<T extends object, K extends keyof T>(obj: T, keys: K[]): Partial<T> {
-  const result: Partial<T> = {};
-  for (const k of keys) {
-    if (k in obj) result[k] = obj[k];
+const ARRAY_KEYS = [
+  "targetRoles", "searchKeywordsEn", "searchKeywordsRu", "requiredSkills", "niceToHaveSkills",
+  "experience", "workFormat", "excludeKeywords", "redFlagKeywords",
+] as const;
+type SettingsBody = Partial<Omit<SearchPreferenceData, "salaryMinimum">> & { salaryMinimum?: number | null };
+
+function isSettingsBody(value: unknown): value is SettingsBody {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  if ("aiCustomConfig" in value || "aiProviderOrder" in value) return false;
+  for (const [key, field] of Object.entries(value)) {
+    if (ARRAY_KEYS.some((arrayKey) => arrayKey === key)) {
+      if (!Array.isArray(field) || field.length > 100 || !field.every((item: unknown) => typeof item === "string" && item.length <= 300)) return false;
+    } else if (["salaryMinimum", "minimumScoreToNotify", "maxNotificationsPerDay", "hhTotalApplications"].includes(key)) {
+      if (field === null && ["salaryMinimum", "hhTotalApplications"].includes(key)) continue;
+      if (typeof field !== "number" || !Number.isInteger(field) || field < 0 || field > 2_147_483_647) return false;
+      if (key === "minimumScoreToNotify" && field > 100) return false;
+      if (key === "maxNotificationsPerDay" && (field < 1 || field > 100)) return false;
+    } else if (key === "isActive") {
+      if (typeof field !== "boolean") return false;
+    } else if (["hhLastVerifiedAt", "hhExpiresAt"].includes(key)) {
+      if (field !== null && (typeof field !== "string" || !Number.isFinite(Date.parse(field)))) return false;
+    } else if (["id", "name", "salaryCurrency", "coverLetterLanguage", "language", "resumeText", "portfolioUrl", "hhToken", "hhResumeId", "hhResumeTitle", "hhProfileName", "hhProfileAvatar", "hhSessionStatus"].includes(key)) {
+      if (field === null && ["resumeText", "portfolioUrl", "hhToken", "hhResumeId", "hhResumeTitle", "hhProfileName", "hhProfileAvatar", "hhSessionStatus"].includes(key)) continue;
+      if (typeof field !== "string" || field.length > (key === "resumeText" ? 50_000 : 4096)) return false;
+      if (key === "id" && !field.trim()) return false;
+      if (key === "language" && !["en", "ru"].includes(field)) return false;
+    }
   }
+  return true;
+}
+
+function pick<T extends object, K extends keyof T>(obj: T, keys: K[]): Partial<Pick<T, K>> {
+  const result: Partial<Pick<T, K>> = {};
+  for (const key of keys) if (key in obj) result[key] = obj[key];
   return result;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function serializePref(pref: any) {
-  const hasHhToken = Boolean(pref.hhToken);
-  // Strictly omit raw hhToken from the JSON response to prevent credential leaks to browser/extensions
-  const { hhToken: _omittedHhToken, ...clean } = pref;
-
-  const rawCustomConfig = typeof pref.aiProviderOrder === "object" && pref.aiProviderOrder !== null && !Array.isArray(pref.aiProviderOrder)
-    ? pref.aiProviderOrder
-    : {
-        order: Array.isArray(pref.aiProviderOrder) ? pref.aiProviderOrder : ["groq", "gemini", "openrouter"],
-        taskRouting: {
-          deepAnalysis: Array.isArray(pref.aiProviderOrder) ? pref.aiProviderOrder[0] || "groq" : "groq",
-          coverLetter: Array.isArray(pref.aiProviderOrder) ? pref.aiProviderOrder[0] || "groq" : "groq",
-        },
-        customProviders: {},
-      };
-
-  // Mask custom provider API keys so raw keys never touch client JavaScript
-  const maskedAiCustomConfig = {
-    ...rawCustomConfig,
-    customProviders: maskProviderKeys(rawCustomConfig.customProviders),
-  };
-
+function serializePref(pref: SearchPreference) {
   return {
-    ...clean,
+    ...pref,
     hhToken: undefined,
-    hasHhToken,
-    targetRoles:           Array.isArray(pref.targetRoles)           ? pref.targetRoles           : [],
-    searchKeywordsEn:      Array.isArray(pref.searchKeywordsEn)      ? pref.searchKeywordsEn      : [],
-    searchKeywordsRu:      Array.isArray(pref.searchKeywordsRu)      ? pref.searchKeywordsRu      : [],
-    requiredSkills:        Array.isArray(pref.requiredSkills)        ? pref.requiredSkills        : [],
-    niceToHaveSkills:      Array.isArray(pref.niceToHaveSkills)      ? pref.niceToHaveSkills      : [],
-    experience:            Array.isArray(pref.experience)            ? pref.experience            : [],
-    workFormat:            Array.isArray(pref.workFormat)            ? pref.workFormat            : [],
-    excludeKeywords:       Array.isArray(pref.excludeKeywords)       ? pref.excludeKeywords       : [],
-    redFlagKeywords:       Array.isArray(pref.redFlagKeywords)       ? pref.redFlagKeywords       : [],
-    aiProviderOrder:       Array.isArray(pref.aiProviderOrder)
-      ? pref.aiProviderOrder
-      : (typeof pref.aiProviderOrder === "object" && pref.aiProviderOrder !== null && Array.isArray((pref.aiProviderOrder as any).order)
-          ? (pref.aiProviderOrder as any).order
-          : ["groq", "gemini", "openrouter"]),
-    aiCustomConfig:        maskedAiCustomConfig,
+    aiProviderOrder: undefined,
+    hasHhToken: Boolean(pref.hhToken),
+    ...Object.fromEntries(ARRAY_KEYS.map((key) => [key, Array.isArray(pref[key]) ? pref[key] : []])),
   };
-}
-
-function getServerConfiguredProviders(): string[] {
-  const list: string[] = [];
-  const isValid = (key?: string) => Boolean(key && !key.startsWith("sk-...") && key.trim().length > 10);
-
-  if (isValid(process.env.GROQ_API_KEY)) list.push("groq");
-  if (isValid(process.env.GEMINI_API_KEY)) list.push("gemini");
-  if (isValid(process.env.OPENROUTER_API_KEY)) list.push("openrouter");
-  if (isValid(process.env.OPENAI_API_KEY)) list.push("openai");
-  if (isValid(process.env.DEEPSEEK_API_KEY)) list.push("deepseek");
-  if (isValid(process.env.ANTHROPIC_API_KEY)) list.push("anthropic");
-
-  return list;
 }
 
 // ── GET ───────────────────────────────────────────────────────
@@ -140,7 +121,7 @@ export async function GET() {
       });
 
       if (pref) {
-        await prisma.searchPreference.update({
+        pref = await prisma.searchPreference.update({
           where: { id: pref.id },
           data: { isActive: true },
         });
@@ -160,13 +141,13 @@ export async function GET() {
 
     let activeTgLink = tgLink;
     if (!activeTgLink) {
-      const token = crypto.randomBytes(3).toString("hex").toUpperCase();
+      const token = crypto.randomBytes(24).toString("hex").toUpperCase();
       activeTgLink = await prisma.telegramLink.create({
         data: {
           userId: user.id,
           token,
           isActive: true,
-          language: (pref as any)?.language || "en",
+          language: pref.language || "en",
         },
       });
     }
@@ -179,7 +160,6 @@ export async function GET() {
         hasTelegramBot: Boolean(process.env.TELEGRAM_BOT_TOKEN),
         hasEmailService: Boolean(process.env.SMTP_USER || process.env.EMAIL_USER),
       },
-      serverConfiguredProviders: getServerConfiguredProviders(),
       telegramLink: {
         linked: !!activeTgLink.telegramChatId,
         token: activeTgLink.token,
@@ -209,17 +189,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
   }
   try {
-    const body = (await req.json().catch(() => ({}))) as Partial<SearchPreferenceData> & { id?: string };
+    const body: unknown = await req.json().catch(() => null);
+    if (!isSettingsBody(body)) {
+      return NextResponse.json({ success: false, error: "Invalid settings. AI configuration is managed by the service." }, { status: 400 });
+    }
 
     // Scalar fields
-    const scalarFields = pick(body, [
+    const scalarFields = { ...pick(body, [
       "name", "salaryMinimum", "salaryCurrency",
       "minimumScoreToNotify", "maxNotificationsPerDay",
       "coverLetterLanguage", "language", "resumeText", "isActive", "portfolioUrl",
       "hhResumeId", "hhResumeTitle",
       "hhProfileName", "hhProfileAvatar", "hhTotalApplications",
       "hhSessionStatus", "hhLastVerifiedAt", "hhExpiresAt",
-    ]);
+    ]), hhToken: undefined as string | null | undefined };
 
     if (typeof scalarFields.name === "string") {
       scalarFields.name = scalarFields.name.trim() || "Default";
@@ -239,53 +222,21 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // JSON array fields
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const jsonFields: Record<string, any> = {};
-    const arrayKeys: (keyof SearchPreferenceData)[] = [
-      "targetRoles", "searchKeywordsEn", "searchKeywordsRu",
-      "requiredSkills", "niceToHaveSkills", "experience",
-      "workFormat", "excludeKeywords", "redFlagKeywords",
-      "aiProviderOrder",
-    ];
-    for (const key of arrayKeys) {
-      if (key in body && Array.isArray((body as any)[key])) jsonFields[key] = (body as any)[key];
-    }
+    const jsonFields: Partial<Record<typeof ARRAY_KEYS[number], string[]>> = {};
+    for (const key of ARRAY_KEYS) if (body[key] !== undefined) jsonFields[key] = body[key];
 
     let existing = null;
     if (body.id) {
       existing = await prisma.searchPreference.findFirst({
         where: { id: body.id, userId: user.id },
       });
+      if (!existing) return NextResponse.json({ success: false, error: "Profile not found" }, { status: 404 });
     }
 
     if (!existing) {
       existing = await prisma.searchPreference.findFirst({
         where: { userId: user.id, isActive: true },
       });
-    }
-
-    // Handle rich AI provider config (BYOK + Task-Specific Routing)
-    if (body.aiCustomConfig) {
-      const existingConfig =
-        typeof existing?.aiProviderOrder === "object" &&
-        existing?.aiProviderOrder !== null &&
-        !Array.isArray(existing.aiProviderOrder)
-          ? (existing.aiProviderOrder as any)
-          : undefined;
-
-      const encryptedProviders = encryptProviderKeys(
-        body.aiCustomConfig.customProviders,
-        existingConfig?.customProviders
-      );
-
-      jsonFields.aiProviderOrder = {
-        order: Array.isArray(body.aiCustomConfig.order)
-          ? body.aiCustomConfig.order
-          : (Array.isArray(body.aiProviderOrder) ? body.aiProviderOrder : ["deepseek", "groq", "gemini", "openrouter"]),
-        taskRouting: body.aiCustomConfig.taskRouting || {},
-        customProviders: encryptedProviders,
-      };
     }
 
     const safeData = { ...scalarFields, ...jsonFields };

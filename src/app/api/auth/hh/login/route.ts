@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getApiUser } from "@/lib/auth-helpers";
+import { randomBytes } from "node:crypto";
 
 /**
  * GET /api/auth/hh/login
@@ -28,13 +29,18 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const host = req.headers.get("x-forwarded-host") || req.headers.get("host") || "localhost:3000";
-  const protocol = req.headers.get("x-forwarded-proto") || (host.includes("localhost") ? "http" : "https");
-  const redirectUri = `${protocol}://${host}/api/auth/hh/callback`;
+  const baseUrl = process.env.APP_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || req.nextUrl.origin;
+  const redirectUri = new URL("/api/auth/hh/callback", baseUrl).toString();
+  const state = randomBytes(32).toString("hex");
 
   const authUrl = `https://hh.ru/oauth/authorize?response_type=code&client_id=${encodeURIComponent(
     clientId
-  )}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${encodeURIComponent(user.id)}`;
+  )}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${encodeURIComponent(state)}`;
 
-  return NextResponse.redirect(authUrl);
+  const response = NextResponse.redirect(authUrl);
+  response.cookies.set("hh_oauth_state", `${user.id}:${state}`, {
+    httpOnly: true, secure: new URL(baseUrl).protocol === "https:", sameSite: "lax",
+    path: "/api/auth/hh", maxAge: 600,
+  });
+  return response;
 }

@@ -22,6 +22,13 @@ const PREF_DEFAULTS = {
   isActive:              true,
 };
 
+function isProfileAction(value: unknown): value is { action: string; id?: string; name?: string } {
+  if (typeof value !== "object" || value === null || !("action" in value) || typeof value.action !== "string") return false;
+  if ("id" in value && (typeof value.id !== "string" || !value.id || value.id.length > 200)) return false;
+  if ("name" in value && (typeof value.name !== "string" || value.name.length > 200)) return false;
+  return true;
+}
+
 export async function GET() {
   const user = await getApiUser();
   if (!user?.id) {
@@ -34,7 +41,7 @@ export async function GET() {
       orderBy: { createdAt: "asc" },
     });
     return NextResponse.json({ success: true, data: profiles });
-  } catch (error) {
+  } catch {
     return NextResponse.json({ success: false, error: "Failed to fetch profiles" }, { status: 500 });
   }
 }
@@ -45,7 +52,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
   }
   try {
-    const body = await req.json();
+    const body: unknown = await req.json().catch(() => null);
+    if (!isProfileAction(body)) return NextResponse.json({ success: false, error: "Invalid profile action" }, { status: 400 });
     const { action, id, name } = body;
 
     if (action === "switch") {
@@ -91,7 +99,7 @@ export async function POST(req: NextRequest) {
         });
       });
 
-      return NextResponse.json({ success: true, data: newProfile });
+      return NextResponse.json({ success: true, data: { id: newProfile.id, name: newProfile.name, isActive: newProfile.isActive } });
     }
 
     if (action === "rename") {
@@ -112,7 +120,7 @@ export async function POST(req: NextRequest) {
         data: { name: name.trim() },
       });
 
-      return NextResponse.json({ success: true, data: updated });
+      return NextResponse.json({ success: true, data: { id: updated.id, name: updated.name, isActive: updated.isActive } });
     }
 
     if (action === "delete") {

@@ -22,6 +22,9 @@ export async function GET(req: NextRequest) {
       100,
       Math.max(1, parseInt(searchParams.get("limit") ?? "20", 10))
     );
+    if (!Number.isSafeInteger(page) || !Number.isSafeInteger(limit)) {
+      return NextResponse.json({ success: false, error: "Invalid pagination parameters" }, { status: 400 });
+    }
     const sortBy = searchParams.get("sortBy") ?? "createdAt";
     const orderRaw = searchParams.get("order") ?? "desc";
     const order: "asc" | "desc" = orderRaw === "asc" ? "asc" : "desc";

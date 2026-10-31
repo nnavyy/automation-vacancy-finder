@@ -7,8 +7,6 @@ import WorkflowSection from "@/components/landing/WorkflowSection";
 import ArchitectureSection from "@/components/landing/ArchitectureSection";
 import LandingBlogSection from "@/components/landing/LandingBlogSection";
 import DubCtaSection from "@/components/landing/DubCtaSection";
-import SelfHostSection from "@/components/landing/SelfHostSection";
-import DownloadHub from "@/components/landing/DownloadHub";
 import LandingFooter from "@/components/landing/LandingFooter";
 
 interface LandingViewProps {
@@ -44,11 +42,7 @@ export default function LandingView({ userEmail }: LandingViewProps) {
         {/* Inset Dark CTA Card */}
         <DubCtaSection />
 
-        {/* Local Self-Hosting Instructions */}
-        <SelfHostSection />
 
-        {/* Direct Download Hub */}
-        <DownloadHub />
       </main>
 
       {/* Footer */}

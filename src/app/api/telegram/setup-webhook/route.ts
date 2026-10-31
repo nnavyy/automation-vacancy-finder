@@ -5,17 +5,11 @@
 // ============================================================
 
 import { NextRequest, NextResponse } from "next/server";
-import { getApiUser } from "@/lib/auth-helpers";
+import { safeEqual } from "@/lib/timingSafe";
 
 export async function GET(req: NextRequest) {
-  const user = await getApiUser();
-  const authHeader = req.headers.get("authorization");
-  const secretParam = req.nextUrl.searchParams.get("secret");
-
-  const isAuthorized =
-    Boolean(user?.id) ||
-    (Boolean(process.env.CRON_SECRET) && authHeader === `Bearer ${process.env.CRON_SECRET}`) ||
-    (Boolean(process.env.TELEGRAM_WEBHOOK_SECRET) && secretParam === process.env.TELEGRAM_WEBHOOK_SECRET);
+  const authHeader = req.headers.get("authorization") || "";
+  const isAuthorized = Boolean(process.env.CRON_SECRET) && safeEqual(authHeader, `Bearer ${process.env.CRON_SECRET}`);
 
   if (!isAuthorized) {
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
@@ -26,10 +20,11 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "TELEGRAM_BOT_TOKEN not set" }, { status: 500 });
   }
 
-  // Auto-detect the domain from the request
-  const host = req.headers.get("host") ?? req.nextUrl.host;
-  const protocol = host.includes("localhost") ? "http" : "https";
-  const webhookUrl = `${protocol}://${host}/api/telegram/webhook`;
+  const baseUrl = process.env.APP_BASE_URL || process.env.NEXT_PUBLIC_APP_URL;
+  if (!baseUrl || !process.env.TELEGRAM_WEBHOOK_SECRET) {
+    return NextResponse.json({ ok: false, error: "APP_BASE_URL and TELEGRAM_WEBHOOK_SECRET are required." }, { status: 503 });
+  }
+  const webhookUrl = new URL("/api/telegram/webhook", baseUrl).toString();
 
   console.log(`[Setup] Setting webhook to: ${webhookUrl}`);
 
@@ -44,6 +39,7 @@ export async function GET(req: NextRequest) {
 
     const res = await fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
       method: "POST",
+      signal: AbortSignal.timeout(10_000),
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(webhookPayload),
     });
@@ -54,6 +50,7 @@ export async function GET(req: NextRequest) {
     // Set bot menu commands
     const cmdsRes = await fetch(`https://api.telegram.org/bot${token}/setMyCommands`, {
       method: "POST",
+      signal: AbortSignal.timeout(10_000),
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         commands: [
@@ -68,7 +65,7 @@ export async function GET(req: NextRequest) {
     console.log("[Setup] Set commands response:", cmdsBody);
 
     // Also get current webhook info
-    const infoRes = await fetch(`https://api.telegram.org/bot${token}/getWebhookInfo`);
+    const infoRes = await fetch(`https://api.telegram.org/bot${token}/getWebhookInfo`, { signal: AbortSignal.timeout(10_000) });
     const info = await infoRes.json();
 
     return NextResponse.json({

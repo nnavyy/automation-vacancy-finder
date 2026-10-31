@@ -1,3 +1,4 @@
+import { fetchPublicPage } from "@/lib/publicFetch";
 // ============================================================
 // Nanda AI Job Assistant — AI Vacancy Analyzer
 // ============================================================
@@ -75,7 +76,7 @@ export async function buildAnalysisPrompt(
     portfolioContent = `\n\n<candidate_portfolio_context>\n${pref.cachedPortfolioContent}\n</candidate_portfolio_context>`;
   } else if (pref?.portfolioUrl && isSafePublicUrl(pref.portfolioUrl)) {
     try {
-      const res = await fetch(pref.portfolioUrl, { signal: AbortSignal.timeout(5000) });
+      const res = await fetchPublicPage(pref.portfolioUrl, 5000);
       if (res.ok) {
         const html = await res.text();
         const text = html.replace(/<[^>]*>?/gm, " ").replace(/\s\s+/g, " ").trim().slice(0, 1500);
@@ -492,18 +493,10 @@ Writing rules (humanizer):
 - Close respectfully and invite a short technical call.${instruction}
 - Return ONLY the raw cover letter text. No commentary, no markdown, no code fences.`;
 
-  const customConfig =
-    pref?.aiCustomConfig ??
-    (typeof pref?.aiProviderOrder === "object" && !Array.isArray(pref?.aiProviderOrder)
-      ? pref?.aiProviderOrder
-      : undefined);
-
   const aiResult = await callAI({
     prompt,
     requestType: "cover_letter",
     maxTokens: options.maxTokens ?? 600,
-    providerOrder: Array.isArray(pref?.aiProviderOrder) ? pref.aiProviderOrder : customConfig?.order,
-    customConfig,
   });
 
   if (aiResult.isRateLimited || !aiResult.content.trim()) {
@@ -541,19 +534,11 @@ export async function analyzeVacancy(
 }> {
   const prompt = await buildAnalysisPrompt(vacancy, similarFeedback, pref);
 
-  const customConfig =
-    pref?.aiCustomConfig ??
-    (typeof pref?.aiProviderOrder === "object" && !Array.isArray(pref?.aiProviderOrder)
-      ? pref?.aiProviderOrder
-      : undefined);
-
   // ── Step 1: Call AI provider chain (Stage 1: Fast compact scoring) ──
   const aiResult = await callAI({
     prompt,
     requestType: "analyze",
     maxTokens: 500, // Compact Stage 1 token limit saves ~1500 output tokens per call
-    providerOrder: Array.isArray(pref?.aiProviderOrder) ? pref.aiProviderOrder : customConfig?.order,
-    customConfig,
   });
 
   // ── Step 2: Handle total AI failure / rate limits ─────────

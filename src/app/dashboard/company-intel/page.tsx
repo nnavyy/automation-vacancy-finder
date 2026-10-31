@@ -102,6 +102,7 @@ function isSafeCareersUrl(url?: string, domain?: string): boolean {
   if (!url) return false;
   try {
     const parsed = new URL(url);
+    if (!["http:", "https:"].includes(parsed.protocol)) return false;
     const host = parsed.hostname.toLowerCase();
     if (domain) {
       const normDomain = domain.toLowerCase().replace(/^www\./, "");
@@ -109,7 +110,7 @@ function isSafeCareersUrl(url?: string, domain?: string): boolean {
         return true;
       }
     }
-    return KNOWN_ATS_DOMAINS.some((ats) => host.includes(ats));
+    return KNOWN_ATS_DOMAINS.some((ats) => host === ats || host.endsWith(`.${ats}`));
   } catch {
     return false;
   }

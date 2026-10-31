@@ -147,8 +147,8 @@ export async function verifySubmittedCode(
     : record.code === submittedHash;
 
   if (!isMatch) {
-    await prisma.verificationCode.update({
-      where: { id: record.id },
+    await prisma.verificationCode.updateMany({
+      where: { id: record.id, usedAt: null, attempts: { lt: 5 } },
       data: { attempts: { increment: 1 } },
     });
     const remaining = 5 - (record.attempts + 1);
@@ -158,11 +158,15 @@ export async function verifySubmittedCode(
     };
   }
 
-  // Mark code as used
-  await prisma.verificationCode.update({
-    where: { id: record.id },
+  // Atomically claim the code so concurrent requests cannot both authenticate.
+  const claimed = await prisma.verificationCode.updateMany({
+    where: { id: record.id, usedAt: null, attempts: { lt: 5 }, expiresAt: { gt: new Date() } },
     data: { usedAt: new Date() },
   });
+
+  if (claimed.count !== 1) {
+    return { success: false, error: "Verification code is no longer valid. Please request a new one." };
+  }
 
   return { success: true };
 }
