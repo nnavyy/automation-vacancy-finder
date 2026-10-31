@@ -36,6 +36,7 @@ import {
   DollarSign
 } from "lucide-react";
 import { BrandLogo } from "@/components/BrandLogo";
+import DashboardFocus from "@/components/DashboardFocus";
 import CompanyIntelPaywall from "@/components/CompanyIntelPaywall";
 
 interface MockVacancy {
@@ -274,21 +275,29 @@ export default function DemoPage() {
           </Link>
 
           <Link
-            href="/architecture"
+            href="/register"
             className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs text-zinc-300 hover:text-white bg-zinc-800 border border-white/10 hover:bg-zinc-700 transition-colors"
           >
-            <span>Architecture Specs</span>
+            <span>Create free account</span>
           </Link>
 
           <Link
-            href="/about"
+            href="/#pricing"
             className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs text-zinc-300 hover:text-white bg-zinc-800 border border-white/10 hover:bg-zinc-700 transition-colors"
           >
-            <span>About Creator</span>
+            <span>View plans</span>
           </Link>
         </div>
       </header>
 
+      <nav aria-label="Preview navigation" className="md:hidden border-b border-white/10 px-5 py-3">
+        <select aria-label="Choose dashboard section" value={activeTab} onChange={(event) => {
+          const value = event.target.value;
+          if (value === "overview" || value === "vacancies" || value === "saved" || value === "applied" || value === "company-intel" || value === "analytics" || value === "settings") setActiveTab(value);
+        }} className="w-full rounded-lg border border-white/10 bg-zinc-900 px-3 py-2.5 text-sm">
+          <option value="overview">Overview</option><option value="vacancies">Vacancies</option><option value="saved">Saved</option><option value="applied">Applied</option><option value="analytics">Analytics · Free</option><option value="company-intel">Company Intel · $3/month</option><option value="settings">Settings</option>
+        </select>
+      </nav>
       {/* Main Body: Sticky Pinned Sidebar on Left + Independently Scrollable Workspace on Right */}
       <div className="flex-1 flex overflow-hidden">
         {/* Left Sidebar (Sticky and always visible) */}
@@ -477,7 +486,7 @@ export default function DemoPage() {
           {/* Top Title Bar */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-white/[0.06]">
             <div>
-              <h1 className="text-2xl font-bold tracking-tight text-white capitalize">
+              <h1 className="text-3xl font-medium tracking-tight text-white capitalize">
                 {activeTab === "overview" && "Overview"}
                 {activeTab === "vacancies" && "All Vacancies"}
                 {activeTab === "saved" && "Saved Vacancies"}
@@ -487,7 +496,7 @@ export default function DemoPage() {
                 {activeTab === "settings" && "Search Settings"}
               </h1>
               <p className="text-xs text-zinc-400 mt-1">
-                {activeTab === "overview" && "Autonomous job search and pipeline intelligence at a glance"}
+                {activeTab === "overview" && "Your matches, shortlist, and next steps in one place"}
                 {activeTab === "vacancies" && "Active listings scraped from HeadHunter RSS feeds"}
                 {activeTab === "saved" && "Actionable manual queue staged for review"}
                 {activeTab === "applied" && "Submitted applications and direct recruiter responses"}
@@ -530,10 +539,11 @@ export default function DemoPage() {
           {/* View: Overview */}
           {activeTab === "overview" && (
             <div className="space-y-6">
+              <DashboardFocus total={stats.total} saved={stats.saved} onNavigate={setActiveTab} />
               {/* 5 KPI Metric Cards Row (Clean typography without decorative badge pills) */}
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
                 {/* 1. TOTAL VACANCIES */}
-                <div className="bg-[#0f0f13] border border-white/[0.08] rounded-2xl p-5 shadow-sm space-y-2">
+                <div className="bg-[#101416] border border-white/[0.08] rounded-2xl p-5 shadow-sm space-y-2">
                   <div className="flex items-center justify-between text-[11px] text-zinc-400">
                     <span className="font-semibold uppercase tracking-wider text-[10px]">
                       TOTAL VACANCIES
@@ -541,7 +551,7 @@ export default function DemoPage() {
                     <FileText className="w-3.5 h-3.5 text-zinc-500" />
                   </div>
                   <div className="flex items-baseline gap-2">
-                    <span className="text-2xl font-bold tracking-tight text-white">
+                    <span className="text-3xl font-medium tracking-tight text-white">
                       {stats.total}
                     </span>
                     <span className="text-[11px] font-mono text-emerald-400">
@@ -554,7 +564,7 @@ export default function DemoPage() {
                 </div>
 
                 {/* 2. APPLIED */}
-                <div className="bg-[#0f0f13] border border-white/[0.08] rounded-2xl p-5 shadow-sm space-y-2">
+                <div className="bg-[#101416] border border-white/[0.08] rounded-2xl p-5 shadow-sm space-y-2">
                   <div className="flex items-center justify-between text-[11px] text-zinc-400">
                     <span className="font-semibold uppercase tracking-wider text-[10px]">
                       APPLIED
@@ -562,7 +572,7 @@ export default function DemoPage() {
                     <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
                   </div>
                   <div className="flex items-baseline gap-2">
-                    <span className="text-2xl font-bold tracking-tight text-white">
+                    <span className="text-3xl font-medium tracking-tight text-white">
                       {stats.applied}
                     </span>
                     <span className="text-[11px] text-zinc-400">responses</span>
@@ -573,7 +583,7 @@ export default function DemoPage() {
                 </div>
 
                 {/* 3. SKIPPED */}
-                <div className="bg-[#0f0f13] border border-white/[0.08] rounded-2xl p-5 shadow-sm space-y-2">
+                <div className="bg-[#101416] border border-white/[0.08] rounded-2xl p-5 shadow-sm space-y-2">
                   <div className="flex items-center justify-between text-[11px] text-zinc-400">
                     <span className="font-semibold uppercase tracking-wider text-[10px]">
                       SKIPPED
@@ -581,7 +591,7 @@ export default function DemoPage() {
                     <XCircle className="w-3.5 h-3.5 text-rose-400" />
                   </div>
                   <div className="flex items-baseline gap-2">
-                    <span className="text-2xl font-bold tracking-tight text-white">
+                    <span className="text-3xl font-medium tracking-tight text-white">
                       {stats.skipped}
                     </span>
                     <span className="text-[11px] text-zinc-400">auto-culled</span>
@@ -592,7 +602,7 @@ export default function DemoPage() {
                 </div>
 
                 {/* 4. SAVED */}
-                <div className="bg-[#0f0f13] border border-white/[0.08] rounded-2xl p-5 shadow-sm space-y-2">
+                <div className="bg-[#101416] border border-white/[0.08] rounded-2xl p-5 shadow-sm space-y-2">
                   <div className="flex items-center justify-between text-[11px] text-zinc-400">
                     <span className="font-semibold uppercase tracking-wider text-[10px]">
                       SAVED
@@ -600,7 +610,7 @@ export default function DemoPage() {
                     <Bookmark className="w-3.5 h-3.5 text-sky-400" />
                   </div>
                   <div className="flex items-baseline gap-2">
-                    <span className="text-2xl font-bold tracking-tight text-white">
+                    <span className="text-3xl font-medium tracking-tight text-white">
                       {stats.saved}
                     </span>
                     <span className="text-[11px] text-zinc-400">staged</span>
@@ -611,7 +621,7 @@ export default function DemoPage() {
                 </div>
 
                 {/* 5. AI PENDING */}
-                <div className="bg-[#0f0f13] border border-white/[0.08] rounded-2xl p-5 shadow-sm space-y-2 col-span-2 sm:col-span-1">
+                <div className="bg-[#101416] border border-white/[0.08] rounded-2xl p-5 shadow-sm space-y-2 col-span-2 sm:col-span-1">
                   <div className="flex items-center justify-between text-[11px] text-zinc-400">
                     <span className="font-semibold uppercase tracking-wider text-[10px]">
                       AI PENDING
@@ -619,7 +629,7 @@ export default function DemoPage() {
                     <Clock className="w-3.5 h-3.5 text-amber-400" />
                   </div>
                   <div className="flex items-baseline gap-2">
-                    <span className="text-2xl font-bold tracking-tight text-white">
+                    <span className="text-3xl font-medium tracking-tight text-white">
                       {stats.pending}
                     </span>
                     <span className="text-[11px] text-zinc-400">in queue</span>
@@ -633,7 +643,7 @@ export default function DemoPage() {
               {/* Middle Row: Average Match Score & Hunter Engine */}
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
                 {/* Average Match Score (7 Columns) */}
-                <div className="lg:col-span-7 bg-[#0f0f13] border border-white/[0.08] rounded-2xl p-6 shadow-sm flex flex-col justify-between space-y-4">
+                <div className="lg:col-span-7 bg-[#101416] border border-white/[0.08] rounded-2xl p-6 shadow-sm flex flex-col justify-between space-y-4">
                   <div>
                     <div className="flex items-center justify-between text-xs text-zinc-400 mb-3">
                       <div className="flex items-center gap-2">
@@ -684,7 +694,7 @@ export default function DemoPage() {
                 </div>
 
                 {/* Hunter Engine Status (5 Columns) */}
-                <div className="lg:col-span-5 bg-[#0f0f13] border border-white/[0.08] rounded-2xl p-6 shadow-sm flex flex-col justify-between space-y-4">
+                <div className="lg:col-span-5 bg-[#101416] border border-white/[0.08] rounded-2xl p-6 shadow-sm flex flex-col justify-between space-y-4">
                   <div>
                     <div className="flex items-center justify-between text-xs text-zinc-400 mb-3">
                       <div className="flex items-center gap-2">
@@ -878,7 +888,7 @@ export default function DemoPage() {
                     placeholder="Search by title, employer, or tech stack..."
                     value={queryFilter}
                     onChange={(e) => setQueryFilter(e.target.value)}
-                    className="w-full bg-[#0f0f13] border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500/50"
+                    className="w-full bg-[#101416] border border-white/10 rounded-xl pl-10 pr-4 py-2.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-emerald-500/50"
                   />
                 </div>
               </div>
@@ -930,7 +940,7 @@ export default function DemoPage() {
 
           {/* View: Analytics */}
           {activeTab === "analytics" && (
-            <div className="p-6 rounded-2xl bg-[#0f0f13] border border-white/[0.08] space-y-4">
+            <div className="p-6 rounded-2xl bg-[#101416] border border-white/[0.08] space-y-4">
               <h3 className="text-base font-bold text-white">Synergy &amp; Compensation Distribution</h3>
               <p className="text-xs text-zinc-400">
                 Evaluation calibration across 240 processed HeadHunter vacancies.
@@ -969,7 +979,7 @@ export default function DemoPage() {
 
           {/* View: Settings */}
           {activeTab === "settings" && (
-            <div className="p-6 rounded-2xl bg-[#0f0f13] border border-white/[0.08] space-y-5 max-w-2xl">
+            <div className="p-6 rounded-2xl bg-[#101416] border border-white/[0.08] space-y-5 max-w-2xl">
               <h3 className="text-base font-bold text-white">Autonomous Hunter Parameters</h3>
               <div className="space-y-3 text-xs">
                 <div>

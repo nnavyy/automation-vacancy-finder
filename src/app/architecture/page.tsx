@@ -344,14 +344,14 @@ const FAQ_ITEMS: FaqItem[] = [
       "Commercial job scrapers let tables grow into tens of thousands of dead listings, slowing down queries and ballooning database size. Our 100-Vacancy Guard automatically purges listings that return HTTP 404 (archived by employers) and caps the active queue at 100 of the highest-synergy postings. This maintains sub-12ms full-text search speeds and zero disk bloat.",
   },
   {
-    question: "Can I self-host this entirely on my own VPS or local machine?",
+    question: "Is HH Job Copilot a hosted platform or self-hosted?",
     answer:
-      "Yes. HH Job Copilot is 100% open-source and local-first. You can spin it up with a single docker compose up -d command or run it directly on Node.js with local PostgreSQL.",
+      "HH Job Copilot is a proprietary, fully hosted cloud platform. All crawlers, jitter algorithms, and multi-provider AI failovers run on our managed high-availability infrastructure so you get real-time alerts without managing Docker containers or server keys.",
   },
   {
-    question: "Is any of my resume or candidate data transmitted to third-party tracking servers?",
+    question: "How is candidate and resume data protected?",
     answer:
-      "Never. There is zero telemetry, zero analytics tracking, and no proprietary cloud database. Your search criteria, resume text, API keys, and application history stay strictly inside your local PostgreSQL container.",
+      "Your search criteria, resume text, and integration secrets are protected with AES-256-GCM authenticated encryption at rest and strict multi-tenant isolation. We never sell candidate data to third parties or advertisers.",
   },
 ];
 

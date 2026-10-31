@@ -1,52 +1,92 @@
-import React from "react";
-import LandingHeader from "@/components/landing/LandingHeader";
-import HeroSection from "@/components/landing/HeroSection";
-import ProjectPreviewSimulator from "@/components/landing/ProjectPreviewSimulator";
-import ScrollStorySection from "@/components/landing/ScrollStorySection";
-import WorkflowSection from "@/components/landing/WorkflowSection";
-import ArchitectureSection from "@/components/landing/ArchitectureSection";
-import LandingBlogSection from "@/components/landing/LandingBlogSection";
-import DubCtaSection from "@/components/landing/DubCtaSection";
-import LandingFooter from "@/components/landing/LandingFooter";
+"use client";
+import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { AnimatePresence, motion, MotionConfig, useReducedMotion } from "framer-motion";
+import { ArrowUpRight, Check, Play, Pause, X, Search, Send, BarChart3, Building2, Menu, ChevronRight } from "lucide-react";
+import { BrandLogo } from "@/components/BrandLogo";
+import { LanguageProvider, useLanguage } from "@/lib/i18n";
 
-interface LandingViewProps {
-  userEmail?: string | null;
+export default function LandingView({ userEmail }: { userEmail?: string | null }): React.JSX.Element {
+  return <LanguageProvider><MotionConfig reducedMotion="user"><LandingContent userEmail={userEmail} /></MotionConfig></LanguageProvider>;
 }
-
-export default function LandingView({ userEmail }: LandingViewProps) {
-  return (
-    <div className="min-h-screen bg-[#09090b] text-white selection:bg-white selection:text-black antialiased">
-      {/* Navigation Header */}
-      <LandingHeader userEmail={userEmail} />
-
-      {/* Main Content */}
-      <main>
-        {/* Hero Section */}
-        <HeroSection />
-
-        {/* Interactive Live Project Preview */}
-        <ProjectPreviewSimulator />
-
-        {/* Dynamic Scroll Storytelling with Morphing Left/Right Cards */}
-        <ScrollStorySection />
-
-        {/* Autonomous Loop Workflow */}
-        <WorkflowSection />
-
-        {/* In-Depth Architecture */}
-        <ArchitectureSection />
-
-        {/* Engineering Blog Articles Preview */}
-        <LandingBlogSection />
-
-        {/* Inset Dark CTA Card */}
-        <DubCtaSection />
-
-
-      </main>
-
-      {/* Footer */}
-      <LandingFooter />
-    </div>
-  );
+function LandingContent({ userEmail }: { userEmail?: string | null }): React.JSX.Element {
+  const { language, setLanguage } = useLanguage();
+  const ru = language === "ru";
+  const copy = (r: string, e: string) => ru ? r : e;
+  const reduce = useReducedMotion();
+  const [stage, setStage] = useState(0);
+  const [playing, setPlaying] = useState(true);
+  const [menu, setMenu] = useState(false);
+  const [selected, setSelected] = useState(0);
+  const [saved, setSaved] = useState(false);
+  const dialog = useRef<HTMLDialogElement>(null);
+  const opener = useRef<HTMLButtonElement>(null);
+  const stages = [copy("Поиск вакансий", "Job search"), copy("Почему вы подходите", "Match insights"), copy("Уведомления Telegram", "Telegram alerts"), copy("Аналитика", "Analytics")];
+  const roles = ["Frontend Developer · React", "Full Stack Engineer · Node.js", "Product Engineer · TypeScript"];
+  useEffect(() => {
+    if (!playing || reduce) return;
+    const timer = setInterval(() => setStage(value => (value + 1) % 4), 4500);
+    return () => clearInterval(timer);
+  }, [playing, reduce]);
+  const reveal = { initial: reduce ? false as const : { opacity: 0, y: 22 }, whileInView: { opacity: 1, y: 0 }, viewport: { once: true, amount: 0.12 }, transition: { type: "spring" as const, bounce: 0, duration: 0.65 } };
+  const button = "inline-flex items-center justify-center gap-2 rounded-lg px-5 py-3 text-sm font-medium transition-colors active:scale-[0.98] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-emerald-300";
+  const close = () => { dialog.current?.close(); opener.current?.focus(); };
+  return <div className="min-h-screen overflow-x-clip bg-[#090b0d] text-zinc-100 selection:bg-emerald-300 selection:text-black">
+    <a href="#content" className="sr-only focus:not-sr-only">{copy("К содержанию", "Skip to content")}</a>
+    <header className="sticky top-0 z-40 border-b border-white/10 bg-[#090b0d]/90 backdrop-blur-xl" onKeyDown={e => { if (e.key === "Escape") setMenu(false); }}>
+      <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-5 sm:px-8">
+        <Link href="/landing" className="flex items-center gap-3 text-sm font-semibold"><BrandLogo size={30} />HH Job Copilot</Link>
+        <nav aria-label="Main navigation" className="hidden items-center gap-7 text-sm text-zinc-400 lg:flex">{[["#preview",copy("Обзор продукта","Product tour")],["#how-it-works",copy("Как это работает","How it works")],["#pricing",copy("Тарифы","Pricing")],["#faq",copy("Вопросы","FAQ")]].map(([href,label])=><a key={href} href={href} className="hover:text-white">{label}</a>)}</nav>
+        <div className="flex items-center gap-2"><button aria-label="Русский" aria-pressed={ru} onClick={()=>setLanguage("ru")} className={`px-2 py-2 text-xs ${ru?"text-emerald-300":"text-zinc-500"}`}>RU</button><span className="text-zinc-700">/</span><button aria-label="English" aria-pressed={!ru} onClick={()=>setLanguage("en")} className={`px-2 py-2 text-xs ${!ru?"text-emerald-300":"text-zinc-500"}`}>EN</button><Link href={userEmail?"/dashboard":"/login"} className="hidden px-4 text-sm text-zinc-300 sm:block">{copy(userEmail?"Кабинет":"Войти",userEmail?"Dashboard":"Sign in")}</Link><button aria-label={menu?"Close navigation":"Open navigation"} aria-expanded={menu} onClick={()=>setMenu(!menu)} className="p-2 lg:hidden"><Menu size={20}/></button></div>
+      </div>
+      {menu&&<nav aria-label="Mobile navigation" className="grid gap-4 border-t border-white/10 px-6 py-5 lg:hidden">{[["#preview",copy("Обзор продукта","Product tour")],["#how-it-works",copy("Как это работает","How it works")],["#pricing",copy("Тарифы","Pricing")],["/login",copy("Войти","Sign in")]].map(([href,label])=><a key={href} href={href} onClick={()=>setMenu(false)}>{label}</a>)}</nav>}
+    </header>
+    <main id="content">
+      <section className="relative px-5 pb-12 pt-20 text-center sm:pt-28">
+        <div aria-hidden className="pointer-events-none absolute inset-0 opacity-20 [background-image:linear-gradient(#3f554733_1px,transparent_1px),linear-gradient(90deg,#3f554733_1px,transparent_1px)] [background-size:80px_80px] [mask-image:linear-gradient(black,transparent)]"/>
+        <motion.div {...reveal} className="relative mx-auto max-w-4xl"><h1 className="text-4xl font-semibold leading-[1.1] tracking-[-0.04em] sm:text-6xl lg:text-7xl">{copy("Меньше поиска.","Less searching.")}<br/><span className="text-emerald-300">{copy("Больше подходящих вакансий.","More right-fit opportunities.")}</span></h1><p className="mx-auto mt-7 max-w-2xl text-base leading-7 text-zinc-400 sm:text-lg">{copy("Ваш помощник для поиска работы на HeadHunter: вакансии под ваш опыт, понятная оценка совпадения и уведомления в Telegram. От первого поиска до следующего отклика — в одном месте.","Your HeadHunter job-search companion: roles matched to your experience, clear match explanations, and Telegram alerts. From your first search to your next application, in one place.")}</p><div className="mt-8 flex flex-wrap justify-center gap-3"><Link href="/register" className={`${button} bg-emerald-300 text-zinc-950 hover:bg-emerald-200`}>{copy("Начать бесплатно","Start free")}<ArrowUpRight size={17}/></Link><a href="#preview" className={`${button} border border-white/15 hover:bg-white/5`}><Play size={15}/>{copy("Посмотреть, как работает","See how it works")}</a></div><p className="mt-5 text-xs text-zinc-500">{copy("Поиск, сопроводительные письма и аналитика — бесплатно.","Search, cover letters, and Analytics are free.")}</p></motion.div>
+      </section>
+      <motion.section {...reveal} id="preview" className="relative mx-auto max-w-7xl scroll-mt-24 px-5 pb-24 sm:px-8">
+        <div className="mb-7 flex flex-wrap justify-center gap-2">{stages.map((label,index)=><button key={index} aria-pressed={stage===index} onClick={()=>{setStage(index);setPlaying(false);}} className={`relative rounded-lg px-4 py-3 text-xs sm:text-sm ${stage===index?"text-emerald-200":"text-zinc-500 hover:text-white"}`}>{stage===index&&<motion.span layoutId="tour-tab" className="absolute inset-0 rounded-lg border border-emerald-300/20 bg-emerald-300/10" transition={{type:"spring",bounce:0,duration:0.35}}/>}<span className="relative">{label}</span></button>)}</div>
+        <div className="relative rounded-3xl border border-white/10 bg-gradient-to-br from-emerald-500/[0.08] via-[#101418] to-sky-500/[0.07] p-3 shadow-2xl sm:p-8">
+          <button ref={opener} aria-label={copy("Открыть интерактивный просмотр","Open interactive preview")} onClick={()=>{setPlaying(false);dialog.current?.showModal();}} className="group block w-full overflow-hidden rounded-xl border border-white/15 bg-[#0b0f12] text-left shadow-2xl transition-transform duration-300 hover:-translate-y-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-300">
+            <div className="flex items-center justify-between border-b border-white/10 px-5 py-4 text-xs text-zinc-500"><span>HH Job Copilot / {stages[stage]}</span><span>{copy("Пример данных","Sample data")}</span></div>
+            <div className="grid min-h-[360px] sm:grid-cols-[170px_1fr] lg:min-h-[440px]"><div className="hidden space-y-6 border-r border-white/10 p-6 text-xs text-zinc-500 sm:block"><BrandLogo size={28}/>{stages.map((item,i)=><div key={item} className={stage===i?"text-emerald-300":""}>{item}</div>)}</div><div className="overflow-hidden p-5 sm:p-8"><AnimatePresence mode="wait"><motion.div key={stage} initial={{opacity:0,y:reduce?0:12}} animate={{opacity:1,y:0}} exit={{opacity:0}} transition={{duration:0.25}}>
+              <div className="mb-8 flex items-center justify-between"><span className="text-xl font-medium sm:text-2xl">{stages[stage]}</span><span className="text-xs text-emerald-300">{copy("Нажмите для просмотра","Click to explore")} ↗</span></div>
+              {stage===0&&roles.map((role,i)=><div key={role} className="mb-3 flex items-center justify-between gap-4 rounded-lg border border-white/10 bg-white/[0.025] p-4"><div><p className="text-sm sm:text-base">{role}</p><p className="mt-2 text-xs text-zinc-500">{copy("Пример компании · Удалённо","Example company · Remote")} · {180+i*40} 000 ₽</p></div><span className="text-xl text-emerald-300">{94-i*4}%</span></div>)}
+              {stage===1&&<div className="grid gap-8 sm:grid-cols-[120px_1fr]"><div className="flex h-28 w-28 items-center justify-center rounded-full border-4 border-emerald-300/60 text-4xl font-medium text-emerald-200">94%</div><div><p className="text-lg">Frontend Developer</p>{[copy("React и TypeScript совпадают с вашим стеком","React and TypeScript match your skills"),copy("Зарплата выше выбранного минимума","Salary is above your minimum"),copy("Уточните требования к опыту на собеседовании","Clarify experience requirements at the interview")].map(item=><p key={item} className="mt-4 flex gap-3 text-sm text-zinc-400"><Check size={16} className="shrink-0 text-emerald-300"/>{item}</p>)}</div></div>}
+              {stage===2&&<div className="mx-auto max-w-md rounded-2xl border border-sky-300/20 bg-[#142330] p-6"><Send className="mb-4 text-sky-300"/><p className="text-lg">{copy("Новая вакансия под ваш профиль","A new match for your profile")}</p><p className="mt-4 text-sm text-zinc-400">Frontend Developer · React<br/>250 000 – 350 000 ₽ · {copy("Удалённо","Remote")}</p><p className="mt-6 border-t border-white/10 pt-4 text-sm text-sky-200">{copy("Открыть вакансию →","View vacancy →")}</p></div>}
+              {stage===3&&<div><div className="mb-7 grid grid-cols-3 gap-3">{[copy("Сохранено","Saved"),copy("Отклики","Applied"),copy("Совпадения","Matches")].map((item,i)=><div key={item}><p className="text-xs text-zinc-500">{item}</p><p className="mt-2 text-3xl">{[12,8,24][i]}</p></div>)}</div><div className="flex h-36 items-end gap-3 border-b border-white/10">{[32,48,35,60,55,72,90,82,100,87,110,125].map((height,i)=><motion.div key={i} initial={{scaleY:reduce?1:0}} animate={{scaleY:1}} transition={{delay:reduce?0:i*0.04}} style={{height,transformOrigin:"bottom"}} className="flex-1 rounded-t bg-gradient-to-t from-emerald-500/20 to-emerald-300/80"/>)}</div></div>}
+            </motion.div></AnimatePresence></div></div>
+          </button>
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-4 rounded-xl bg-[#0a0d10]/90 p-5"><div><p className="text-sm font-medium">{copy("От профиля до подходящей вакансии","From your profile to a relevant role")}</p><p className="mt-1 text-xs text-zinc-500">{copy("Анимированный обзор. Нажмите на экран и попробуйте сами.","Animated walkthrough. Click the screen and try it yourself.")}</p></div><button onClick={()=>setPlaying(!playing)} className={`${button} border border-white/10`} aria-label={playing?copy("Приостановить обзор","Pause walkthrough"):copy("Продолжить обзор","Play walkthrough")}>{playing?<Pause size={16}/>:<Play size={16}/>} {playing?copy("Пауза","Pause"):copy("Смотреть","Play")}</button></div>
+        </div>
+      </motion.section>
+      <section id="how-it-works" className="mx-auto max-w-6xl scroll-mt-28 px-5 pb-24 sm:px-8"><motion.div {...reveal}><h2 className="text-3xl font-medium tracking-tight sm:text-5xl">{copy("Как устроен ваш поиск","How your search comes together")}</h2><p className="mt-5 max-w-2xl text-base leading-7 text-zinc-400">{copy("Вам не нужно настраивать сервер или выбирать AI-модель. Создайте профиль, задайте критерии и просматривайте результаты. Решение об отклике всегда остаётся за вами.","No server setup or AI model selection. Create a profile, set your preferences, and review results. You stay in control of every application.")}</p></motion.div><div className="mt-12 grid gap-8 md:grid-cols-3">{[
+        [copy("01 / Ваш профиль","01 / Your profile"),copy("Расскажите о своём опыте","Tell us about your experience"),copy("Добавьте резюме, навыки и желаемые роли. Укажите зарплату, город и формат работы — удалённо, гибрид или офис.","Add your resume, skills, and target roles. Choose a salary range, location, and remote, hybrid, or office work.")],
+        [copy("02 / Подбор и оценка","02 / Search and assessment"),copy("Разберитесь в совпадениях","Understand each match"),copy("Запустите поиск по HeadHunter. Оценка помогает сравнить требования вакансии с профилем, увидеть сильные стороны и вопросы, которые стоит уточнить.","Run a HeadHunter search. Match explanations compare job requirements with your profile and highlight strengths and questions to clarify.")],
+        [copy("03 / Следующий шаг","03 / Your next step"),copy("Подготовьте уверенный отклик","Prepare a thoughtful application"),copy("Сохраните интересную вакансию, подготовьте черновик письма и откликнитесь на HeadHunter. История и аналитика помогут не потерять контекст.","Save a role, prepare a cover-letter draft, and apply on HeadHunter. Your history and Analytics keep the context together.")]
+      ].map(([step,title,text])=><motion.article {...reveal} key={step} className="border-t border-white/15 pt-6"><p key="step" className="text-xs text-emerald-300">{step}</p><h3 key="title" className="mt-5 text-xl font-medium">{title}</h3><p key="description" className="mt-4 text-sm leading-7 text-zinc-400">{text}</p></motion.article>)}</div></section>
+      <section className="border-y border-white/10 bg-[#0d1114] px-5 py-24 sm:px-8"><div className="mx-auto grid max-w-6xl gap-8 md:grid-cols-2">{[
+        {icon:Send,title:copy("Хорошие вакансии — в вашем Telegram","Good matches, in your Telegram"),text:copy("Привяжите Telegram в настройках. Уведомления помогут вернуться к интересной роли без постоянного обновления ленты. Вы выбираете, когда открыть вакансию и отправить отклик.","Connect Telegram in Settings. Alerts bring you back to promising roles without constantly refreshing a feed. You decide when to review and apply.")},
+        {icon:BarChart3,title:copy("Видно, как движется поиск","See your search progress"),text:copy("Отслеживайте сохранённые вакансии, отклики и распределение оценок. Аналитика доступна бесплатно: она помогает корректировать поиск, а не обещает трудоустройство.","Track saved roles, applications, and match-score distribution. Analytics stays free and helps refine your search; it does not promise a job offer.")},
+        {icon:Search,title:copy("Письмо с контекстом, а не шаблон","A cover letter with context"),text:copy("Получите черновик на основе вашего опыта и описания роли. Проверьте факты, добавьте свой голос и только затем отправляйте работодателю.","Get a draft based on your experience and the role. Check the facts, add your own voice, and then send it to the employer.")},
+        {icon:Building2,title:copy("Company Intel: узнайте работодателя","Company Intel: understand the employer"),text:copy("Исследуйте компанию, её карьерные страницы и публичные контакты по найму. Доступность HR-контактов зависит от компании и источников; найденные сведения нужно проверять. Это единственная платная функция.","Research the company, careers pages, and public hiring contacts. HR contact availability depends on the company and sources; review what you find. This is the only paid feature.")}
+      ].map(({icon:Icon,title,text})=><motion.article {...reveal} key={title} className="rounded-2xl border border-white/10 bg-white/[0.02] p-7 sm:p-9"><Icon key="icon" className="mb-7 text-emerald-300" size={28}/><h2 key="title" className="text-2xl font-medium tracking-tight">{title}</h2><p key="description" className="mt-5 text-sm leading-7 text-zinc-400">{text}</p></motion.article>)}</div></section>
+      <motion.section {...reveal} id="pricing" aria-labelledby="pricing-title" className="mx-auto max-w-5xl scroll-mt-28 px-5 py-24 sm:px-8"><h2 id="pricing-title" className="text-center text-3xl font-medium sm:text-4xl">{copy("Начните бесплатно. Узнайте больше, когда нужно.","Start free. Go deeper when you need to.")}</h2><p className="mt-5 text-center text-sm text-zinc-400">{copy("Поиск работы и аналитика остаются бесплатными.","Your job search and Analytics stay free.")}</p><div className="mt-12 grid gap-5 md:grid-cols-2">{[false,true].map(paid=><article key={String(paid)} className={`flex flex-col rounded-2xl border p-8 ${paid?"border-emerald-300/30 bg-emerald-300/[0.04]":"border-white/10 bg-white/[0.02]"}`}><h3 className="text-xl">{paid?"Company Intel":copy("Бесплатно","Free")}</h3><p className="my-7"><span className="text-5xl font-medium">{paid?"$3":"$0"}</span><span className="ml-2 text-sm text-zinc-500">{copy("/ месяц","/ month")}</span></p><ul className="mb-8 space-y-4 text-sm text-zinc-300">{(paid?[copy("Всё из бесплатного тарифа","Everything in Free"),copy("Исследование компаний и источники","Company research and sources"),copy("Публичные контакты по найму","Public hiring contacts"),copy("Черновики сообщений работодателям","Outreach drafts")]:[copy("Поиск и оценка вакансий","Job search and match explanations"),copy("Сохранённые вакансии и письма","Saved roles and cover letters"),copy("Аналитика и история откликов","Analytics and application tracking"),copy("Уведомления в Telegram","Telegram vacancy alerts")]).map(text=><li key={text} className="flex gap-3"><Check size={17} className="shrink-0 text-emerald-300"/>{text}</li>)}</ul><Link href={paid?"/dashboard/company-intel":"/register"} className={`${button} mt-auto ${paid?"bg-emerald-300 text-black":"border border-white/20"}`}>{paid?copy("Подробнее о Company Intel","Explore Company Intel"):copy("Создать аккаунт","Create free account")}</Link>{paid&&<p className="mt-4 text-xs leading-5 text-zinc-500">{copy("Онлайн-оплата пока не подключена. Наличие контактов не гарантируется.","Online checkout is not available yet. Contact availability is not guaranteed.")}</p>}</article>)}</div></motion.section>
+      <section id="faq" className="mx-auto max-w-3xl scroll-mt-28 px-5 pb-24"><motion.h2 {...reveal} className="mb-10 text-3xl font-medium">{copy("Перед первым поиском","Before your first search")}</motion.h2>{[
+        [copy("Для кого этот сервис?","Who is this for?"),copy("Для соискателей, которые ищут работу на HeadHunter, прежде всего в России и странах СНГ. Основной язык — русский, интерфейс можно переключить на английский. Доступность вакансий зависит от выбранных регионов и работодателей.","For people searching on HeadHunter, primarily in Russia and the CIS. Russian is the primary language, with an English option. Available roles depend on your regions and employers.")],
+        [copy("Вы откликаетесь вместо меня?","Do you apply on my behalf?"),copy("Вы просматриваете вакансию и управляете откликом. Сервис помогает с поиском, оценкой и подготовкой текста; проверяйте содержание перед отправкой.","You review the role and control the application. The service helps with search, assessment, and drafts; review the content before sending.")],
+        [copy("Что означает оценка совпадения?","What does a match score mean?"),copy("Это подсказка для сравнения вашего профиля с требованиями вакансии. Она может ошибаться и не является оценкой работодателя или гарантией приглашения.","It helps compare your profile with job requirements. It can be wrong and is neither an employer assessment nor an interview guarantee.")],
+        [copy("Нужны ли API-ключи и установка?","Do I need API keys or an installation?"),copy("Нет. Вы работаете в браузере. Настройки моделей обслуживает сервис; в профиле нужны только сведения для поиска работы.","No. Use the app in your browser. Model settings are managed by the service; your profile contains your job-search preferences.")],
+        [copy("Можно попробовать без регистрации?","Can I try it without registering?"),copy("Да. Нажмите на экран в начале страницы или откройте демо. Все данные в просмотре — примеры, действия не отправляют реальные отклики.","Yes. Click the screen above or open the demo. Preview data is illustrative and actions do not send real applications.")]
+      ].map(([q,a])=><motion.details {...reveal} key={q} className="border-b border-white/10 py-5"><summary key="question" className="cursor-pointer text-base text-zinc-200">{q}</summary><p key="answer" className="mt-4 text-sm leading-7 text-zinc-400">{a}</p></motion.details>)}</section>
+      <motion.section {...reveal} className="border-y border-white/10 bg-gradient-to-r from-emerald-400/[0.06] to-transparent px-5 py-20 text-center"><h2 className="text-3xl font-medium">{copy("Ваш следующий шаг — ближе.","Your next move is closer.")}</h2><p className="mb-7 mt-4 text-zinc-400">{copy("Начните с профиля. Дальше — подходящие возможности.","Start with your profile. Discover what fits next.")}</p><Link href="/register" className={`${button} bg-emerald-300 text-black`}>{copy("Начать бесплатно","Start free")}<ArrowUpRight size={16}/></Link></motion.section>
+    </main>
+    <footer className="mx-auto grid w-full max-w-7xl gap-9 px-5 py-14 text-sm sm:grid-cols-[2fr_1fr_1fr] sm:px-8"><div><Link href="/landing" className="flex items-center gap-3 font-medium"><BrandLogo size={28}/>HH Job Copilot</Link><p className="mt-5 max-w-sm text-sm leading-6 text-zinc-500">{copy("Поиск работы на HeadHunter с понятными совпадениями и контекстом для следующего шага.","HeadHunter job search with clear matches and context for your next step.")}</p><p className="mt-5 text-xs text-zinc-600">© {new Date().getFullYear()} HH Job Copilot. {copy("Независимый сервис.","An independent service.")}</p></div><nav aria-label="Product footer" className="grid content-start gap-4 text-zinc-400"><a href="#how-it-works">{copy("Как это работает","How it works")}</a><a href="#pricing">{copy("Тарифы","Pricing")}</a><Link href="/demo">{copy("Демо кабинета","Dashboard demo")}</Link><Link href="/about">{copy("О проекте","About")}</Link></nav><nav aria-label="Support footer" className="grid content-start gap-4 text-zinc-400"><a href="mailto:nandazhafran@gmail.com">{copy("Поддержка","Support")}</a><Link href="/legal/privacy">{copy("Конфиденциальность","Privacy")}</Link><Link href="/legal/terms">{copy("Условия использования","Terms")}</Link><a href="#faq">{copy("Частые вопросы","FAQ")}</a></nav></footer>
+    <dialog ref={dialog} onClose={()=>opener.current?.focus()} className="fixed inset-0 m-auto max-h-[90dvh] w-[min(960px,94vw)] overflow-y-auto rounded-2xl border border-white/15 bg-[#101518] p-0 text-zinc-100 backdrop:bg-black/80">
+      <div className="flex items-center justify-between border-b border-white/10 p-5"><div><h2 className="text-lg">{copy("Попробуйте свой следующий шаг","Try your next step")}</h2><p className="mt-1 text-xs text-zinc-500">{copy("Пример данных · Ничего не отправляется","Sample data · Nothing is sent")}</p></div><button onClick={close} aria-label={copy("Закрыть просмотр","Close preview")} className="rounded-lg p-3 hover:bg-white/10"><X/></button></div>
+      <div className="grid gap-6 p-5 sm:grid-cols-2 sm:p-8"><div className="space-y-3">{roles.map((role,i)=><button key={role} onClick={()=>{setSelected(i);setSaved(false);}} className={`w-full rounded-xl border p-5 text-left ${selected===i?"border-emerald-300/50 bg-emerald-300/5":"border-white/10"}`}><p className="text-sm">{role}</p><p className="mt-3 text-xs text-zinc-500">{copy("Удалённо · Пример компании","Remote · Example company")}</p><p className="mt-3 text-emerald-300">{94-i*4}% <ChevronRight className="inline" size={14}/></p></button>)}</div><div><h3 className="text-xl">{roles[selected]}</h3><p className="mt-5 text-sm leading-7 text-zinc-400">{copy("Ваш опыт совпадает с основным стеком. Вакансия предполагает работу над интерфейсами продукта и взаимодействие с командой. Уточните уровень ответственности и процесс найма перед откликом.","Your experience matches the core stack. The role involves product interfaces and team collaboration. Clarify responsibilities and the hiring process before applying.")}</p><button onClick={()=>setSaved(!saved)} aria-pressed={saved} className={`${button} mt-6 w-full bg-emerald-300 text-black`}>{saved?copy("Сохранено в примере","Saved in preview"):copy("Сохранить вакансию","Save role")}</button><Link href="/demo" className={`${button} mt-3 w-full border border-white/15`}>{copy("Открыть полное демо","Open full demo")}<ArrowUpRight size={16}/></Link></div></div>
+    </dialog>
+  </div>;
 }

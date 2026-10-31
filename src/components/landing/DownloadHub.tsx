@@ -22,7 +22,7 @@ export default function DownloadHub() {
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center max-w-2xl mx-auto mb-14">
           <h2 className="text-3xl sm:text-4xl font-semibold text-white tracking-tight mb-3">
-            Download Open-Source Release
+            Download Hosted Package
           </h2>
           <p className="text-sm sm:text-base text-zinc-400 leading-relaxed">
             Directly packaged on this server with zero external redirects. Extract the archive, configure your parameters, and run locally.
@@ -127,7 +127,7 @@ export default function DownloadHub() {
         <div className="max-w-3xl mx-auto mt-6 p-4 rounded-xl bg-zinc-900/40 border border-white/[0.08] flex items-center justify-between text-xs text-zinc-400">
           <div className="flex items-center gap-2">
             <ShieldCheck className="w-4 h-4 text-emerald-400" />
-            <span>Open Source under MIT License &middot; Verified Local Package</span>
+            <span>Proprietary &middot; Verified Hosted Release</span>
           </div>
           <span>Version 1.0.0 Stable</span>
         </div>

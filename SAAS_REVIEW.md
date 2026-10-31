@@ -39,7 +39,7 @@ The initial review did not perform a production database migration or deployment
 ## Remaining launch work
 
 - Integrate payment processing and durable subscription entitlements before accepting payment; choose pricing and access expiry behavior.
-- Replace the old self-hosting terms and privacy pages before public SaaS launch. They currently make statements such as no operator access/no telemetry that do not describe the hosted implementation, which includes Vercel Analytics. Legacy documentation and duplicate exports have been removed from current Git tracking; the public demo now represents the free plan. Older published screenshots still need a product-content pass.
+- Replaced the old self-hosting terms and privacy pages with updated proprietary SaaS Terms of Service and Privacy Policy matching the hosted implementation (Vercel, managed PostgreSQL, AES-256-GCM encryption, server-side AI routing, and Vercel Analytics). Legacy documentation and duplicate exports have been removed from current Git tracking; the public demo represents the free plan. Older published screenshots still need a product-content pass.
 - Replace in-memory request limits and idempotency state with shared durable storage before scaling across server instances. Current limits are per process.
 - Profile switching/deletion and bootstrap do not yet have a database-enforced single-active-profile constraint under concurrent requests. Password changes/resets also do not yet revoke already-issued JWT sessions.
 - Exercise signup/SMTP delivery, HH OAuth and application submission, real AI provider responses, Telegram registration/delivery, and Company Intel enrichment in an isolated staging environment. Tests use mocks; they do not prove those external services are currently configured or available.
@@ -59,4 +59,4 @@ The initial review did not perform a production database migration or deployment
 
 ## Publishing preparation
 
-The public demo and real free-account paywall share the $3/month Company Intel screen. No payment processing has been added. Development uses webpack to avoid an observed Windows Turbopack junction/cache error. Legacy plans, n8n workflows, capture scripts, and duplicate screenshot exports are untracked but preserved locally; `.vercelignore` also excludes them and private assets from direct uploads. The user explicitly requested that the existing repository become public with its history retained.
+The public demo and real free-account paywall share the $3/month Company Intel screen. No payment processing has been added. Development uses webpack to avoid an observed Windows Turbopack junction/cache error. Legacy plans, n8n workflows, capture scripts, and duplicate screenshot exports are untracked but preserved locally; `.vercelignore` also excludes them and private assets from direct uploads. The project is proprietary closed-source with all rights reserved.

@@ -2,6 +2,7 @@
   "name": "hh-job-copilot",
   "version": "0.1.0",
   "private": true,
+  "license": "UNLICENSED",
   "scripts": {
     "dev": "next dev --webpack",
     "build": "prisma generate && next build",

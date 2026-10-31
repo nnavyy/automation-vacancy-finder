@@ -15,6 +15,7 @@ import RunCollectionButton, { LiveDashboardStats } from "@/components/RunCollect
 import OverviewTopMatches, { TopMatchVacancy } from "@/components/OverviewTopMatches";
 import { useLanguage } from "@/lib/i18n";
 import SpotlightCard from "@/components/ui/SpotlightCard";
+import DashboardFocus from "@/components/DashboardFocus";
 import CountUp from "@/components/ui/CountUp";
 
 interface DashboardOverviewProps {
@@ -152,7 +153,7 @@ export default function DashboardOverview({
         className="flex flex-col sm:flex-row sm:items-end justify-between gap-4"
       >
         <div>
-          <h1 className="text-2xl sm:text-3xl font-semibold text-zinc-50 tracking-[-0.02em] leading-tight mb-1.5">
+          <h1 className="text-3xl sm:text-4xl font-medium text-zinc-50 tracking-[-0.02em] leading-tight mb-1.5">
             {t("overview.title")}
           </h1>
           <p className="text-zinc-400 text-sm leading-relaxed">{t("overview.subtitle")}</p>
@@ -162,6 +163,8 @@ export default function DashboardOverview({
           onRunningChange={(running) => setIsCollecting(running)}
         />
       </motion.div>
+
+      <DashboardFocus total={metrics.total} saved={metrics.saved} language={language} />
 
       {/* Stat strip: one surface, five cells */}
       <motion.div
@@ -173,8 +176,8 @@ export default function DashboardOverview({
           {isCollecting && <span className="sweep-line" aria-hidden />}
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-px bg-white/[0.06]">
             {stats.map((s) => (
-              <div key={s.label} className="bg-[#0f0f11] p-5 space-y-2 first:rounded-tl-2xl">
-                <span className="block text-xs font-medium text-zinc-500">{s.label}</span>
+              <div key={s.label} className="bg-[#101416] p-5 space-y-2 first:rounded-tl-2xl">
+                <span className="block text-xs font-medium text-zinc-400">{s.label}</span>
                 <CountUp
                   value={s.value}
                   locale={locale}

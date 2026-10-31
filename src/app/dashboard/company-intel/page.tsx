@@ -58,6 +58,7 @@ interface CompanyMetadata {
   linkedinUrl?: string;
   generalEmails?: string[];
   crawledSources?: CrawledSource[];
+  contactSources?: { name: string; email?: string; linkedinUrl?: string; sourceUrl: string }[];
 }
 
 interface CompanyIntel {
@@ -145,7 +146,7 @@ function CompanyIntelContent() {
   const [dossierData, setDossierData] = useState<RecruiterDossierData | null>(null);
 
   // Contact Category Filter
-  const [contactFilter, setContactFilter] = useState<"all" | "tech" | "hr">("all");
+  const [contactFilter, setContactFilter] = useState<"all" | "tech" | "hr">("hr");
 
   // Dismiss delete confirmation modal on Escape key
   useEffect(() => {
@@ -198,7 +199,7 @@ function CompanyIntelContent() {
         if (urlCompany) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const matched = json.data.find((c: any) =>
-            c.companyName.toLowerCase().includes(urlCompany.toLowerCase())
+            c.companyName.toLowerCase() === urlCompany.toLowerCase()
           );
           if (matched) {
             setSelectedId(matched.id);
@@ -231,6 +232,7 @@ function CompanyIntelContent() {
   const filteredContacts = useMemo(() => {
     if (!activeCompany) return [];
     return activeCompany.contacts.filter((c) => {
+      if (roleQuery.trim() && !`${c.name} ${c.role} ${c.department ?? ""}`.toLowerCase().includes(roleQuery.trim().toLowerCase())) return false;
       const r = (c.role + " " + (c.department ?? "")).toLowerCase();
       if (contactFilter === "tech") {
         return (
@@ -252,7 +254,7 @@ function CompanyIntelContent() {
       }
       return true;
     });
-  }, [activeCompany, contactFilter]);
+  }, [activeCompany, contactFilter, roleQuery]);
 
   const totalTracked = intels.length;
   const totalDecisionMakers = intels.reduce((acc, i) => acc + i.contacts.length, 0);
@@ -464,6 +466,7 @@ function CompanyIntelContent() {
             <Building2 className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500" />
             <input
               type="text"
+              aria-label="Company name or official domain"
               value={companyName}
               onChange={(e) => setCompanyName(e.target.value)}
               placeholder={t(
@@ -479,9 +482,10 @@ function CompanyIntelContent() {
             <Users className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-500" />
             <input
               type="text"
+              aria-label="Filter contacts by name or role"
               value={roleQuery}
               onChange={(e) => setRoleQuery(e.target.value)}
-              placeholder={t("intel.rolePlaceholder", "Target role (e.g. Head of Frontend)")}
+              placeholder={t("intel.rolePlaceholder", "Filter contacts by name or role")}
               className="w-full bg-zinc-900 border border-zinc-800 rounded-xl pl-10 pr-4 py-2.5 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-violet-500/60 focus:ring-1 focus:ring-violet-500/30 transition-all"
             />
           </div>
@@ -813,7 +817,7 @@ function CompanyIntelContent() {
               </div>
             ) : (
               filteredContacts.map((contact) => {
-                const synergy = contact.seniority === "C-Level" ? 94 : 88;
+                const source = activeMetadata.contactSources?.find(item => (contact.email && item.email === contact.email) || (contact.linkedinUrl && item.linkedinUrl === contact.linkedinUrl) || item.name === contact.name);
                 const isSelectedForPitch = activePitchContact?.id === contact.id;
 
                 return (
@@ -845,17 +849,10 @@ function CompanyIntelContent() {
                         </div>
                       </div>
 
-                      {/* Synergy Score */}
-                      <div className="text-right shrink-0">
-                        <div className="text-base font-black text-emerald-400">
-                          {synergy}%
-                        </div>
-                        <span className="text-[10px] text-zinc-500 uppercase font-semibold">
-                          {t("intel.synergyScore", "Synergy Score")}
-                        </span>
-                      </div>
+                      <span className="text-xs text-zinc-400">{contact.emailVerified ? "Provider verified email" : "Public contact"}</span>
                     </div>
 
+                    {source && /^https?:\/\//.test(source.sourceUrl) && <a href={source.sourceUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-xs text-emerald-300 hover:underline">View contact source <ExternalLink size={12} /></a>}
                     {/* Outreach Channels Row */}
                     <div className="flex items-center gap-2 flex-wrap text-xs">
                       {contact.email && (

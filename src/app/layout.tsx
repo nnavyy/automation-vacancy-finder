@@ -30,7 +30,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={inter.variable}>
+    <html lang="ru" className={inter.variable}>
       <body className="bg-zinc-950 text-zinc-100 font-sans antialiased min-h-screen flex flex-col selection:bg-emerald-500/20 selection:text-emerald-300">
         <NextTopLoader color="#10b981" showSpinner={false} />
         <main className="flex-1 flex flex-col w-full h-full">

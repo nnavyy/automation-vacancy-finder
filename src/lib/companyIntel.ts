@@ -6,9 +6,9 @@
 import * as cheerio from 'cheerio';
 import { isSafePublicUrl } from "@/lib/security";
 import { fetchPublicPage } from "@/lib/publicFetch";
-import { callAI } from '@/lib/aiProviderRouter';
 
 export interface ContactResult {
+  sourceUrl?: string;
   name: string;
   firstName?: string;
   lastName?: string;
@@ -34,6 +34,7 @@ export interface CompanyMetadata {
   linkedinUrl?: string;
   generalEmails?: string[];
   crawledSources?: CrawledSource[];
+  contactSources?: { name: string; email?: string; linkedinUrl?: string; sourceUrl: string }[];
 }
 
 export interface DeepCompanyIntelResult {
@@ -243,41 +244,6 @@ export async function resolveCompanyDomain(
 
   const cleanName = cleanCompanyName(trimmed);
 
-  // 2. High-precision AI domain resolution using unified AI Provider Router
-  try {
-    const aiRes = await callAI({
-      systemPrompt: `You are an expert company intelligence domain resolver.
-Identify the official corporate website domain and careers/jobs portal URL for companies worldwide (US, Europe, Russia, CIS, Asia).
-STRICT RULES:
-1. ONLY return a domain if you are 100% certain it belongs to the exact company specified.
-2. If the company is an obscure Russian entity, private local business, or if you are not completely sure, return null for domain.
-3. NEVER guess, hallucinate, or return an unrelated resort, blog, store, forum, or news site.
-4. For Russian companies (e.g. "Циан", "Техоборонэксперт"), only return their real .ru or .com domain if it actually exists.
-5. Return strictly valid JSON: {"domain": string | null, "officialName": string, "careersUrl": string | null}`,
-      prompt: `Company name: "${trimmed}" (Clean entity name: "${cleanName}")`,
-      requestType: "company_domain_resolve",
-      maxTokens: 150,
-    });
-
-    const cleanJson = aiRes.content.replace(/^```json\s*/i, "").replace(/```\s*$/i, "").trim();
-    const parsed = JSON.parse(cleanJson);
-    if (parsed.domain && typeof parsed.domain === "string") {
-      const candidate = extractDomain(parsed.domain.trim());
-      if (candidate) {
-        const validCareers = isValidCareersUrl(parsed.careersUrl, candidate, cleanName)
-          ? parsed.careersUrl
-          : undefined;
-        return {
-          domain: candidate,
-          officialName: parsed.officialName || trimmed,
-          careersUrl: validCareers,
-        };
-      }
-    }
-  } catch (aiErr) {
-    console.warn("[CompanyIntel] AI domain resolve fallback:", aiErr);
-  }
-
   // 3. Clearbit Autocomplete (Strict name matching)
   try {
     const url = `https://autocomplete.clearbit.com/v1/companies/suggest?query=${encodeURIComponent(cleanName)}`;
@@ -300,7 +266,7 @@ STRICT RULES:
   // 4. Web Search fallback with STRICT Relevance Verification
   try {
     const results = await searchBing(`"${cleanName}" official site OR company`);
-    for (const r of results) {
+    for (const r of results.slice(0, 3)) {
       const d = extractDomain(r.link);
       if (!d) continue;
 
@@ -311,7 +277,13 @@ STRICT RULES:
       // Search result MUST explicitly mention the company name
       const mentionsCompany = titleLower.includes(targetLower) || snippetLower.includes(targetLower);
       if (mentionsCompany) {
-        return { domain: d, officialName: trimmed };
+        try {
+          const page = await fetchPublicPage(`https://${d}`, 4000);
+          if (!page.ok) continue;
+          const $ = cheerio.load(await page.text());
+          const identity = `${$('title').text()} ${$('meta[property="og:site_name"]').attr('content') ?? ''}`.toLowerCase();
+          if (identity.includes(targetLower)) return { domain: d, officialName: trimmed };
+        } catch {}
       }
     }
   } catch {}
@@ -324,148 +296,90 @@ STRICT RULES:
 
 export async function crawlCompanyWebsite(
   domain: string,
-  _companyName: string
+  companyName: string
 ): Promise<{
   website: string;
   careersUrl?: string;
   linkedinCompanyUrl?: string;
   generalEmails: string[];
   contacts: ContactResult[];
+  sources: CrawledSource[];
 }> {
   const website = `https://${domain}`;
-  if (!isSafePublicUrl(website)) return { website, generalEmails: [], contacts: [] };
   const contacts: ContactResult[] = [];
+  const sources: CrawledSource[] = [];
   const generalEmails = new Set<string>();
   let careersUrl: string | undefined;
   let linkedinCompanyUrl: string | undefined;
-
-  const candidatePaths = [
-    '',
-    '/about-us',
-    '/about',
-    '/team',
-    '/leadership',
-    '/contact-us',
-    '/contact',
-    '/careers',
-    '/jobs'
-  ];
-
-  for (const path of candidatePaths) {
-    const pageUrl = `${website}${path}`;
-    try {
-      const res = await fetchPublicPage(pageUrl, 6000);
-
-      if (!res.ok) continue;
-      const html = await res.text();
-      const $ = cheerio.load(html);
-
-      // 1. Detect Company LinkedIn URL
-      if (!linkedinCompanyUrl) {
-        const compA = $('a[href*="linkedin.com/company/"]').first().attr('href');
-        if (compA) linkedinCompanyUrl = compA;
-      }
-
-      // 2. Detect Careers URL
-      if (!careersUrl) {
-        const careerA = $('a[href*="recruitee.com"], a[href*="greenhouse.io"], a[href*="lever.co"], a[href*="workable.com"], a[href*="/careers"], a[href*="/jobs"]').first().attr('href');
-        if (careerA) {
-          const candidate = careerA.startsWith('http') ? careerA : `${website}${careerA.startsWith('/') ? '' : '/'}${careerA}`;
-          if (isValidCareersUrl(candidate, domain, _companyName)) {
-            careersUrl = candidate;
-          }
-        }
-      }
-
-      // 3. Extract Team & Leadership LinkedIn Profiles
-      $('a[href*="linkedin.com/in/"]').each((_, aEl) => {
-        const l = $(aEl).attr('href') || '';
-        if (!l || contacts.some(c => c.linkedinUrl === l)) return;
-
-        const parentHeader = $(aEl).closest('div');
-        const container = parentHeader.parent();
-
-        let name = container.find('[class*="name"]').first().text().trim() ||
-                   parentHeader.find('[class*="name"]').first().text().trim() ||
-                   container.find('h2, h3, h4, strong').first().text().trim();
-
-        let role = container.find('[class*="role"], [class*="title"]').first().text().trim() ||
-                   container.find('p').first().text().trim() || 'Leader / Specialist';
-
-        if (!name) {
-          const slug = l.split('linkedin.com/in/')[1]?.replace(/\/.*$/, '')?.replace(/[-_0-9]+$/, '');
-          name = slug ? slug.charAt(0).toUpperCase() + slug.slice(1) : '';
-        }
-
-        if (name && name.length > 2 && name.length < 60) {
-          const roleLower = role.toLowerCase();
-          contacts.push({
-            name,
-            role,
-            department: roleLower.includes('hr') || roleLower.includes('talent') || roleLower.includes('people')
-              ? 'Human Resources'
-              : roleLower.includes('engineer') || roleLower.includes('tech') || roleLower.includes('developer')
-              ? 'Engineering'
-              : roleLower.includes('product')
-              ? 'Product'
-              : roleLower.includes('finance')
-              ? 'Finance'
-              : roleLower.includes('marketing')
-              ? 'Marketing'
-              : undefined,
-            seniority: normalizeSeniority(role),
-            emailVerified: false,
-            linkedinUrl: l,
-          });
-        }
-      });
-
-      // 4. Extract Company Emails
-      const emailRegex = /([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/g;
-      let match;
-      while ((match = emailRegex.exec(html)) !== null) {
-        const em = match[1].toLowerCase();
-        if (
-          !em.endsWith('.png') &&
-          !em.endsWith('.jpg') &&
-          !em.endsWith('.svg') &&
-          !em.includes('sentry') &&
-          !em.includes('wixpress') &&
-          !em.includes('example.com') &&
-          !em.includes('schema.org') &&
-          !em.includes('webpack')
-        ) {
-          generalEmails.add(em);
-        }
-      }
-    } catch {}
-  }
-
-  // Also inspect external careers page if available
-  if (careersUrl && careersUrl.startsWith('http') && !careersUrl.includes(domain)) {
-    try {
-      const res = await fetchPublicPage(careersUrl, 6000);
-      if (res.ok) {
-        const text = await res.text();
-        const emailRegex = /([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/g;
-        let match;
-        while ((match = emailRegex.exec(text)) !== null) {
-          const em = match[1].toLowerCase();
-          if (!em.endsWith('.png') && !em.endsWith('.jpg') && !em.endsWith('.svg') && !em.includes('example.com')) {
-            generalEmails.add(em);
-          }
-        }
-      }
-    } catch {}
-  }
-
-  return {
-    website,
-    careersUrl,
-    linkedinCompanyUrl,
-    generalEmails: Array.from(generalEmails),
-    contacts,
+  const queue = [website];
+  const visited = new Set<string>();
+  const sameCompanyEmail = (email: string) => {
+    const host = email.split('@')[1]?.toLowerCase();
+    return host === domain || host?.endsWith(`.${domain}`);
   };
+  const relevant = /career|job|vacanc|recruit|hiring|team|people|contact|about|ваканс|карьер|команд|работа|контакт/i;
+  if (!isSafePublicUrl(website)) return { website, generalEmails: [], contacts, sources };
+
+  async function inspect(pageUrl: string): Promise<void> {
+    try {
+      const res = await fetchPublicPage(pageUrl, 5000);
+      if (!res.ok) return;
+      const $ = cheerio.load(await res.text());
+      $('script, style, noscript').remove();
+      sources.push({ title: $('title').text().trim() || `${companyName} — company website`, link: pageUrl, snippet: $('body').text().replace(/\s+/g, ' ').trim().slice(0, 250), source: 'Company website' });
+      $('a[href]').each((_, element) => {
+        const href = $(element).attr('href') ?? '';
+        try {
+          const link = new URL(href, pageUrl);
+          link.hash = '';
+          if (!isSafePublicUrl(link.href)) return;
+          const host = link.hostname.toLowerCase().replace(/^www\./, '');
+          if (host === 'linkedin.com' && link.pathname.startsWith('/company/')) linkedinCompanyUrl ??= link.href;
+          if (relevant.test(`${link.pathname} ${$(element).text()}`) && isValidCareersUrl(link.href, domain, companyName)) {
+            if (/career|job|vacanc|ваканс|карьер|работа/i.test(`${link.pathname} ${$(element).text()}`)) careersUrl ??= link.href;
+            if ((host === domain || host.endsWith(`.${domain}`)) && queue.length < 30 && !visited.has(link.href) && !queue.includes(link.href)) queue.push(link.href);
+          }
+          if (host !== 'linkedin.com' || !link.pathname.startsWith('/in/')) return;
+          // Use the nearest individual card, never names guessed from a URL slug.
+          let card = $(element).closest('article, li, [class*="member"], [class*="person"], [class*="employee"]');
+          if (!card.length) card = $(element).closest('div');
+          if (!card.find('h2,h3,h4,[class*="name"]').length) card = card.parent();
+          if (card.find('a[href*="linkedin.com/in/"]').length > 1) return;
+          const name = card.find('[class*="name"], h2, h3, h4').first().text().trim();
+          const role = card.find('[class*="role"], [class*="position"], [class*="title"], p').first().text().trim();
+          if (!name || name.length > 80 || !role || role.length > 180) return;
+          const email = card.find('a[href^="mailto:"]').first().attr('href')?.slice(7).split('?')[0].toLowerCase();
+          contacts.push({ name, role, department: isHiringRole(role) ? 'Human Resources' : undefined, email: email && sameCompanyEmail(email) ? email : undefined, emailVerified: false, linkedinUrl: link.href, sourceUrl: pageUrl, seniority: normalizeSeniority(role) });
+        } catch {}
+      });
+      const text = `${$('body').text()} ${$('a[href^="mailto:"]').map((_, element) => $(element).attr('href')).get().join(' ')}`;
+      for (const match of text.matchAll(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g)) {
+        const email = match[0].toLowerCase();
+        if (sameCompanyEmail(email)) generalEmails.add(email);
+      }
+    } catch { /* Partial results remain useful when a page is unavailable. */ }
+  }
+
+  visited.add(website);
+  await inspect(website);
+  // Discovered links first; common paths only fill gaps. Three bounded batches.
+  queue.push(...['/careers', '/jobs', '/team', '/contact', '/about'].map(path => website + path));
+  let budget = 9;
+  while (queue.length && budget > 0) {
+    const batch: string[] = [];
+    while (queue.length && batch.length < Math.min(3, budget)) {
+      const url = queue.shift()!;
+      if (!visited.has(url)) { visited.add(url); batch.push(url); }
+    }
+    if (!batch.length) break;
+    budget -= batch.length;
+    await Promise.allSettled(batch.map(inspect));
+  }
+  return { website, careersUrl, linkedinCompanyUrl, generalEmails: [...generalEmails], contacts, sources };
+}
+
+function isHiringRole(role: string): boolean {
+  return /\bhr\b|human resources|recruit|talent|people|hiring|кадр|рекрут|персонал|подбор/i.test(role);
 }
 
 // ── LinkedIn OSINT Scraper (Decodes Bing Tracking Links) ──────
@@ -476,14 +390,21 @@ export async function findContactsDDG(
 ): Promise<ContactResult[]> {
   try {
     const query = domain
-      ? `("${companyName}" OR "${domain}") site:linkedin.com/in`
-      : `"${companyName}" site:linkedin.com/in`;
+      ? `("${companyName}" OR "${domain}") (recruiter OR "talent acquisition" OR HR) site:linkedin.com/in`
+      : `"${companyName}" (recruiter OR HR OR рекрутер) site:linkedin.com/in`;
 
     const results = await searchBing(query, 12);
     const contacts: ContactResult[] = [];
 
     for (const r of results) {
-      if (!r.link.includes('linkedin.com/in')) continue;
+      try {
+        const url = new URL(r.link);
+        if (url.protocol !== 'https:' || !['linkedin.com', 'www.linkedin.com'].includes(url.hostname) || !url.pathname.startsWith('/in/')) continue;
+      } catch { continue; }
+      const evidence = `${r.title} ${r.snippet}`.toLowerCase();
+      const company = cleanCompanyName(companyName).toLowerCase();
+      if (!company || !evidence.includes(company) || !isHiringRole(evidence)) continue;
+      if (/\bformer\b|\bpreviously\b|\bex-|бывш/i.test(evidence)) continue;
 
       let cleanTitle = r.title
         .replace(/\s+\|\s+LinkedIn/gi, '')
@@ -505,6 +426,8 @@ export async function findContactsDDG(
           role,
           emailVerified: false,
           linkedinUrl: r.link,
+          sourceUrl: r.link,
+          department: 'Human Resources',
           seniority: normalizeSeniority(role),
         });
       }
@@ -540,6 +463,7 @@ export async function findEmailsHunter(
       department?: string;
       seniority?: string;
       confidence?: number;
+      verification?: { status?: string };
       linkedin?: string;
     }> = json?.data?.emails ?? [];
 
@@ -553,7 +477,7 @@ export async function findEmailsHunter(
         department: e.department,
         seniority: normalizeSeniority(e.seniority ?? ''),
         email: e.value,
-        emailVerified: (e.confidence ?? 0) >= 70,
+        emailVerified: e.verification?.status === "valid",
         linkedinUrl: e.linkedin,
       }));
   } catch {
@@ -640,7 +564,7 @@ export function mergeContacts(
 
   // 1. Site contacts first (direct official team members)
   for (const c of siteContacts) {
-    map.set(makeKey(c), c);
+    if (!map.has(makeKey(c))) map.set(makeKey(c), c);
   }
 
   // 2. Apollo contacts
@@ -768,6 +692,7 @@ export async function crawlDeepCompanyIntel(
     }
     if (siteData.linkedinCompanyUrl && !linkedinCompanyUrl) linkedinCompanyUrl = siteData.linkedinCompanyUrl;
     generalEmails.push(...siteData.generalEmails);
+    crawledSources.push(...siteData.sources);
   }
 
   // 4. Create action contacts for discovered general / recruiting emails
@@ -781,8 +706,8 @@ export async function crawlDeepCompanyIntel(
       department: isHr ? 'Human Resources' : 'General',
       seniority: 'Manager',
       email: em,
-      emailVerified: true,
-      linkedinUrl: linkedinCompanyUrl,
+      emailVerified: false,
+      sourceUrl: siteData?.sources.find(source => source.snippet.includes(em))?.link ?? website,
     });
   }
 
@@ -801,6 +726,7 @@ export async function crawlDeepCompanyIntel(
     linkedinUrl: linkedinCompanyUrl,
     generalEmails: uniqueEmails,
     crawledSources,
+    contactSources: mergedContacts.flatMap(contact => contact.sourceUrl ? [{ name: contact.name, email: contact.email, linkedinUrl: contact.linkedinUrl, sourceUrl: contact.sourceUrl }] : []),
   };
 
   return {
@@ -829,7 +755,7 @@ const SENIORITY_ORDER: Record<string, number> = {
 function senioritySort(a: ContactResult, b: ContactResult): number {
   const aScore = SENIORITY_ORDER[a.seniority ?? 'Other'] ?? 5;
   const bScore = SENIORITY_ORDER[b.seniority ?? 'Other'] ?? 5;
-  return aScore - bScore;
+  return Number(isHiringRole(b.role)) - Number(isHiringRole(a.role)) || aScore - bScore;
 }
 
 function normalizeSeniority(raw: string): string {

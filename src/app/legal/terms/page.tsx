@@ -7,7 +7,7 @@ export const metadata = {
 };
 
 export default function TermsPage() {
-  const updated = "September 2026";
+  const updated = "October 2026";
 
   return (
     <main className="min-h-screen bg-zinc-950 text-zinc-300">
@@ -31,62 +31,71 @@ export default function TermsPage() {
           <section>
             <h2 className="text-base font-semibold text-zinc-100 mb-3">1. Acceptance of Terms</h2>
             <p>
-              By installing, configuring, or operating {BRAND_NAME} (the &quot;Software&quot;),
-              you agree to be bound by these Terms of Service (&quot;Terms&quot;). If you do not agree,
-              do not use the Software.
+              By accessing, creating an account on, or using {BRAND_NAME} (the &quot;Service&quot; or &quot;Software&quot;),
+              you agree to be bound by these Terms of Service (&quot;Terms&quot;). If you do not agree to these Terms,
+              do not access or use the Service.
             </p>
             <p className="mt-3">
-              These Terms apply to all users who self-host or otherwise run the Software locally or
-              on any infrastructure they control.
+              These Terms apply to all users, registered account holders, visitors, and subscribers of {BRAND_NAME}.
             </p>
           </section>
 
           {/* 2 */}
           <section>
-            <h2 className="text-base font-semibold text-zinc-100 mb-3">2. Description of Software</h2>
+            <h2 className="text-base font-semibold text-zinc-100 mb-3">2. Description of Service</h2>
             <p>
-              {BRAND_NAME} is an open-source, self-hosted tool that automates the discovery
-              and AI-based evaluation of job vacancies from third-party employment platforms, primarily
-              HH.ru. The Software interfaces with external APIs (Groq, Google Gemini, Hunter.io,
-              Apollo.io, Telegram) on behalf of the user.
+              {BRAND_NAME} is a proprietary, hosted SaaS platform and career automation copilot designed to
+              streamline the discovery, assessment, and management of job vacancies from third-party employment
+              platforms, primarily HeadHunter (hh.ru).
+            </p>
+            <p className="mt-3">
+              The Service provides automated vacancy monitoring, AI-assisted candidate fit analysis, cover letter
+              drafting, application tracking, analytics telemetry, and direct recruiter intelligence.
             </p>
           </section>
 
           {/* 3 */}
           <section>
-            <h2 className="text-base font-semibold text-zinc-100 mb-3">3. Permitted Use</h2>
-            <p>You may use the Software solely for:</p>
-            <ul className="mt-3 space-y-2 list-disc list-inside text-zinc-400">
-              <li>Personal job search automation on your own behalf.</li>
-              <li>Local development, testing, and modification under the project license.</li>
-              <li>Non-commercial research into AI-assisted recruitment tooling.</li>
-            </ul>
+            <h2 className="text-base font-semibold text-zinc-100 mb-3">3. Permitted Use &amp; Account License</h2>
+            <p>
+              Subject to these Terms, {BRAND_NAME} grants you a personal, revocable, non-exclusive, non-transferable,
+              and non-sublicensable right to access and use the Service strictly for your own personal, non-commercial job
+              search automation and career planning.
+            </p>
+            <p className="mt-3">
+              You are responsible for maintaining the confidentiality of your account credentials and for all activities
+              that occur under your account.
+            </p>
           </section>
 
           {/* 4 */}
           <section>
-            <h2 className="text-base font-semibold text-zinc-100 mb-3">4. Prohibited Use</h2>
-            <p>You must not use the Software to:</p>
+            <h2 className="text-base font-semibold text-zinc-100 mb-3">4. Prohibited Use &amp; Restrictions</h2>
+            <p>You must not, directly or indirectly:</p>
             <ul className="mt-3 space-y-2 list-disc list-inside text-zinc-400">
               <li>
-                Send unsolicited bulk messages or spam to recruiters, hiring managers, or any third
-                party.
+                Reverse engineer, decompile, disassemble, copy, reproduce, modify, or create derivative works
+                based upon any part of the Software, service infrastructure, or underlying algorithms.
               </li>
               <li>
-                Impersonate any individual or misrepresent your credentials in automatically
-                generated cover letters or outreach.
+                Sublicense, sell, rent, lease, distribute, redistribute, or commercially exploit access to {BRAND_NAME}
+                or operate it as a white-label or multi-tenant commercial offering for third parties.
               </li>
               <li>
-                Violate the Terms of Service of any third-party platform that the Software interacts
-                with, including but not limited to HH.ru, LinkedIn, Hunter.io, or Apollo.io.
+                Send unsolicited bulk messages, spam, harassment, or abusive communications to recruiters, hiring
+                managers, or third-party platforms.
               </li>
               <li>
-                Harvest, aggregate, or resell data obtained through the Software for commercial
-                purposes without explicit written consent of the data subjects.
+                Misrepresent your credentials, fabricate qualifications, or impersonate another individual in
+                automated job applications or communications.
               </li>
               <li>
-                Deploy the Software as a multi-tenant SaaS product without removing all references
-                to the original project and complying with the applicable open-source license.
+                Circumvent, disable, or tamper with security controls, rate limiters, payment verifications, or feature
+                entitlements of the Service.
+              </li>
+              <li>
+                Scrape, harvest, aggregate, or bulk export data from {BRAND_NAME} or third-party platforms in violation of
+                applicable terms of service or data protection regulations.
               </li>
             </ul>
           </section>
@@ -94,36 +103,32 @@ export default function TermsPage() {
           {/* 5 */}
           <section>
             <h2 className="text-base font-semibold text-zinc-100 mb-3">
-              5. Third-Party Services and API Credentials
+              5. Third-Party Platforms and Integrations
             </h2>
             <p>
-              The Software requires API keys and authentication tokens provided by third parties
-              (Groq, Google, Telegram, HH.ru, Hunter.io, Apollo.io). You are solely responsible
-              for:
+              {BRAND_NAME} interfaces with external third-party services and APIs (including HeadHunter, Telegram,
+              and AI reasoning providers). When using these integrations:
             </p>
             <ul className="mt-3 space-y-2 list-disc list-inside text-zinc-400">
-              <li>Obtaining those credentials lawfully.</li>
-              <li>Securing them in your environment (e.g., <code className="font-mono text-zinc-300">.env</code> files).</li>
-              <li>Complying with each provider&apos;s usage policies and rate limits.</li>
+              <li>You agree to comply with each external platform&apos;s published Terms of Service and API policies.</li>
+              <li>You acknowledge that {BRAND_NAME} is independent of and not endorsed or sponsored by HeadHunter LLC.</li>
+              <li>
+                External platform rate limits, terms changes, or access restrictions are outside the control of {BRAND_NAME}.
+              </li>
             </ul>
-            <p className="mt-3">
-              The project maintainers accept no liability for costs, bans, or data exposure arising
-              from misuse of third-party credentials.
-            </p>
           </section>
 
           {/* 6 */}
           <section>
-            <h2 className="text-base font-semibold text-zinc-100 mb-3">6. Data and Privacy</h2>
+            <h2 className="text-base font-semibold text-zinc-100 mb-3">6. Data Privacy and Security</h2>
             <p>
-              All data processed by the Software (resume text, HH.ru session cookies, contact
-              information) is stored exclusively in the PostgreSQL database you configure and control.
-              The project maintainers never collect, receive, or have access to your personal data.
-              Please review the{" "}
+              Your personal data, search criteria, resume text, application history, and session settings are handled
+              strictly in accordance with our{" "}
               <Link href="/legal/privacy" className="text-emerald-400 hover:text-emerald-300 transition-colors">
                 Privacy Policy
-              </Link>{" "}
-              for full details.
+              </Link>
+              . We implement industry-standard encryption (including AES-256-GCM for sensitive secrets and tokens) to
+              protect candidate information across our hosted infrastructure.
             </p>
           </section>
 
@@ -131,11 +136,10 @@ export default function TermsPage() {
           <section>
             <h2 className="text-base font-semibold text-zinc-100 mb-3">7. Disclaimer of Warranties</h2>
             <p>
-              The Software is provided &quot;AS IS&quot; without warranty of any kind, express or implied,
-              including but not limited to the implied warranties of merchantability, fitness for a
-              particular purpose, and non-infringement. The project maintainers do not warrant that
-              the Software will be error-free, uninterrupted, or that it will produce any particular
-              job search outcome.
+              The Service is provided &quot;AS IS&quot; and &quot;AS AVAILABLE&quot; without warranties of any kind, either
+              express or implied, including but not limited to warranties of merchantability, fitness for a particular purpose,
+              and non-infringement. We do not warrant that the Service will be uninterrupted, error-free, or that it will guarantee
+              interviews, job offers, or specific employment outcomes.
             </p>
           </section>
 
@@ -143,31 +147,33 @@ export default function TermsPage() {
           <section>
             <h2 className="text-base font-semibold text-zinc-100 mb-3">8. Limitation of Liability</h2>
             <p>
-              To the maximum extent permitted by applicable law, the project maintainers shall not be
-              liable for any indirect, incidental, special, consequential, or punitive damages, or
-              any loss of profits or revenues, whether incurred directly or indirectly, arising from
-              your use of the Software or its interaction with third-party platforms.
+              To the maximum extent permitted by law, {BRAND_NAME}, its founders, operators, and affiliates shall not be
+              liable for any indirect, incidental, consequential, special, or punitive damages, or loss of profits, data,
+              or employment opportunities arising from your use of or inability to use the Service.
             </p>
           </section>
 
           {/* 9 */}
           <section>
-            <h2 className="text-base font-semibold text-zinc-100 mb-3">9. Open-Source License</h2>
+            <h2 className="text-base font-semibold text-zinc-100 mb-3">9. Proprietary Rights and Intellectual Property</h2>
             <p>
-              The Software is distributed under the MIT License. Use, modification, and distribution
-              of the source code are governed by that license. These Terms of Service apply to the
-              operational use of the running Software and do not supersede the MIT License with
-              respect to copyright and redistribution rights.
+              {BRAND_NAME} is proprietary software. All rights, title, and interest in and to the Software, source code,
+              algorithms, database schemas, visual designs, interfaces, and branding belong exclusively to {BRAND_NAME} and
+              its operators.
+            </p>
+            <p className="mt-3">
+              This project is not licensed under the MIT License or any open-source license. No license or transfer of
+              intellectual property rights is granted by implication, estoppel, or otherwise, except for the limited right
+              to access the hosted service as expressly set forth herein.
             </p>
           </section>
 
           {/* 10 */}
           <section>
-            <h2 className="text-base font-semibold text-zinc-100 mb-3">10. Changes to Terms</h2>
+            <h2 className="text-base font-semibold text-zinc-100 mb-3">10. Modifications to Terms and Service</h2>
             <p>
-              These Terms may be updated at any time. Continued use of the Software after an update
-              constitutes acceptance of the revised Terms. The &quot;Last updated&quot; date at the top of
-              this page reflects when changes were last made.
+              We reserve the right to modify or replace these Terms, or modify or discontinue the Service, at any time.
+              Continued access to the Service following any modifications constitutes acceptance of the revised Terms.
             </p>
           </section>
 

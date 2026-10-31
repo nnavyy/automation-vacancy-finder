@@ -1,21 +1,16 @@
-MIT License
+Proprietary Software License
 
-Copyright (c) 2026 Nanda AI Job Assistant Contributors
+Copyright (c) 2026 HH Job Copilot. All Rights Reserved.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+This software, its source code, documentation, workflows, visual designs, and associated assets (the "Software") are confidential and proprietary to HH Job Copilot.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+Permission is strictly limited to authorized users accessing the hosted service through approved interfaces. 
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+UNDER NO CIRCUMSTANCES MAY ANY PERSON OR ENTITY:
+1. Copy, reproduce, redistribute, republish, sublicense, sell, rent, lease, or distribute the Software or its source code, in whole or in part, in any format or medium.
+2. Reverse engineer, decompile, disassemble, translate, or otherwise attempt to discover the source code, object code, underlying algorithms, or infrastructure of the Software.
+3. Modify, adapt, translate, enhance, or create derivative works based upon the Software.
+4. Remove, alter, or obscure any proprietary, copyright, trademark, or confidentiality notices contained in or affixed to the Software.
+5. Use the Software or any portion thereof to construct a competing service, database, or commercial offering.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE, AND NON-INFRINGEMENT. IN NO EVENT SHALL THE COPYRIGHT HOLDERS, CONTRIBUTORS, OR AFFILIATES BE LIABLE FOR ANY CLAIM, DAMAGES, LOSS OF PROFITS, DATA LOSS, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.

@@ -3,9 +3,9 @@ import { auth } from "@/lib/auth";
 import LandingView from "@/components/landing/LandingView";
 
 export const metadata = {
-  title: "HH Job Copilot — Autonomous Local Job Search & AI Scoring",
+  title: "HH Job Copilot — Поиск работы на HeadHunter",
   description:
-    "Hosted job search copilot for HeadHunter (hh.ru), with free Analytics and paid Company Intel. Caches vacancies matching your developer profile, evaluates compatibility with multi-tier AI, verifies vacancy liveness, and dispatches to Telegram.",
+    "Поиск работы на HeadHunter: вакансии под ваш опыт, сопроводительные письма, бесплатная аналитика и уведомления в Telegram. Исследуйте работодателей с Company Intel.",
 };
 
 export default async function LandingPage() {

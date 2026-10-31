@@ -3,7 +3,7 @@
 // ============================================================
 // Nanda AI Job Assistant — Internationalization (i18n) Engine
 // Target Market: CIS Region & Global (HeadHunter Ecosystem)
-// Supported Languages: English (Default), Russian (ru / CIS)
+// Supported Languages: Russian (Default / CIS), English
 // Strict rule: Zero emojis in translation strings
 // ============================================================
 
@@ -18,8 +18,8 @@ export interface LanguageOption {
 }
 
 export const SUPPORTED_LANGUAGES: LanguageOption[] = [
-  { code: "en", label: "English", nativeName: "English (Default)" },
-  { code: "ru", label: "Russian", nativeName: "Русский (CIS)" },
+  { code: "en", label: "English", nativeName: "English" },
+  { code: "ru", label: "Russian", nativeName: "Русский" },
 ];
 
 export const TRANSLATIONS: Record<Language, Record<string, string>> = {
@@ -567,7 +567,7 @@ interface LanguageContextType {
 }
 
 const LanguageContext = createContext<LanguageContextType>({
-  language: "en",
+  language: "ru",
   setLanguage: () => {},
   t: (key, fallback) => fallback || key,
   languages: SUPPORTED_LANGUAGES,
@@ -576,8 +576,8 @@ const LanguageContext = createContext<LanguageContextType>({
 const STORAGE_KEY = "app_language";
 
 export function LanguageProvider({ children }: { children: React.ReactNode }) {
-  // English is the default language
-  const [language, setLanguageState] = useState<Language>("en");
+  // Russian is the default language
+  const [language, setLanguageState] = useState<Language>("ru");
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -586,6 +586,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
       const saved = localStorage.getItem(STORAGE_KEY) as Language | null;
       if (saved && (saved === "en" || saved === "ru")) {
         setLanguageState(saved);
+        document.documentElement.lang = saved;
       }
     } catch {
       // ignore localStorage errors in private browsing
@@ -614,7 +615,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
   return (
     <LanguageContext.Provider
       value={{
-        language: mounted ? language : "en",
+        language: mounted ? language : "ru",
         setLanguage,
         t,
         languages: SUPPORTED_LANGUAGES,

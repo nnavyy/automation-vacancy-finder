@@ -164,8 +164,9 @@ export default function SidebarNav({ onNavigate }: { onNavigate?: () => void }) 
               key={href}
               href={href}
               prefetch={true}
+              aria-current={isActive ? "page" : undefined}
               onClick={() => onNavigate && onNavigate()}
-              className={`relative flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] font-medium transition-colors duration-150 active:scale-[0.98] ${
+              className={`relative flex items-center gap-3 px-3 py-3 rounded-lg text-[13px] font-medium transition-colors duration-150 active:scale-[0.98] ${
                 isActive ? "text-zinc-50" : "text-zinc-400 hover:text-zinc-100 hover:bg-white/[0.04]"
               }`}
             >
@@ -173,7 +174,7 @@ export default function SidebarNav({ onNavigate }: { onNavigate?: () => void }) 
                 <motion.span
                   layoutId="sidebar-active"
                   transition={{ type: "spring", bounce: 0, duration: 0.35 }}
-                  className="absolute inset-0 rounded-lg bg-white/[0.07] ring-1 ring-inset ring-white/[0.08]"
+                  className="absolute inset-0 rounded-lg bg-emerald-300/[0.08] ring-1 ring-inset ring-emerald-300/15"
                 />
               )}
               <Icon

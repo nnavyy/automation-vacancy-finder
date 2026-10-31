@@ -182,7 +182,7 @@ export default function AboutClient({ userEmail }: AboutClientProps) {
               <li>They store your resume, credentials, and search behaviors on proprietary third-party cloud servers with zero privacy guarantees.</li>
             </ul>
             <p className="text-zinc-400 leading-relaxed">
-              I engineered <strong>HH Job Copilot</strong> as a 100% free, self-hosted, open-source alternative. It operates directly against HeadHunter&apos;s public RSS feeds, runs AI evaluations using your own API keys (or local LLMs), enforces a strict 100-vacancy cap to keep your database fast, and sends verified listings straight to your personal Telegram.
+              I engineered <strong>HH Job Copilot</strong> as a modern, dedicated AI copilot and career automation service. It operates directly against HeadHunter&apos;s public feeds, executes high-precision AI evaluations on secure infrastructure, enforces a curated vacancy cap to keep your pipeline clean and relevant, and delivers high-synergy listings straight to your personal Telegram.
             </p>
           </div>
 
