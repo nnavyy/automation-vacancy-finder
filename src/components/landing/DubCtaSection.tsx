@@ -35,7 +35,7 @@ export default function DubCtaSection() {
             </h2>
 
             <p className="text-sm sm:text-base text-zinc-400 leading-relaxed font-normal max-w-xl mx-auto">
-              See why HH Job Copilot is the hosted job search service. Search, matching, cover letters, and Analytics are free. Company Intel adds company research and outreach tools for $3 per month.
+              See why HH Job Copilot is the hosted job search service. Search, matching, cover letters, and Analytics are free. Company Intel adds company research and outreach tools for 250 Stars per month.
             </p>
 
             {/* Action Buttons Row */}

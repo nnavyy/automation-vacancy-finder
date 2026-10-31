@@ -1,6 +1,6 @@
-# Payment setup — decision pending
+# Payment setup — 250 Stars/month
 
-Company Intel remains $3/month. Analytics remains free. No live checkout is enabled.
+Company Intel is 250 Telegram Stars/month. Analytics remains free. Upgrade links open https://t.me/wonkiiy for manual arrangements. This link does not collect payment or automatically grant access. Do not advertise an exact $5 equivalent: buyer costs vary. Telegram Wallet payment is not configured: a username is not a wallet checkout, and no receiving address/network or payment verification has been provided. Digital goods sold inside Telegram bots must use Stars, not crypto.
 
 For an exact USD subscription, use a website payment processor supported in your business country. Customers pay through hosted checkout; signed payment webhooks activate/renew database-backed access, failed renewals expire it, and a customer portal handles cancellation. A Telegram wallet alone is not a card subscription merchant account. MCP can help configure a provider, but the deployed app still needs the provider API and signed webhooks.
 

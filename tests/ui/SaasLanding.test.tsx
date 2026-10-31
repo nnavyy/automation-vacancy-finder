@@ -14,7 +14,7 @@ it("explains free access and the paid feature without self-hosting claims", () =
   fireEvent.click(screen.getByRole("button", { name: "English" }));
   const pricing = screen.getByRole("region", { name: "Start free. Go deeper when you need to." });
   expect(within(pricing).getByText("$0")).toBeTruthy();
-  expect(within(pricing).getByText("$3")).toBeTruthy();
+  expect(within(pricing).getByText("250 Stars")).toBeTruthy();
   expect(within(pricing).getByText("Analytics and application tracking")).toBeTruthy();
   expect(screen.queryByText(/Designed for Open Standards/)).toBeNull();
   expect(screen.queryByText(/100% Local PostgreSQL/)).toBeNull();
@@ -38,4 +38,10 @@ it("starts in Russian and opens an interactive preview", () => {
   expect(screen.getByRole("dialog")).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "Закрыть просмотр" }));
   expect(screen.queryByRole("dialog")).toBeNull();
+});
+
+it("routes upgrade requests to the owner's Telegram", () => {
+  render(<LandingView />);
+  fireEvent.click(screen.getByRole("button", { name: "English" }));
+  expect(screen.getByRole("link", { name: "Arrange access on Telegram" }).getAttribute("href")).toBe("https://t.me/wonkiiy");
 });

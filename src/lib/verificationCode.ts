@@ -34,18 +34,21 @@ let cachedTransporter: nodemailer.Transporter | null = null;
 let cachedMailerKey = "";
 
 export function isMailConfigured(): boolean {
-  const user = process.env.SMTP_USER || process.env.EMAIL_USER;
-  const pass = process.env.SMTP_PASS || process.env.EMAIL_PASS;
-  return Boolean(user && pass);
+  return Boolean(process.env.SMTP_USER && process.env.SMTP_PASS && getSenderAddress());
+}
+
+function getSenderAddress(): string | null {
+  const address = process.env.MAIL_FROM_ADDRESS?.trim();
+  return address && /^[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+$/.test(address) ? address : null;
 }
 
 function getMailer() {
   const host = process.env.SMTP_HOST || "smtp.gmail.com";
   const port = Number(process.env.SMTP_PORT || "465");
   const secure = process.env.SMTP_SECURE ? process.env.SMTP_SECURE === "true" : port === 465;
-  const user = process.env.SMTP_USER || process.env.EMAIL_USER;
-  const pass = process.env.SMTP_PASS || process.env.EMAIL_PASS;
-  if (!user || !pass) return null;
+  const user = process.env.SMTP_USER;
+  const pass = process.env.SMTP_PASS;
+  if (!user || !pass || !getSenderAddress()) return null;
 
   const key = `${host}:${port}:${secure}:${user}`;
   if (cachedTransporter && cachedMailerKey === key) {
@@ -185,15 +188,11 @@ export async function sendVerificationEmail({
 }): Promise<{ success: boolean; error?: string }> {
   const transporter = getMailer();
   if (!transporter) {
-    if (process.env.NODE_ENV === "development") {
-      console.warn("[Mail Dev] EMAIL_USER or EMAIL_PASS not configured. Code for testing:", code);
-    } else {
-      console.error("[Mail] SMTP is not configured on the server. Email delivery aborted.");
-    }
+    console.error("[Mail] Dedicated SMTP credentials and MAIL_FROM_ADDRESS are required.");
     return { success: false, error: "Email service is not configured on the server." };
   }
 
-  const senderEmail = process.env.SMTP_USER || process.env.EMAIL_USER;
+  const senderEmail = getSenderAddress();
 
   let title = "Verification Code";
   let description = "Use the 6-digit code below to complete your action.";
@@ -280,7 +279,7 @@ export async function sendVerificationEmail({
     await transporter.sendMail({
       from: `"${BRAND_NAME}" <${senderEmail}>`,
       to: email,
-      subject: `[${code}] ${title} — ${BRAND_NAME}`,
+      subject: `${title} - ${BRAND_NAME}`,
       html,
     });
     return { success: true };

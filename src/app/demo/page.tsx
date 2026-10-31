@@ -295,7 +295,7 @@ export default function DemoPage() {
           const value = event.target.value;
           if (value === "overview" || value === "vacancies" || value === "saved" || value === "applied" || value === "company-intel" || value === "analytics" || value === "settings") setActiveTab(value);
         }} className="w-full rounded-lg border border-white/10 bg-zinc-900 px-3 py-2.5 text-sm">
-          <option value="overview">Overview</option><option value="vacancies">Vacancies</option><option value="saved">Saved</option><option value="applied">Applied</option><option value="analytics">Analytics · Free</option><option value="company-intel">Company Intel · $3/month</option><option value="settings">Settings</option>
+          <option value="overview">Overview</option><option value="vacancies">Vacancies</option><option value="saved">Saved</option><option value="applied">Applied</option><option value="analytics">Analytics · Free</option><option value="company-intel">Company Intel · 250 Stars/month</option><option value="settings">Settings</option>
         </select>
       </nav>
       {/* Main Body: Sticky Pinned Sidebar on Left + Independently Scrollable Workspace on Right */}
@@ -1110,7 +1110,7 @@ export default function DemoPage() {
 
                 <div className="flex flex-col justify-center gap-4 rounded-xl border border-zinc-800 bg-zinc-950 p-5">
                   <h3 className="text-sm font-semibold text-zinc-100">Company Intel is a paid feature</h3>
-                  <p className="text-xs leading-relaxed text-zinc-400">Company research, recruiter contacts, and outreach drafts are available for $3 per month. Your job search and Analytics stay free.</p>
+                  <p className="text-xs leading-relaxed text-zinc-400">Company research, recruiter contacts, and outreach drafts are available for 250 Stars per month. Your job search and Analytics stay free.</p>
                   <button type="button" onClick={() => setActiveTab("company-intel")} className="self-start rounded-lg bg-emerald-400 px-4 py-2 text-xs font-semibold text-zinc-950 hover:bg-emerald-300">View Company Intel</button>
                 </div>
               </div>

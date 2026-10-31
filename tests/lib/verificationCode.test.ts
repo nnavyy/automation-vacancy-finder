@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { generateNumericOTP, hashVerificationCode } from "@/lib/verificationCode";
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { generateNumericOTP, hashVerificationCode, isMailConfigured } from "@/lib/verificationCode";
 
 describe("verificationCode helper", () => {
   it("generates a 6-digit numeric OTP", () => {
@@ -28,4 +28,17 @@ describe("verificationCode helper", () => {
     expect(hash1).not.toBe(hashDiffCode);
     expect(hash1).not.toBe(hashDiffEmail);
   });
+});
+
+afterEach(() => vi.unstubAllEnvs());
+it("does not use legacy personal credentials as the OTP sender", () => {
+  vi.stubEnv("SMTP_USER", ""); vi.stubEnv("SMTP_PASS", "");
+  vi.stubEnv("EMAIL_USER", "personal@gmail.com"); vi.stubEnv("EMAIL_PASS", "secret");
+  vi.stubEnv("MAIL_FROM_ADDRESS", "");
+  expect(isMailConfigured()).toBe(false);
+});
+it("requires an explicit sender with dedicated SMTP credentials", () => {
+  vi.stubEnv("SMTP_USER", "project@gmail.com"); vi.stubEnv("SMTP_PASS", "secret");
+  vi.stubEnv("MAIL_FROM_ADDRESS", "project@gmail.com");
+  expect(isMailConfigured()).toBe(true);
 });

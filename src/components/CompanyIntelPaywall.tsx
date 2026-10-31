@@ -24,16 +24,16 @@ export default function CompanyIntelPaywall({ returnHref = "/dashboard" }: { ret
         </div>
         <div className="space-y-4 md:w-52 md:border-l md:border-zinc-800 md:pl-8">
           <div className="flex items-baseline gap-2">
-            <span className="text-5xl font-semibold tracking-tight text-white">$3</span>
+            <span className="text-3xl font-semibold tracking-tight text-white">250 Stars</span>
             <span className="text-sm text-zinc-400">/ month</span>
           </div>
           <p className="flex items-center gap-2 text-sm text-zinc-400">
             <LockKeyhole size={15} aria-hidden="true" /> Paid access required
           </p>
-          <a href="mailto:nandazhafran@gmail.com?subject=Company%20Intel%20subscription" className="inline-flex w-full justify-center rounded-lg bg-emerald-400 px-4 py-2.5 text-sm font-semibold text-zinc-950 transition-colors hover:bg-emerald-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-emerald-400">
-            Request access
+          <a href="https://t.me/wonkiiy" className="inline-flex w-full justify-center rounded-lg bg-emerald-400 px-4 py-2.5 text-sm font-semibold text-zinc-950 transition-colors hover:bg-emerald-300 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-emerald-400">
+            Contact @wonkiiy
           </a>
-          <p className="text-xs leading-relaxed text-zinc-500">Online checkout is not available yet. Access is activated manually.</p>
+          <p className="text-xs leading-relaxed text-zinc-500">250 Stars/month. Payments help fund development and running costs. Contact @wonkiiy to arrange access or ask about a Telegram Wallet transfer by username. USD cost varies; activation is manual.</p>
         </div>
       </div>
       <div className="flex flex-wrap items-center justify-between gap-4 border-t border-zinc-800 bg-zinc-950/40 px-6 py-5 sm:px-9">
