@@ -232,3 +232,26 @@ select option {
 @media (prefers-reduced-transparency: reduce) {
   .glass-chrome { backdrop-filter: none !important; background: #0a0a0b !important; }
 }
+
+.fw-public-theme, .field-landing {
+  --background: #f5f7fb;
+  --foreground: #17233b;
+  --fw-surface: #fff;
+  --fw-elevated: #eef2f9;
+  --fw-border: #d9e0ec;
+  --fw-text: var(--foreground);
+  --fw-muted: #526178;
+  --fw-accent: #3848d4;
+  --fw-accent-hover: #2c3bb7;
+  --fw-accent-soft: #e8edff;
+  --fw-on-accent: #fff;
+  --fw-lime: #16664c;
+  --fw-match-soft: #e3f5ec;
+  --fw-display: var(--font-inter), system-ui, sans-serif;
+  color-scheme: light;
+}
+
+:is(.fw-public-theme, .field-landing) :focus-visible {
+  outline: 2px solid var(--fw-accent);
+  outline-offset: 4px;
+}

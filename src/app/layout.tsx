@@ -15,6 +15,7 @@ import { BRAND_NAME, BRAND_TAGLINE } from "@/lib/brand";
 export const metadata: Metadata = {
   title: `${BRAND_NAME} — ${BRAND_TAGLINE}`,
   description: "Autonomous AI Job Search Copilot for HeadHunter (HH.ru).",
+  verification: { google: process.env.GOOGLE_SITE_VERIFICATION || undefined },
   icons: {
     icon: [
       { url: "/favicon.svg", type: "image/svg+xml" },
@@ -33,9 +34,9 @@ export default function RootLayout({
     <html lang="ru" className={inter.variable}>
       <body className="bg-zinc-950 text-zinc-100 font-sans antialiased min-h-screen flex flex-col selection:bg-emerald-500/20 selection:text-emerald-300">
         <NextTopLoader color="#10b981" showSpinner={false} />
-        <main className="flex-1 flex flex-col w-full h-full">
+        <div className="flex-1 flex flex-col w-full h-full">
           {children}
-        </main>
+        </div>
         <Analytics />
       </body>
     </html>

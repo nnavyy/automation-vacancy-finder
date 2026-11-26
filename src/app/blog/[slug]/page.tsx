@@ -1,10 +1,14 @@
 import React from "react";
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Clock, Calendar, User, ArrowRight, Share2, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, Clock, Calendar, ArrowRight } from "lucide-react";
 import LandingHeader from "@/components/landing/LandingHeader";
 import LandingFooter from "@/components/landing/LandingFooter";
+import "@/components/public/public.css";
 import { auth } from "@/lib/auth";
+import type { BlogPostSlug } from "@/lib/blog-slugs";
+import { siteOrigin } from "@/lib/site-url";
 
 interface BlogPost {
   title: string;
@@ -19,7 +23,7 @@ interface BlogPost {
   }[];
 }
 
-const BLOG_POSTS: Record<string, BlogPost> = {
+const BLOG_POSTS = {
   "rss-vs-rest": {
     title: "Automating HeadHunter Job Scraping Without Rate Limits: Why RSS Beats REST",
     date: "October 16, 2026",
@@ -161,29 +165,45 @@ if (activeCount >= 100) {
       },
     ],
   },
-};
+} satisfies Record<BlogPostSlug, BlogPost>;
 
-export default async function BlogPostPage({ params }: { params: Promise<{ slug: string }> }) {
+interface BlogRouteProps {
+  params: Promise<{ slug: string }>;
+}
+
+function isBlogPostSlug(slug: string): slug is BlogPostSlug {
+  return Object.hasOwn(BLOG_POSTS, slug);
+}
+
+export async function generateMetadata({ params }: BlogRouteProps): Promise<Metadata> {
   const { slug } = await params;
+  if (!isBlogPostSlug(slug)) notFound();
   const post = BLOG_POSTS[slug];
+  return {
+    title: `${post.title} | HH Job Copilot`,
+    description: post.summary,
+    alternates: { canonical: new URL(`/blog/${slug}`, siteOrigin) },
+  };
+}
 
-  if (!post) {
-    notFound();
-  }
+export default async function BlogPostPage({ params }: BlogRouteProps) {
+  const { slug } = await params;
+  if (!isBlogPostSlug(slug)) notFound();
+  const post: BlogPost = BLOG_POSTS[slug];
 
   const session = await auth();
   const userEmail = session?.user?.email;
 
   return (
-    <div className="min-h-screen bg-[#09090b] text-white selection:bg-white selection:text-black antialiased">
+    <div className="fw-public-theme min-h-screen bg-public-950 text-public-100 antialiased">
       <LandingHeader userEmail={userEmail} />
 
-      <main className="pt-32 pb-24 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+      <main className="pt-10 sm:pt-16 pb-20 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Navigation Breadcrumb */}
         <div className="mb-8">
           <Link
             href="/blog"
-            className="inline-flex items-center gap-2 text-xs text-zinc-400 hover:text-white transition-colors"
+            className="inline-flex items-center gap-2 text-xs text-public-400 hover:text-public-100 transition-colors"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
             <span>Back to All Articles</span>
@@ -191,9 +211,9 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
         </div>
 
         {/* Article Header */}
-        <header className="mb-12 pb-8 border-b border-white/[0.08]">
-          <div className="flex items-center gap-3 text-xs text-zinc-500 mb-4">
-            <span className="font-mono px-2 py-0.5 rounded bg-zinc-900 border border-white/[0.06] text-zinc-300">
+        <header className="mb-12 pb-8 border-b border-field-line">
+          <div className="flex flex-wrap items-center gap-3 text-sm text-public-400 mb-4">
+            <span className="font-mono px-2 py-0.5 rounded bg-public-900 border border-field-line text-public-300">
               {post.category}
             </span>
             <span>&middot;</span>
@@ -208,25 +228,25 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
             </div>
           </div>
 
-          <h1 className="text-3xl sm:text-5xl font-bold tracking-tight text-white mb-6 leading-[1.15]">
+          <h1 className="fw-public-title mb-6 !text-[clamp(2.4rem,5.5vw,4.6rem)] !leading-[1.05]">
             {post.title}
           </h1>
 
-          <p className="text-base text-zinc-400 leading-relaxed mb-6 font-normal">
+          <p className="text-base text-public-400 leading-relaxed mb-6 font-normal">
             {post.summary}
           </p>
 
           {/* Author Badge (Written by Nanda Zhafran / @nnavyy) */}
-          <div className="flex items-center justify-between pt-4 border-t border-white/[0.06]">
+          <div className="flex items-center justify-between pt-4 border-t border-field-line">
             <Link href="/about" className="flex items-center gap-3 group">
               <div className="w-10 h-10 rounded-full bg-white text-black flex items-center justify-center font-bold text-xs">
                 NZ
               </div>
               <div>
-                <div className="text-xs font-semibold text-white group-hover:text-emerald-400 transition-colors">
+                <div className="text-xs font-semibold text-public-100 group-hover:text-emerald-700 transition-colors">
                   Nanda Zhafran (@nnavyy)
                 </div>
-                <div className="text-[11px] text-zinc-500">
+                <div className="text-[11px] text-public-500">
                   Full-Stack Engineer &middot; Creator of HH Job Copilot
                 </div>
               </div>
@@ -234,7 +254,7 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
 
             <Link
               href="/about"
-              className="text-xs text-zinc-400 hover:text-white transition-colors inline-flex items-center gap-1"
+              className="text-xs text-public-400 hover:text-public-100 transition-colors inline-flex items-center gap-1"
             >
               <span>View Creator Profile</span>
               <ArrowRight className="w-3.5 h-3.5" />
@@ -243,21 +263,21 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
         </header>
 
         {/* Article Body */}
-        <article className="space-y-10 text-sm text-zinc-300 leading-relaxed">
+        <article className="space-y-10 text-base text-public-300 leading-relaxed">
           {post.content.map((sec, idx) => (
             <section key={idx} className="space-y-4">
-              <h2 className="text-xl font-semibold text-white tracking-tight">
+              <h2 className="text-xl font-semibold text-public-100 tracking-tight">
                 {sec.sectionTitle}
               </h2>
 
               {sec.paragraphs.map((p, pIdx) => (
-                <p key={pIdx} className="leading-relaxed text-zinc-400">
+                <p key={pIdx} className="leading-[1.8] text-public-300">
                   {p}
                 </p>
               ))}
 
               {sec.codeSnippet && (
-                <div className="mt-4 rounded-xl bg-[#0e0e11] border border-white/10 p-5 font-mono text-xs text-zinc-300 overflow-x-auto">
+                <div className="mt-4 rounded-xl bg-field-panel border border-field-line p-5 font-mono text-xs text-public-300 overflow-x-auto">
                   <pre>{sec.codeSnippet}</pre>
                 </div>
               )}
@@ -266,10 +286,10 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
         </article>
 
         {/* Footer CTA */}
-        <div className="mt-16 pt-8 border-t border-white/[0.08] flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div className="mt-16 pt-8 border-t border-field-line flex flex-col sm:flex-row items-center justify-between gap-4">
           <Link
             href="/blog"
-            className="inline-flex items-center gap-1.5 text-xs text-zinc-400 hover:text-white transition-colors"
+            className="inline-flex items-center gap-1.5 text-xs text-public-400 hover:text-public-100 transition-colors"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
             <span>More Engineering Articles</span>
@@ -277,7 +297,7 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
 
           <Link
             href="/demo"
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-xs font-medium text-black bg-white hover:bg-zinc-200 transition-all shadow-md"
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-semibold text-white bg-field-accent hover:bg-[#2c3bb7] transition-colors"
           >
             <span>Explore Live Dashboard Demo</span>
             <ArrowRight className="w-3.5 h-3.5" />

@@ -7,25 +7,18 @@ export interface BrandLogoProps {
   variant?: "dark" | "light" | "auto";
 }
 
-/**
- * Official Brand Logo for HH Job Copilot
- * "The Kinetic Chevrons" (Concept C - Official Brand Identity)
- * Available in both Dark and Light versions with Apple-inspired precision.
- */
 export function BrandLogo({
   size = 28,
   className = "",
   showBackground = true,
-  variant = "dark",
-}: BrandLogoProps) {
-  const isLight = variant === "light";
-
-  // Light vs Dark palettes
-  const bgFill = isLight ? "#F5F5F7" : "#0E1015";
-  const bgStroke = isLight ? "rgba(0, 0, 0, 0.08)" : "#202A24";
-  const upperDartFill = isLight ? "#18181B" : "#FFFFFF";
-  const lowerChevronFill = isLight ? "#059669" : "#10B981";
-  const beaconFill = isLight ? "#10B981" : "#34D399";
+  variant = "light",
+}: BrandLogoProps): React.JSX.Element {
+  const isLight = variant !== "dark";
+  const bgFill = isLight ? "#E8EDFF" : "#15234D";
+  const bgStroke = isLight ? "#D2DBFC" : "#384A85";
+  const upperDartFill = isLight ? "#2337A8" : "#C4CEFF";
+  const lowerChevronFill = isLight ? "#3848D4" : "#8798FF";
+  const beaconFill = isLight ? "#3848D4" : "#A7B6FF";
 
   return (
     <svg
@@ -35,7 +28,7 @@ export function BrandLogo({
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       className={className}
-      aria-label={`HH Job Copilot Logo (${isLight ? "Light" : "Dark"})`}
+      aria-label="HH Job Copilot logo"
     >
       {showBackground && (
         <>
@@ -52,8 +45,6 @@ export function BrandLogo({
         </>
       )}
 
-      {/* Layered Dynamic Kinetic Chevrons */}
-      {/* Lower Chevron (Emerald Base) */}
       <path
         d="M 22 68 L 50 44 L 78 68 L 78 56 L 50 32 L 22 56 Z"
         fill={lowerChevronFill}

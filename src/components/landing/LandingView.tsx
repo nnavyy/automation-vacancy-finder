@@ -1,66 +1,203 @@
 "use client";
-import { useRef, useState } from "react";
-import Link from "next/link";
-import { motion, MotionConfig, useReducedMotion } from "framer-motion";
-import { ArrowUpRight, Check, X, Search, Send, BarChart3, Building2, Menu, ChevronRight } from "lucide-react";
-import ProductExperience from "./ProductExperience";
-import { BrandLogo } from "@/components/BrandLogo";
-import { LanguageProvider, useLanguage } from "@/lib/i18n";
 
-export default function LandingView({ userEmail }: { userEmail?: string | null }): React.JSX.Element {
-  return <LanguageProvider><MotionConfig reducedMotion="user"><LandingContent userEmail={userEmail} /></MotionConfig></LanguageProvider>;
+import { useRef, useState, type ReactNode } from "react";
+import Link from "next/link";
+import { MotionConfig } from "framer-motion";
+import { ArrowDown, ArrowRight, ArrowUpRight, BarChart3, Bookmark, Building2, Check, ChevronRight, FileText, Menu, Search, Send, X } from "lucide-react";
+import { BRAND_NAME } from "@/lib/brand";
+import { LanguageProvider, useLanguage } from "@/lib/i18n";
+import { BrandLogo } from "@/components/BrandLogo";
+import ProductExperience, { LANDING_ROLES } from "./ProductExperience";
+import "./fieldwork.css";
+
+interface LandingViewProps {
+  userEmail?: string | null;
+  activity?: ReactNode;
 }
-function LandingContent({ userEmail }: { userEmail?: string | null }): React.JSX.Element {
+
+export default function LandingView({ userEmail, activity }: LandingViewProps) {
+  return (
+    <LanguageProvider>
+      <MotionConfig reducedMotion="user"><LandingContent userEmail={userEmail} activity={activity} /></MotionConfig>
+    </LanguageProvider>
+  );
+}
+
+function LandingContent({ userEmail, activity }: LandingViewProps) {
   const { language, setLanguage } = useLanguage();
   const ru = language === "ru";
   const copy = (r: string, e: string) => ru ? r : e;
-  const reduce = useReducedMotion();
   const [menu, setMenu] = useState(false);
   const [selected, setSelected] = useState(0);
   const [saved, setSaved] = useState(false);
   const dialog = useRef<HTMLDialogElement>(null);
   const opener = useRef<HTMLButtonElement>(null);
-  const roles = ["Frontend Developer · React", "Full Stack Engineer · Node.js", "Product Engineer · TypeScript"];
-  const reveal = { initial: reduce ? false as const : { opacity: 1, y: 22 }, whileInView: { opacity: 1, y: 0 }, viewport: { once: true, amount: 0.12 }, transition: { type: "spring" as const, bounce: 0, duration: 0.65 } };
-  const button = "inline-flex items-center justify-center gap-2 rounded-lg px-5 py-3 text-sm font-medium transition-colors active:scale-[0.98] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-emerald-300";
-  const close = () => { dialog.current?.close(); opener.current?.focus(); };
-  return <div className="min-h-screen overflow-x-clip bg-[#0b100e] text-zinc-100 selection:bg-[#d6e9de] selection:text-black">
-    <a href="#content" className="sr-only focus:not-sr-only">{copy("К содержанию", "Skip to content")}</a>
-    <header className="sticky top-0 z-40 border-b border-white/10 bg-[#0b100e]/90 backdrop-blur-xl" onKeyDown={e => { if (e.key === "Escape") setMenu(false); }}>
-      <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-5 py-5 sm:px-8">
-        <Link href="/landing" className="flex items-center gap-3 text-sm font-semibold"><BrandLogo size={30} />HH Job Copilot</Link>
-        <nav aria-label="Main navigation" className="hidden items-center gap-7 text-sm text-zinc-400 lg:flex">{[["#preview",copy("Обзор продукта","Product tour")],["#how-it-works",copy("Как это работает","How it works")],["#pricing",copy("Тарифы","Pricing")],["#faq",copy("Вопросы","FAQ")]].map(([href,label])=><a key={href} href={href} className="hover:text-white">{label}</a>)}</nav>
-        <div className="flex items-center gap-2"><button aria-label="Русский" aria-pressed={ru} onClick={()=>setLanguage("ru")} className={`px-2 py-2 text-xs ${ru?"text-[#b8d6c4]":"text-zinc-500"}`}>RU</button><span className="text-zinc-700">/</span><button aria-label="English" aria-pressed={!ru} onClick={()=>setLanguage("en")} className={`px-2 py-2 text-xs ${!ru?"text-[#b8d6c4]":"text-zinc-500"}`}>EN</button><Link href={userEmail?"/dashboard":"/login"} className="hidden px-4 text-sm text-zinc-300 sm:block">{copy(userEmail?"Кабинет":"Войти",userEmail?"Dashboard":"Sign in")}</Link><button aria-label={menu?"Close navigation":"Open navigation"} aria-expanded={menu} onClick={()=>setMenu(!menu)} className="p-2 lg:hidden"><Menu size={20}/></button></div>
-      </div>
-      {menu&&<nav aria-label="Mobile navigation" className="grid gap-4 border-t border-white/10 px-6 py-5 lg:hidden">{[["#preview",copy("Обзор продукта","Product tour")],["#how-it-works",copy("Как это работает","How it works")],["#pricing",copy("Тарифы","Pricing")],["/login",copy("Войти","Sign in")]].map(([href,label])=><a key={href} href={href} onClick={()=>setMenu(false)}>{label}</a>)}</nav>}
-    </header>
-    <main id="content">
-      <ProductExperience ru={ru} opener={opener} onOpen={()=>dialog.current?.showModal()} />
-      <section id="how-it-works" className="mx-auto max-w-6xl scroll-mt-28 px-5 pb-24 sm:px-8"><motion.div {...reveal}><h2 className="text-3xl font-medium tracking-tight sm:text-5xl">{copy("Как устроен ваш поиск","How your search comes together")}</h2><p className="mt-5 max-w-2xl text-base leading-7 text-zinc-400">{copy("Вам не нужно настраивать сервер или выбирать AI-модель. Создайте профиль, задайте критерии и просматривайте результаты. Решение об отклике всегда остаётся за вами.","No server setup or AI model selection. Create a profile, set your preferences, and review results. You stay in control of every application.")}</p></motion.div><div className="mt-12 grid gap-8 md:grid-cols-3">{[
-        [copy("01 / Ваш профиль","01 / Your profile"),copy("Расскажите о своём опыте","Tell us about your experience"),copy("Добавьте резюме, навыки и желаемые роли. Укажите зарплату, город и формат работы: удалённо, гибрид или офис.","Add your resume, skills, and target roles. Choose a salary range, location, and remote, hybrid, or office work.")],
-        [copy("02 / Подбор и оценка","02 / Search and assessment"),copy("Разберитесь в совпадениях","Understand each match"),copy("Запустите поиск по HeadHunter. Оценка помогает сравнить требования вакансии с профилем, увидеть сильные стороны и вопросы, которые стоит уточнить.","Run a HeadHunter search. Match explanations compare job requirements with your profile and highlight strengths and questions to clarify.")],
-        [copy("03 / Следующий шаг","03 / Your next step"),copy("Подготовьте уверенный отклик","Prepare a thoughtful application"),copy("Сохраните интересную вакансию, подготовьте черновик письма и откликнитесь на HeadHunter. История и аналитика помогут не потерять контекст.","Save a role, prepare a cover-letter draft, and apply on HeadHunter. Your history and Analytics keep the context together.")]
-      ].map(([step,title,text])=><motion.article {...reveal} key={step} className="border-t border-white/15 pt-6"><p key="step" className="text-xs text-[#b8d6c4]">{step}</p><h3 key="title" className="mt-5 text-xl font-medium">{title}</h3><p key="description" className="mt-4 text-sm leading-7 text-zinc-400">{text}</p></motion.article>)}</div></section>
-      <section className="border-y border-white/10 bg-[#0d1114] px-5 py-24 sm:px-8"><div className="mx-auto grid max-w-6xl gap-8 md:grid-cols-2">{[
-        {icon:Send,title:copy("Подходящие вакансии в Telegram","Good matches, in your Telegram"),text:copy("Привяжите Telegram в настройках. Уведомления помогут вернуться к интересной роли без постоянного обновления ленты. Вы выбираете, когда открыть вакансию и отправить отклик.","Connect Telegram in Settings. Alerts bring you back to promising roles without constantly refreshing a feed. You decide when to review and apply.")},
-        {icon:BarChart3,title:copy("Видно, как движется поиск","See your search progress"),text:copy("Отслеживайте сохранённые вакансии, отклики и распределение оценок. Аналитика доступна бесплатно: она помогает корректировать поиск, а не обещает трудоустройство.","Track saved roles, applications, and match-score distribution. Analytics stays free and helps refine your search; it does not promise a job offer.")},
-        {icon:Search,title:copy("Письмо с контекстом, а не шаблон","A cover letter with context"),text:copy("Получите черновик на основе вашего опыта и описания роли. Проверьте факты, добавьте свой голос и только затем отправляйте работодателю.","Get a draft based on your experience and the role. Check the facts, add your own voice, and then send it to the employer.")},
-        {icon:Building2,title:copy("Company Intel: узнайте работодателя","Company Intel: understand the employer"),text:copy("Исследуйте компанию, её карьерные страницы и публичные контакты по найму. Доступность HR-контактов зависит от компании и источников; найденные сведения нужно проверять. Это единственная платная функция.","Research the company, careers pages, and public hiring contacts. HR contact availability depends on the company and sources; review what you find. This is the only paid feature.")}
-      ].map(({icon:Icon,title,text})=><motion.article {...reveal} key={title} className="border-t border-white/15 py-8 pr-6 sm:pr-12"><Icon key="icon" className="mb-7 text-[#b8d6c4]" size={28}/><h2 key="title" className="text-2xl font-medium tracking-tight">{title}</h2><p key="description" className="mt-5 text-sm leading-7 text-zinc-400">{text}</p></motion.article>)}</div></section>
-      <motion.section {...reveal} id="pricing" aria-labelledby="pricing-title" className="mx-auto max-w-5xl scroll-mt-28 px-5 py-24 sm:px-8"><h2 id="pricing-title" className="text-center text-3xl font-medium sm:text-4xl">{copy("Начните бесплатно. Узнайте больше, когда нужно.","Start free. Go deeper when you need to.")}</h2><p className="mt-5 text-center text-sm text-zinc-400">{copy("Поиск работы и аналитика остаются бесплатными.","Your job search and Analytics stay free.")}</p><div className="mt-12 grid gap-5 md:grid-cols-2">{[false,true].map(paid=><article key={String(paid)} className={`flex flex-col rounded-2xl border p-8 ${paid?"border-emerald-300/30 bg-[#d6e9de]/[0.04]":"border-white/10 bg-white/[0.02]"}`}><h3 className="text-xl">{paid?"Company Intel":copy("Бесплатно","Free")}</h3><p className="my-7"><span className="text-4xl font-medium">{paid?"250 Stars":"$0"}</span><span className="ml-2 text-sm text-zinc-500">{copy("/ месяц","/ month")}</span></p><ul className="mb-8 space-y-4 text-sm text-zinc-300">{(paid?[copy("Всё из бесплатного тарифа","Everything in Free"),copy("Исследование компаний и источники","Company research and sources"),copy("Публичные контакты по найму","Public hiring contacts"),copy("Черновики сообщений работодателям","Outreach drafts")]:[copy("Поиск и оценка вакансий","Job search and match explanations"),copy("Сохранённые вакансии и письма","Saved roles and cover letters"),copy("Аналитика и история откликов","Analytics and application tracking"),copy("Уведомления в Telegram","Telegram vacancy alerts")]).map(text=><li key={text} className="flex gap-3"><Check size={17} className="shrink-0 text-[#b8d6c4]"/>{text}</li>)}</ul><Link href={paid?"https://t.me/wonkiiy":"/register"} className={`${button} mt-auto ${paid?"bg-[#d6e9de] text-black":"border border-white/20"}`}>{paid?copy("Оформить доступ в Telegram","Arrange access on Telegram"):copy("Создать аккаунт","Create free account")}</Link>{paid&&<p className="mt-4 text-xs leading-5 text-zinc-500">{copy("250 Stars в месяц. Оплата помогает финансировать разработку и работу сервиса. Напишите @wonkiiy для оформления или уточнения перевода через Telegram Wallet по имени пользователя. Доступ активируется вручную; стоимость Stars в долларах может отличаться.","250 Stars per month. Payments help fund development and running costs. Contact @wonkiiy to arrange access or ask about a Telegram Wallet transfer by username. Activation is manual; the USD cost of Stars varies.")}</p>}</article>)}</div></motion.section>
-      <section id="faq" className="mx-auto max-w-3xl scroll-mt-28 px-5 pb-24"><motion.h2 {...reveal} className="mb-10 text-3xl font-medium">{copy("Перед первым поиском","Before your first search")}</motion.h2>{[
-        [copy("Для кого этот сервис?","Who is this for?"),copy("Для соискателей, которые ищут работу на HeadHunter, прежде всего в России и странах СНГ. Основной язык , русский, интерфейс можно переключить на английский. Доступность вакансий зависит от выбранных регионов и работодателей.","For people searching on HeadHunter, primarily in Russia and the CIS. Russian is the primary language, with an English option. Available roles depend on your regions and employers.")],
-        [copy("Вы откликаетесь вместо меня?","Do you apply on my behalf?"),copy("Вы просматриваете вакансию и управляете откликом. Сервис помогает с поиском, оценкой и подготовкой текста; проверяйте содержание перед отправкой.","You review the role and control the application. The service helps with search, assessment, and drafts; review the content before sending.")],
-        [copy("Что означает оценка совпадения?","What does a match score mean?"),copy("Это подсказка для сравнения вашего профиля с требованиями вакансии. Она может ошибаться и не является оценкой работодателя или гарантией приглашения.","It helps compare your profile with job requirements. It can be wrong and is neither an employer assessment nor an interview guarantee.")],
-        [copy("Нужны ли API-ключи и установка?","Do I need API keys or an installation?"),copy("Нет. Вы работаете в браузере. Настройки моделей обслуживает сервис; в профиле нужны только сведения для поиска работы.","No. Use the app in your browser. Model settings are managed by the service; your profile contains your job-search preferences.")],
-        [copy("Можно попробовать без регистрации?","Can I try it without registering?"),copy("Да. Нажмите на экран в начале страницы или откройте демо. Все данные в просмотре: примеры, действия не отправляют реальные отклики.","Yes. Click the screen above or open the demo. Preview data is illustrative and actions do not send real applications.")]
-      ].map(([q,a])=><motion.details {...reveal} key={q} className="border-b border-white/10 py-5"><summary key="question" className="cursor-pointer text-base text-zinc-200">{q}</summary><p key="answer" className="mt-4 text-sm leading-7 text-zinc-400">{a}</p></motion.details>)}</section>
-      <motion.section {...reveal} className="border-y border-white/10 bg-gradient-to-r from-emerald-400/[0.06] to-transparent px-5 py-20 text-center"><h2 className="text-3xl font-medium">{copy("Найдите следующую работу.","Your next move is closer.")}</h2><p className="mb-7 mt-4 text-zinc-400">{copy("Начните с профиля. Подберите вакансии под ваш опыт.","Start with your profile. Discover what fits next.")}</p><Link href="/register" className={`${button} bg-[#d6e9de] text-black`}>{copy("Начать бесплатно","Start free")}<ArrowUpRight size={16}/></Link></motion.section>
-    </main>
-    <footer className="mx-auto grid w-full max-w-7xl gap-9 px-5 py-14 text-sm sm:grid-cols-[2fr_1fr_1fr] sm:px-8"><div><Link href="/landing" className="flex items-center gap-3 font-medium"><BrandLogo size={28}/>HH Job Copilot</Link><p className="mt-5 max-w-sm text-sm leading-6 text-zinc-500">{copy("Поиск работы на HeadHunter с понятными совпадениями и контекстом для следующего шага.","HeadHunter job search with clear matches and context for your next step.")}</p><p className="mt-5 text-xs text-zinc-600">© {new Date().getFullYear()} HH Job Copilot. {copy("Независимый сервис.","An independent service.")}</p></div><nav aria-label="Product footer" className="grid content-start gap-4 text-zinc-400"><a href="#how-it-works">{copy("Как это работает","How it works")}</a><a href="#pricing">{copy("Тарифы","Pricing")}</a><Link href="/demo">{copy("Демо кабинета","Dashboard demo")}</Link><Link href="/about">{copy("О проекте","About")}</Link></nav><nav aria-label="Support footer" className="grid content-start gap-4 text-zinc-400"><a href="https://t.me/wonkiiy">{copy("Поддержка","Support")}</a><Link href="/legal/privacy">{copy("Конфиденциальность","Privacy")}</Link><Link href="/legal/terms">{copy("Условия использования","Terms")}</Link><a href="#faq">{copy("Частые вопросы","FAQ")}</a></nav></footer>
-    <dialog ref={dialog} onClose={()=>opener.current?.focus()} className="fixed inset-0 m-auto max-h-[90dvh] w-[min(960px,94vw)] overflow-y-auto rounded-2xl border border-white/15 bg-[#101518] p-0 text-zinc-100 backdrop:bg-black/80">
-      <div className="flex items-center justify-between border-b border-white/10 p-5"><div><h2 className="text-lg">{copy("Попробуйте свой следующий шаг","Try your next step")}</h2><p className="mt-1 text-xs text-zinc-500">{copy("Пример данных · Ничего не отправляется","Sample data · Nothing is sent")}</p></div><button onClick={close} aria-label={copy("Закрыть просмотр","Close preview")} className="rounded-lg p-3 hover:bg-white/10"><X/></button></div>
-      <div className="grid gap-6 p-5 sm:grid-cols-2 sm:p-8"><div className="space-y-3">{roles.map((role,i)=><button key={role} onClick={()=>{setSelected(i);setSaved(false);}} className={`w-full rounded-xl border p-5 text-left ${selected===i?"border-emerald-300/50 bg-[#d6e9de]/5":"border-white/10"}`}><p className="text-sm">{role}</p><p className="mt-3 text-xs text-zinc-500">{copy("Удалённо · Пример компании","Remote · Example company")}</p><p className="mt-3 text-[#b8d6c4]">{94-i*4}% <ChevronRight className="inline" size={14}/></p></button>)}</div><div><h3 className="text-xl">{roles[selected]}</h3><p className="mt-5 text-sm leading-7 text-zinc-400">{copy("Ваш опыт совпадает с основным стеком. Вакансия предполагает работу над интерфейсами продукта и взаимодействие с командой. Уточните уровень ответственности и процесс найма перед откликом.","Your experience matches the core stack. The role involves product interfaces and team collaboration. Clarify responsibilities and the hiring process before applying.")}</p><button onClick={()=>setSaved(!saved)} aria-pressed={saved} className={`${button} mt-6 w-full bg-[#d6e9de] text-black`}>{saved?copy("Сохранено в примере","Saved in preview"):copy("Сохранить вакансию","Save role")}</button><Link href="/demo" className={`${button} mt-3 w-full border border-white/15`}>{copy("Открыть полное демо","Open full demo")}<ArrowUpRight size={16}/></Link></div></div>
-    </dialog>
-  </div>;
+  const menuToggle = useRef<HTMLButtonElement>(null);
+  const role = LANDING_ROLES[selected];
+  const alert = LANDING_ROLES[0];
+  const navigation = [
+    ["#preview", copy("Обзор продукта", "Product tour")],
+    ["#how-it-works", copy("Как это работает", "How it works")],
+    ["#pricing", copy("Тарифы", "Pricing")],
+    ["#faq", copy("Вопросы", "FAQ")],
+  ];
+  const accountHref = userEmail ? "/dashboard" : "/login";
+  const accountLabel = userEmail ? copy("Кабинет", "Dashboard") : copy("Войти", "Sign in");
+  const startHref = userEmail ? "/dashboard" : "/register";
+  const startLabel = userEmail ? accountLabel : copy("Начать бесплатно", "Start free");
+  const steps = [
+    { icon: FileText, title: copy("Расскажите о своём опыте", "Tell us about your experience"), description: copy("Добавьте резюме, навыки и желаемые роли. Укажите зарплату, город и формат работы.", "Add your resume, skills and target roles. Choose a salary range, location and workplace preference.") },
+    { icon: Search, title: copy("Разберитесь в совпадениях", "Understand each match"), description: copy("Запустите поиск по HeadHunter. Сравните требования с профилем, сильные стороны и вопросы, которые стоит уточнить.", "Search HeadHunter. Compare the requirements with your profile, see where you fit and what to clarify.") },
+    { icon: Bookmark, title: copy("Подготовьте отклик", "Prepare your application"), description: copy("Сохраните роль, подготовьте черновик письма и откликнитесь на HeadHunter. История и аналитика сохранят контекст.", "Save a role, draft a cover letter and apply on HeadHunter. History and Analytics keep the context together.") },
+  ];
+  const features = [
+    { icon: Send, title: copy("Вакансии в Telegram", "Matches in Telegram"), description: copy("Подключите Telegram в настройках и получайте уведомления о подходящих ролях.", "Connect Telegram in Settings to get alerts when promising roles appear.") },
+    { icon: BarChart3, title: copy("Прогресс поиска", "Search progress"), description: copy("Следите за сохранёнными ролями, откликами и распределением оценок в бесплатной аналитике.", "Track saved roles, applications and match scores in free Analytics.") },
+    { icon: Building2, title: "Company Intel", description: copy("Изучайте карьерные страницы и публичные контакты по найму. Проверяйте источники перед отправкой.", "Research career pages and public hiring contacts. Review the sources before reaching out.") },
+  ];
+  const plans = [
+    { title: copy("Бесплатно", "Free"), price: "$0", items: [copy("Поиск и оценка вакансий", "Job search and match explanations"), copy("Сохранённые вакансии и письма", "Saved roles and cover letters"), copy("Аналитика и история откликов", "Analytics and application tracking"), copy("Уведомления в Telegram", "Telegram vacancy alerts")], href: startHref, label: userEmail ? accountLabel : copy("Создать аккаунт", "Create free account") },
+    { title: "Company Intel", price: "250 Stars", items: [copy("Всё из бесплатного тарифа", "Everything in Free"), copy("Исследование компаний и источники", "Company research and sources"), copy("Публичные контакты по найму", "Public hiring contacts"), copy("Черновики сообщений работодателям", "Outreach drafts")], href: "https://t.me/wonkiiy", label: copy("Оформить доступ в Telegram", "Arrange access on Telegram") },
+  ];
+  const questions = [
+    [copy("Для кого этот сервис?", "Who is this for?"), copy("Для соискателей, которые ищут работу на HeadHunter, прежде всего в России и странах СНГ. Интерфейс доступен на русском и английском. Вакансии зависят от выбранных регионов и работодателей.", "For people searching on HeadHunter, primarily in Russia and the CIS. The interface is available in Russian and English. Available roles depend on your regions and employers.")],
+    [copy("Вы откликаетесь вместо меня?", "Do you apply on my behalf?"), copy("Вы просматриваете вакансию и управляете откликом. Сервис помогает с поиском, оценкой и черновиками. Проверяйте содержание перед отправкой.", "You review the role and control the application. The service helps with search, assessment and drafts. Review the content before sending.")],
+    [copy("Что означает оценка совпадения?", "What does a match score mean?"), copy("Это подсказка для сравнения вашего профиля с требованиями вакансии. Она может ошибаться и не гарантирует приглашение.", "It helps compare your profile with job requirements. It can be wrong and cannot guarantee an interview.")],
+    [copy("Нужны ли API-ключи и установка?", "Do I need API keys or an installation?"), copy("Вы работаете в браузере. В профиле нужны только сведения для поиска работы.", "Use the app in your browser. Your profile contains your job-search preferences.")],
+    [copy("Можно попробовать без регистрации?", "Can I try it without registering?"), copy("Да. Откройте интерактивный пример или полное демо. Они используют вымышленные данные.", "Yes. Open the interactive preview or the full demo. Both use sample data.")],
+  ];
+
+  return (
+    <div className="field-landing">
+      <a href="#content" className="field-skip">{copy("К содержанию", "Skip to content")}</a>
+      <header className="field-header" onKeyDown={(event) => {
+        if (event.key === "Escape" && menu) {
+          setMenu(false);
+          menuToggle.current?.focus();
+        }
+      }}>
+        <div className="field-wrap field-header-row">
+          <Link href="/landing" className="field-brand"><BrandLogo size={34} />{BRAND_NAME}</Link>
+          <nav aria-label={copy("Основная навигация", "Main navigation")} className="field-desktop-nav">
+            {navigation.map(([href, label]) => <a key={href} href={href}>{label}</a>)}
+          </nav>
+          <div className="field-header-actions">
+            <div className="field-language">
+              <button type="button" aria-label="Русский" aria-pressed={ru} onClick={() => setLanguage("ru")}>RU</button>
+              <button type="button" aria-label="English" aria-pressed={!ru} onClick={() => setLanguage("en")}>EN</button>
+            </div>
+            <Link href={accountHref} className="field-header-signin">{accountLabel}<ArrowUpRight size={15} /></Link>
+            <button ref={menuToggle} type="button" aria-label={menu ? copy("Закрыть меню", "Close navigation") : copy("Открыть меню", "Open navigation")} aria-expanded={menu} aria-controls={menu ? "field-mobile-navigation" : undefined} onClick={() => setMenu(!menu)} className="field-mobile-toggle">
+              {menu ? <X size={22} /> : <Menu size={22} />}
+            </button>
+          </div>
+        </div>
+        {menu && <nav id="field-mobile-navigation" aria-label={copy("Мобильное меню", "Mobile navigation")} className="field-mobile-nav">
+          {navigation.map(([href, label]) => <a key={href} href={href} onClick={() => setMenu(false)}>{label}<ArrowDown size={14} /></a>)}
+          <Link href={accountHref}>{accountLabel}<ArrowUpRight size={15} /></Link>
+        </nav>}
+      </header>
+
+      <main id="content" tabIndex={-1}>
+        <section className="field-hero field-wrap" aria-labelledby="landing-title">
+          <div className="field-hero-copy">
+            <h1 id="landing-title">{copy("Меньше поиска.", "Less searching.")} <em>{copy("Ближе к вашей работе.", "Closer to your next role.")}</em></h1>
+            <p>{copy("Подбирайте вакансии HeadHunter под свой опыт, сравнивайте условия и решайте, куда откликнуться.", "Find HeadHunter roles that fit your experience, compare the details and decide where to apply.")}</p>
+            <div className="field-actions">
+              <Link href={startHref} className="field-button">{startLabel}<ArrowUpRight size={18} /></Link>
+              <Link href="/demo" className="field-button field-button-quiet">{copy("Открыть демо", "Explore demo")}<ArrowRight size={18} /></Link>
+            </div>
+          </div>
+          <section id="preview" className="field-hero-product" aria-label={copy("Обзор продукта", "Product tour")}>
+            <ProductExperience ru={ru} opener={opener} onOpen={() => dialog.current?.showModal()} />
+          </section>
+        </section>
+
+        <section id="how-it-works" className="field-section field-wrap" aria-labelledby="workflow-title">
+          <div className="field-section-heading"><h2 id="workflow-title">{copy("Как устроен ваш поиск", "How your search comes together")}</h2></div>
+          <div className="field-steps">
+            {steps.map(({ icon: Icon, title, description }) => <article key={title}>
+              <Icon size={24} strokeWidth={1.5} aria-hidden="true" />
+              <h3>{title}</h3><p>{description}</p>
+            </article>)}
+          </div>
+        </section>
+
+        <section className="field-feature-section" aria-labelledby="field-features-title">
+          <div className="field-wrap field-feature-grid">
+            <div className="field-alert-visual">
+              <figure className="field-alert-window">
+                <figcaption className="field-alert-channel"><Send size={18} aria-hidden="true" /><strong>Telegram</strong><span>{copy("Пример уведомления", "Example notification")}</span></figcaption>
+                <div className="field-alert-message">
+                  <p>{copy("Найдена подходящая вакансия", "A match from your search")}</p>
+                  <strong>{alert.title}</strong>
+                  <p>{alert.company} · {copy("Удалённо", "Remote")}</p>
+                  <div className="field-alert-details"><span>{alert.salary}</span><strong>{alert.score}% {copy("совпадение", "match")}</strong></div>
+                </div>
+              </figure>
+            </div>
+            <div className="field-feature-content">
+              <h2 id="field-features-title">{copy("Держите поиск под рукой.", "Keep your search close.")}</h2>
+              {features.map(({ icon: Icon, title, description }) => <article key={title}>
+                <Icon size={21} strokeWidth={1.5} aria-hidden="true" /><div><h3>{title}</h3><p>{description}</p></div>
+              </article>)}
+            </div>
+          </div>
+        </section>
+
+        {activity}
+
+        <section id="pricing" aria-labelledby="pricing-title" className="field-section field-wrap field-pricing">
+          <div className="field-section-heading"><h2 id="pricing-title">{copy("Начните бесплатно. Узнайте больше, когда нужно.", "Start free. Go deeper when you need to.")}</h2></div>
+          <div className="field-plan-grid">
+            {plans.map(({ title, price, items, href, label }, index) => <article key={title} className={index ? "field-plan-highlight" : undefined}>
+              <h3>{title}</h3>
+              <p className="field-price">{price}<span>{copy("/ месяц", "/ month")}</span></p>
+              <ul>{items.map((text) => <li key={text}><Check size={16} aria-hidden="true" />{text}</li>)}</ul>
+              <Link href={href} className={index ? "field-button" : "field-button field-button-quiet"}>{label}<ArrowUpRight size={17} /></Link>
+              {index === 1 && <p className="field-plan-note">{copy("Напишите @wonkiiy для оформления или уточнения перевода через Telegram Wallet. Доступ активируется вручную. Стоимость Stars в долларах может отличаться.", "Contact @wonkiiy for access or a Telegram Wallet transfer. Access is activated manually. The USD cost of Stars varies.")}</p>}
+            </article>)}
+          </div>
+        </section>
+
+        <section id="faq" className="field-section field-wrap field-faq" aria-labelledby="faq-title">
+          <div className="field-section-heading"><h2 id="faq-title">{copy("Перед первым поиском", "Before your first search")}</h2></div>
+          <div>{questions.map(([question, answer]) => <details key={question}>
+            <summary>{question}<ChevronRight size={18} aria-hidden="true" /></summary><p>{answer}</p>
+          </details>)}</div>
+        </section>
+      </main>
+
+      <footer className="field-footer">
+        <div className="field-wrap field-footer-row">
+          <div><Link href="/landing" className="field-brand"><BrandLogo size={30} />{BRAND_NAME}</Link><p>© {new Date().getFullYear()} {BRAND_NAME}</p></div>
+          <nav aria-label={copy("Помощь и информация", "Help and information")}>
+            <Link href="/guide">{copy("Как пользоваться", "User guide")}</Link><Link href="/about">{copy("О проекте", "About")}</Link>
+            <Link href="/compare">{copy("Сравнение", "Compare")}</Link>
+            <a href="https://t.me/wonkiiy">{copy("Поддержка", "Support")}</a><Link href="/legal/privacy">{copy("Конфиденциальность", "Privacy")}</Link>
+            <Link href="/legal/terms">{copy("Условия использования", "Terms")}</Link>
+          </nav>
+          <Link href={startHref} className="field-button field-button-quiet">{startLabel}<ArrowUpRight size={16} /></Link>
+        </div>
+      </footer>
+
+      <dialog ref={dialog} onClose={() => opener.current?.focus()} aria-labelledby="field-preview-dialog-title" className="field-preview-dialog">
+        <div className="field-dialog-header">
+          <div><h2 id="field-preview-dialog-title">{copy("Попробуйте свой следующий шаг", "Try your next step")}</h2><p>{copy("Пример данных · Ничего не отправляется", "Sample data · Nothing is sent")}</p></div>
+          <button type="button" onClick={() => { dialog.current?.close(); opener.current?.focus(); }} aria-label={copy("Закрыть просмотр", "Close preview")}><X size={22} /></button>
+        </div>
+        <div className="field-dialog-grid">
+          <div className="field-dialog-roles">
+            {LANDING_ROLES.map((item, index) => <button type="button" key={item.title} aria-pressed={selected === index} onClick={() => { setSelected(index); setSaved(false); }}>
+              <span>{item.title}<small>{item.company} · {copy("Удалённо", "Remote")}</small></span><strong>{item.score}%</strong>
+            </button>)}
+          </div>
+          <div className="field-dialog-detail"><h3>{role.title}</h3><p>{copy("Ваш опыт совпадает с основным стеком. Уточните уровень ответственности и процесс найма перед откликом.", "Your experience matches the core stack. Clarify responsibilities and the hiring process before applying.")}</p>
+            <button type="button" onClick={() => setSaved(!saved)} aria-pressed={saved} className="field-button"><Bookmark size={17} fill={saved ? "currentColor" : "none"} />{saved ? copy("Сохранено в примере", "Saved in preview") : copy("Сохранить вакансию", "Save role")}</button>
+            <Link href="/demo" className="field-text-link">{copy("Открыть полное демо", "Open full demo")}<ArrowUpRight size={16} /></Link>
+          </div>
+        </div>
+      </dialog>
+    </div>
+  );
 }

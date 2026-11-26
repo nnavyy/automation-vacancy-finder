@@ -61,6 +61,8 @@ const proxyHandler = auth((req) => {
       pathname === "/" ||
       pathname === "/landing" ||
       pathname === "/demo" ||
+      pathname === "/guide" ||
+      pathname === "/compare" ||
       pathname === "/architecture" ||
       pathname.startsWith("/blog") ||
       pathname === "/about" ||
@@ -109,6 +111,6 @@ export const middleware = proxyHandler;
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico).*)",
+    "/((?!_next/static|_next/image|favicon\\.ico$|robots\\.txt$|sitemap\\.xml$).*)",
   ],
 };

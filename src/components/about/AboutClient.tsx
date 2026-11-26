@@ -1,59 +1,58 @@
 "use client";
 
-import React, { useState } from "react";
+import { useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import {
-  ArrowLeft,
-  Github,
-  Globe,
-  Mail,
-  Instagram,
-  ShieldCheck,
-  Terminal,
-  Database,
-  Cpu,
-  ArrowUpRight,
-  Sparkles,
-  Maximize2,
-  ChevronLeft,
-  ChevronRight,
-  Code2,
-  ExternalLink
+  ArrowUpRight, ChevronLeft, ChevronRight, Cpu, Database, Github, Globe, Instagram, Mail, ShieldCheck,
 } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
-
-interface AboutClientProps {
-  userEmail?: string | null;
-}
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { BRAND_NAME } from "@/lib/brand";
+import { useLanguage } from "@/lib/i18n";
+import "@/components/public/public.css";
 
 const GALLERY_ITEMS = [
   {
     id: "dashboard",
-    title: "Production Dashboard & Live Vacancy Feed",
-    desc: "Real-time HeadHunter vacancies evaluated by AI with compatibility ratings, compensation filters, and fast status toggles.",
-    src: "/screenshots/01_dashboard_overview.png",
-    tag: "Core Workspace",
+    file: "01_dashboard_overview",
+    en: { title: "Workspace overview", description: "The dashboard shows collection activity, new vacancies, and results from past searches." },
+    ru: { title: "Обзор кабинета", description: "На панели видны история сборов, новые вакансии и результаты прошлых поисков." },
   },
   {
     id: "split-view",
-    title: "Split-View Candidate Review Workspace",
-    desc: "Inspect full vacancy specifications, extracted tech stacks, and deterministic filter assertions side-by-side.",
-    src: "/screenshots/02_vacancies_split_view.png",
-    tag: "Review Engine",
+    file: "02_vacancies_split_view",
+    en: { title: "Vacancy review", description: "Select a vacancy to read the listing, compare its requirements with your skills, and save it for later." },
+    ru: { title: "Просмотр вакансии", description: "Выберите вакансию, чтобы прочитать объявление, сверить требования со своими навыками и сохранить её." },
   },
   {
-    id: "recruiter-osint",
-    title: "Engineering Recruiter OSINT Dossier",
-    desc: "Automated corporate domain resolution and direct hiring manager outreach to bypass flooded applicant portals.",
-    src: "/screenshots/06_find_recruiter_dossier.png",
-    tag: "OSINT Intelligence",
+    id: "recruiter",
+    file: "06_find_recruiter_dossier",
+    en: { title: "Recruiter research", description: "Review company details and public contact information when it is available." },
+    ru: { title: "Поиск рекрутера", description: "Изучите сведения о компании и общедоступные контакты, если они найдены." },
   },
   {
     id: "analytics",
-    title: "Application Conversion & Funnel Analytics",
-    desc: "Historical metrics tracking total scanned vacancies, AI synergy breakdown, and interview callback rates.",
-    src: "/screenshots/05_analytics_funnel.png",
-    tag: "Telemetry",
+    file: "05_analytics_funnel",
+    en: { title: "Search analytics", description: "Review vacancy and application activity recorded in the workspace." },
+    ru: { title: "Аналитика поиска", description: "Просмотрите данные о вакансиях и откликах, которые были записаны в кабинете." },
+  },
+];
+
+const ENGINEERING = [
+  {
+    icon: ShieldCheck,
+    en: { title: "Credential storage", description: "The app uses AES-256-GCM to encrypt supported stored integration credentials." },
+    ru: { title: "Хранение учётных данных", description: "Для шифрования поддерживаемых учётных данных интеграций используется AES-256-GCM." },
+  },
+  {
+    icon: Database,
+    en: { title: "Collection controls", description: "The collector checks for duplicates and limits concurrent requests while processing listings." },
+    ru: { title: "Управление сбором", description: "При обработке вакансий сборщик проверяет дубликаты и ограничивает число одновременных запросов." },
+  },
+  {
+    icon: Cpu,
+    en: { title: "Task-specific AI", description: "Vacancy scoring and cover-letter drafting can use separate model tiers when an AI provider is available." },
+    ru: { title: "Модели для разных задач", description: "При доступном ИИ-провайдере оценка вакансий и подготовка писем могут использовать модели разных уровней." },
   },
 ];
 
@@ -66,250 +65,152 @@ const TECH_STACK = [
   { name: "Docker", src: "/assets/docker.svg" },
 ];
 
-export default function AboutClient({ userEmail }: AboutClientProps) {
-  const [activeGalleryIdx, setActiveGalleryIdx] = useState(0);
+const aboutCopy = {
+  en: {
+    title: `About ${BRAND_NAME}`,
+    intro: "I built this workspace to make it easier to find suitable roles on HeadHunter and keep track of the applications I send.",
+    role: "Full-stack engineer and automation specialist",
+    bio: "I build web applications, data collection tools, and developer automation with TypeScript and PostgreSQL.",
+    portfolio: "Portfolio",
+    email: "Email",
+    stack: "Technology",
+    purpose: "Built around a HeadHunter search",
+    mission: "The app pulls vacancies from HeadHunter. It uses your profile to evaluate matches, keeps a shortlist of roles you save, and prepares cover-letter drafts for your review. You can connect Telegram for vacancy alerts.",
+    compare: "Compare job search tools",
+    engineering: "How the app works",
+    privacy: "Read the privacy notice",
+    archive: "Product archive",
+    archiveDescription: "Screenshots from earlier versions.",
+    previous: "Previous screenshot",
+    next: "Next screenshot",
+  },
+  ru: {
+    title: `О проекте ${BRAND_NAME}`,
+    intro: "Я создал этот сервис, чтобы проще находить подходящие вакансии на HeadHunter и отслеживать отправленные отклики.",
+    role: "Фулстек-разработчик и специалист по автоматизации",
+    bio: "Я разрабатываю веб-приложения, инструменты сбора данных и автоматизации на TypeScript и PostgreSQL.",
+    portfolio: "Портфолио",
+    email: "Почта",
+    stack: "Технологии",
+    purpose: "Поиск работы на HeadHunter",
+    mission: "Приложение собирает вакансии с HeadHunter, оценивает их по вашему профилю, сохраняет интересные позиции и готовит черновики сопроводительных писем для проверки. Для уведомлений о вакансиях можно подключить Telegram.",
+    compare: "Сравнить сервисы поиска работы",
+    engineering: "Как работает приложение",
+    privacy: "Читать политику конфиденциальности",
+    archive: "Архив интерфейсов",
+    archiveDescription: "Скриншоты предыдущих версий.",
+    previous: "Предыдущий скриншот",
+    next: "Следующий скриншот",
+  },
+};
 
-  const nextSlide = () => {
-    setActiveGalleryIdx((prev) => (prev + 1) % GALLERY_ITEMS.length);
-  };
+const linkClass = "inline-flex min-h-10 items-center gap-2 rounded-lg border border-field-line bg-field-panel px-3 text-sm font-medium hover:text-field-accent";
+const arrowClass = "grid size-11 shrink-0 place-items-center rounded-lg border border-field-line bg-field-panel text-field-muted hover:border-field-accent hover:text-field-accent";
 
-  const prevSlide = () => {
-    setActiveGalleryIdx((prev) => (prev - 1 + GALLERY_ITEMS.length) % GALLERY_ITEMS.length);
+export default function AboutClient(): React.JSX.Element {
+  const { language } = useLanguage();
+  const labels = aboutCopy[language];
+  const [index, setIndex] = useState(0);
+  const slide = GALLERY_ITEMS[index];
+  const slideCopy = slide[language];
+  const screenshot = `/screenshots/${slide.file}${language === "ru" ? "_ru" : ""}.png`;
+  const reduceMotion = useReducedMotion();
+
+  const changeSlide = (offset: number) => {
+    setIndex((current) => (current + offset + GALLERY_ITEMS.length) % GALLERY_ITEMS.length);
   };
 
   return (
-    <main className="pt-32 pb-24 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-      {/* Navigation Breadcrumb (Slide Down) */}
-      <motion.div
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="mb-8"
-      >
-        <Link
-          href="/"
-          className="inline-flex items-center gap-2 text-xs text-zinc-400 hover:text-white transition-colors"
-        >
-          <ArrowLeft className="w-3.5 h-3.5" />
-          <span>Back to Home</span>
+    <main lang={language} className="mx-auto max-w-6xl px-5 py-10 sm:px-8 sm:py-16">
+      <header className="max-w-3xl border-b border-field-line pb-9 sm:pb-12">
+        <h1 className="fw-public-title">{labels.title}</h1>
+        <p className="mt-5 max-w-xl text-base leading-7 text-field-muted">{labels.intro}</p>
+      </header>
+
+      <div className="mt-8 grid items-start gap-5 md:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
+        <section className="rounded-xl border border-field-line bg-field-panel p-5 sm:p-6">
+          <h2 className="text-xl font-semibold tracking-tight">Nanda (Zhafran)</h2>
+          <p className="mt-1 text-sm font-medium">{labels.role}</p>
+          <p className="mt-3 max-w-lg text-sm leading-6 text-field-muted">{labels.bio}</p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <a href="https://nandaz-portofolio.vercel.app" target="_blank" rel="noreferrer" className={linkClass}>
+              <Globe size={15} aria-hidden="true" />{labels.portfolio}
+            </a>
+            <a href="https://github.com/nnavyy" target="_blank" rel="noreferrer" className={linkClass}>
+              <Github size={15} aria-hidden="true" />GitHub @nnavyy
+            </a>
+            <a href="mailto:nandazhafran@gmail.com" className={linkClass}>
+              <Mail size={15} aria-hidden="true" />{labels.email}
+            </a>
+            <a href="https://www.instagram.com/rrqac_zsyons/" target="_blank" rel="noreferrer" className={linkClass}>
+              <Instagram size={15} aria-hidden="true" />@rrqac_zsyons
+            </a>
+          </div>
+        </section>
+
+        <section className="rounded-xl border border-field-line bg-field-panel p-5 sm:p-6">
+          <h2 className="text-lg font-semibold tracking-tight">{labels.stack}</h2>
+          <ul className="mt-4 grid grid-cols-2 gap-4 text-sm text-field-muted">
+            {TECH_STACK.map(({ name, src }) => (
+              <li key={name} className="flex min-w-0 items-center gap-2">
+                <Image src={src} alt="" width={18} height={18} className="shrink-0 object-contain" />{name}
+              </li>
+            ))}
+          </ul>
+        </section>
+      </div>
+
+      <section className="my-10 max-w-3xl">
+        <h2 className="text-2xl font-semibold tracking-tight">{labels.purpose}</h2>
+        <p className="mt-3 max-w-[68ch] text-sm leading-6 text-field-muted">{labels.mission}</p>
+        <Link href="/compare" className="mt-2 inline-flex min-h-10 items-center gap-1.5 text-sm font-semibold text-field-accent hover:underline">
+          {labels.compare}<ArrowUpRight size={15} aria-hidden="true" />
         </Link>
-      </motion.div>
+      </section>
 
-      {/* Profile Header (Slide from Left & Fade) */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-        className="bg-[#0e0e11] border border-white/10 rounded-2xl p-8 sm:p-10 shadow-2xl mb-12"
-      >
-        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-6 pb-8 border-b border-white/[0.08]">
-          <div className="space-y-3">
-            <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-white">
-              Nanda (Zhafran)
-            </h1>
-            <p className="text-base text-zinc-300 font-medium">
-              Full-Stack Engineer &amp; Automation Specialist
-            </p>
-            <p className="text-xs text-zinc-400 max-w-xl leading-relaxed">
-              Building web applications, web scrapers, and developer automation tools. Focused on clean TypeScript codebases, fast local workflows, and robust PostgreSQL databases.
-            </p>
+      <section className="border-t border-field-line pt-8">
+        <h2 className="text-2xl font-semibold tracking-tight">{labels.engineering}</h2>
+        <ul className="mt-4 grid gap-3 md:grid-cols-3">
+          {ENGINEERING.map(({ icon: Icon, ...locales }) => (
+            <li key={locales.en.title} className="rounded-xl border border-field-line bg-field-panel p-4 sm:p-5">
+              <Icon size={19} className="mb-3 text-field-accent" aria-hidden="true" />
+              <h3 className="text-sm font-semibold">{locales[language].title}</h3>
+              <p className="mt-2 text-sm leading-6 text-field-muted">{locales[language].description}</p>
+            </li>
+          ))}
+        </ul>
+        <Link href="/legal/privacy" className="mt-3 inline-flex min-h-10 items-center gap-1.5 text-sm font-semibold text-field-accent hover:underline">
+          {labels.privacy}<ArrowUpRight size={15} aria-hidden="true" />
+        </Link>
+      </section>
 
-            {/* Tech Stack Badges */}
-            <div className="pt-2 flex flex-wrap items-center gap-2">
-              {TECH_STACK.map((tech, idx) => (
-                <div
-                  key={idx}
-                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-900 border border-white/[0.06] text-[11px] text-zinc-300"
-                >
-                  <img src={tech.src} alt={tech.name} className="w-3.5 h-3.5 object-contain" />
-                  <span>{tech.name}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Quick Action Badges (Slide in from Right) */}
-          <div className="flex flex-wrap sm:flex-col gap-2.5 shrink-0">
-            <a
-              href="https://nandaz-portofolio.vercel.app"
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-medium text-black bg-white hover:bg-zinc-200 transition-all shadow-sm active:scale-95"
-            >
-              <Globe className="w-3.5 h-3.5" />
-              <span>Live Portfolio</span>
-              <ArrowUpRight className="w-3 h-3 text-zinc-500" />
-            </a>
-            <a
-              href="https://github.com/nnavyy"
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-medium text-white bg-zinc-900 border border-white/10 hover:bg-zinc-800 transition-all active:scale-95"
-            >
-              <Github className="w-3.5 h-3.5" />
-              <span>GitHub @nnavyy</span>
-            </a>
-            <a
-              href="mailto:nandazhafran@gmail.com"
-              className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-medium text-white bg-zinc-900 border border-white/10 hover:bg-zinc-800 transition-all active:scale-95"
-            >
-              <Mail className="w-3.5 h-3.5" />
-              <span>Contact Email</span>
-            </a>
-            <a
-              href="https://www.instagram.com/rrqac_zsyons/"
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-medium text-zinc-400 hover:text-white transition-colors"
-            >
-              <Instagram className="w-3.5 h-3.5" />
-              <span>@rrqac_zsyons</span>
-            </a>
-          </div>
-        </div>
-
-        {/* Mission & Why HH Job Copilot was Built */}
-        <div className="pt-8 space-y-6 text-xs text-zinc-300 leading-relaxed">
+      <section className="mt-10 overflow-hidden rounded-xl border border-field-line bg-field-panel" aria-labelledby="archive-title">
+        <div className="flex flex-wrap items-center justify-between gap-4 px-4 py-5 sm:px-6">
           <div>
-            <h2 className="text-base font-semibold text-white mb-2">
-              Why I Built HH Job Copilot
-            </h2>
-            <p className="text-zinc-400 leading-relaxed mb-3">
-              Most commercial job automation SaaS tools (like LoopCV, LazyApply, or Sonara) charge anywhere from $39 to $199 every month. Despite their high subscription fees, they suffer from critical limitations:
-            </p>
-            <ul className="space-y-2 text-zinc-300 pl-4 list-disc marker:text-zinc-600 mb-4">
-              <li>They fail completely on HeadHunter (hh.ru) because they lack Cyrillic text parsing, composite search query handling, and Russian IT terminology models.</li>
-              <li>They enforce strict daily quotas (10 - 25 applications per day) to force users into higher paid tiers.</li>
-              <li>They store your resume, credentials, and search behaviors on proprietary third-party cloud servers with zero privacy guarantees.</li>
-            </ul>
-            <p className="text-zinc-400 leading-relaxed">
-              I engineered <strong>HH Job Copilot</strong> as a modern, dedicated AI copilot and career automation service. It operates directly against HeadHunter&apos;s public feeds, executes high-precision AI evaluations on secure infrastructure, enforces a curated vacancy cap to keep your pipeline clean and relevant, and delivers high-synergy listings straight to your personal Telegram.
-            </p>
+            <h2 id="archive-title" className="text-2xl font-semibold tracking-tight">{labels.archive}</h2>
+            <p className="mt-1 text-sm text-field-muted">{labels.archiveDescription}</p>
           </div>
-
-          {/* Core Engineering Tenets */}
-          <div className="pt-4 border-t border-white/[0.08]">
-            <h2 className="text-base font-semibold text-white mb-4">
-              Core Engineering Tenets
-            </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="p-4 rounded-xl bg-zinc-950/60 border border-white/[0.06]">
-                <ShieldCheck className="w-4 h-4 text-emerald-400 mb-2" />
-                <div className="font-semibold text-white mb-1">Zero-Trust &amp; Privacy</div>
-                <div className="text-[11px] text-zinc-400 leading-relaxed">
-                  All session tokens and API keys are encrypted with AES-256-GCM. Your candidate data never leaves your local PostgreSQL database.
-                </div>
-              </div>
-              <div className="p-4 rounded-xl bg-zinc-950/60 border border-white/[0.06]">
-                <Database className="w-4 h-4 text-sky-400 mb-2" />
-                <div className="font-semibold text-white mb-1">Idempotent Pipelines</div>
-                <div className="text-[11px] text-zinc-400 leading-relaxed">
-                  Compound indexing and bounded concurrency pools eliminate duplicate postings, rate-limit bans, and database table bloat.
-                </div>
-              </div>
-              <div className="p-4 rounded-xl bg-zinc-950/60 border border-white/[0.06]">
-                <Cpu className="w-4 h-4 text-violet-400 mb-2" />
-                <div className="font-semibold text-white mb-1">Task-Specific AI Routing</div>
-                <div className="text-[11px] text-zinc-400 leading-relaxed">
-                  Fast-tier models (Groq/Gemini Flash) handle high-volume compatibility scoring, while advanced reasoning is reserved for cover letter synthesis.
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </motion.div>
-
-      {/* Production Project Showcase Gallery Carousel */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.2 }}
-        className="bg-[#0e0e11] border border-white/10 rounded-2xl p-6 sm:p-8 shadow-2xl mb-12"
-      >
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-6 mb-6 border-b border-white/[0.08] gap-4">
-          <div>
-            <h2 className="text-xl font-bold text-white mt-1">
-              HH Job Copilot in Production
-            </h2>
-          </div>
-
-          {/* Carousel Navigation Buttons */}
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={prevSlide}
-              className="p-2 rounded-xl bg-zinc-900 border border-white/10 text-zinc-400 hover:text-white hover:border-white/20 transition-all cursor-pointer"
-              title="Previous Screenshot"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <span className="text-xs font-mono text-zinc-500 px-2">
-              {activeGalleryIdx + 1} / {GALLERY_ITEMS.length}
-            </span>
-            <button
-              type="button"
-              onClick={nextSlide}
-              className="p-2 rounded-xl bg-zinc-900 border border-white/10 text-zinc-400 hover:text-white hover:border-white/20 transition-all cursor-pointer"
-              title="Next Screenshot"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
+            <button type="button" onClick={() => changeSlide(-1)} aria-label={labels.previous} className={arrowClass}><ChevronLeft size={18} aria-hidden="true" /></button>
+            <span className="px-2 text-xs tabular-nums text-field-muted">{index + 1} / {GALLERY_ITEMS.length}</span>
+            <button type="button" onClick={() => changeSlide(1)} aria-label={labels.next} className={arrowClass}><ChevronRight size={18} aria-hidden="true" /></button>
           </div>
         </div>
 
-        {/* Gallery Preview Box */}
-        <div className="space-y-4">
-          <div className="relative rounded-2xl overflow-hidden border border-white/10 bg-black group">
-            <AnimatePresence mode="wait">
-              <motion.img
-                key={GALLERY_ITEMS[activeGalleryIdx].id}
-                src={GALLERY_ITEMS[activeGalleryIdx].src}
-                alt={GALLERY_ITEMS[activeGalleryIdx].title}
-                initial={{ opacity: 0, scale: 0.98 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.98 }}
-                transition={{ duration: 0.3 }}
-                className="w-full h-auto max-h-[520px] object-cover object-top"
-              />
+        <figure className="min-w-0">
+          <div className="overflow-hidden border-y border-field-line bg-field-raised">
+            <AnimatePresence initial={false} mode="wait">
+              <motion.div key={slide.id} initial={{ opacity: reduceMotion ? 1 : 0 }} animate={{ opacity: 1 }} exit={{ opacity: reduceMotion ? 1 : 0 }} transition={{ duration: reduceMotion ? 0 : 0.17 }} className="relative aspect-video">
+                <Image src={screenshot} alt={slideCopy.title} fill sizes="(max-width: 1152px) 100vw, 1086px" className="object-contain" />
+              </motion.div>
             </AnimatePresence>
-
-            {/* Tag Badge */}
-            <div className="absolute top-4 left-4">
-              <span className="px-3 py-1 rounded-full bg-black/80 border border-white/20 text-xs font-mono text-white backdrop-blur-md">
-                {GALLERY_ITEMS[activeGalleryIdx].tag}
-              </span>
-            </div>
           </div>
-
-          {/* Screenshot Caption & Switcher Tabs */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-2">
-            <div>
-              <h3 className="text-sm font-semibold text-white">
-                {GALLERY_ITEMS[activeGalleryIdx].title}
-              </h3>
-              <p className="text-xs text-zinc-400 mt-1 max-w-2xl leading-relaxed">
-                {GALLERY_ITEMS[activeGalleryIdx].desc}
-              </p>
-            </div>
-
-            <div className="flex flex-wrap gap-1.5 shrink-0">
-              {GALLERY_ITEMS.map((item, idx) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => setActiveGalleryIdx(idx)}
-                  className={`px-3 py-1 rounded-lg text-xs font-mono transition-all cursor-pointer ${
-                    activeGalleryIdx === idx
-                      ? "bg-white text-black font-semibold shadow-sm"
-                      : "bg-zinc-900 text-zinc-400 border border-white/[0.06] hover:text-white"
-                  }`}
-                >
-                  0{idx + 1}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      </motion.div>
+          <figcaption className="px-4 py-5 sm:px-6" aria-live="polite">
+            <h3 className="text-sm font-semibold">{slideCopy.title}</h3>
+            <p className="mt-1 text-sm leading-6 text-field-muted">{slideCopy.description}</p>
+          </figcaption>
+        </figure>
+      </section>
     </main>
   );
 }

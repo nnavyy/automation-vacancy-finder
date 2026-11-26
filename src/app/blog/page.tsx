@@ -1,9 +1,11 @@
 import React from "react";
 import Link from "next/link";
-import { ArrowLeft, Clock, ArrowRight, BookOpen } from "lucide-react";
+import { ArrowLeft, Clock, ArrowRight } from "lucide-react";
 import LandingHeader from "@/components/landing/LandingHeader";
 import LandingFooter from "@/components/landing/LandingFooter";
+import "@/components/public/public.css";
 import { auth } from "@/lib/auth";
+import type { BlogPostSlug } from "@/lib/blog-slugs";
 
 export const metadata = {
   title: "Engineering Blog - HH Job Copilot",
@@ -52,18 +54,18 @@ export default async function BlogPage() {
       excerpt:
         "How automated corporate domain resolution and executive email heuristics enable direct candidate outreach to engineering leads and tech recruiters before listings are flooded.",
     },
-  ];
+  ] satisfies { id: BlogPostSlug; title: string; date: string; readTime: string; category: string; excerpt: string }[];
 
   return (
-    <div className="min-h-screen bg-[#09090b] text-white selection:bg-white selection:text-black antialiased">
+    <div className="fw-public-theme min-h-screen bg-public-950 text-public-100 antialiased">
       <LandingHeader userEmail={userEmail} />
 
-      <main className="pt-32 pb-24 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+      <main className="pt-10 sm:pt-16 pb-20 max-w-6xl mx-auto px-5 sm:px-8">
         {/* Breadcrumb */}
         <div className="mb-8">
           <Link
             href="/"
-            className="inline-flex items-center gap-2 text-xs text-zinc-400 hover:text-white transition-colors"
+            className="inline-flex items-center gap-2 text-xs text-public-400 hover:text-public-100 transition-colors"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
             <span>Back to Home</span>
@@ -71,14 +73,14 @@ export default async function BlogPage() {
         </div>
 
         {/* Header */}
-        <div className="max-w-2xl mb-14">
-          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-white mb-3">
+        <header className="mb-12 max-w-3xl">
+          <h1 className="fw-public-title mb-4">
             Articles &amp; Architecture Notes
           </h1>
-          <p className="text-sm text-zinc-400 leading-relaxed">
+          <p className="text-base text-public-400 leading-relaxed">
             In-depth documentation, benchmark studies, and design rationale behind our autonomous vacancy finder and AI scoring pipelines.
           </p>
-        </div>
+        </header>
 
         {/* Article Cards Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -86,11 +88,11 @@ export default async function BlogPage() {
             <Link
               key={art.id}
               href={`/blog/${art.id}`}
-              className="bg-[#0e0e11] border border-white/10 rounded-2xl p-6 sm:p-7 shadow-xl hover:border-white/25 hover:bg-[#121217] transition-all flex flex-col justify-between group cursor-pointer block"
+              className="bg-field-panel border border-field-line rounded-2xl p-6 sm:p-7 hover:border-field-accent/50 hover:bg-field-raised transition-all flex flex-col justify-between group cursor-pointer block"
             >
               <div>
-                <div className="flex items-center justify-between text-[11px] text-zinc-500 mb-3">
-                  <span className="font-mono px-2 py-0.5 rounded bg-zinc-900 border border-white/[0.06] text-zinc-300">
+                <div className="flex items-center justify-between text-xs text-public-400 mb-3">
+                  <span className="font-mono px-2 py-0.5 rounded bg-public-900 border border-field-line text-public-300">
                     {art.category}
                   </span>
                   <div className="flex items-center gap-1.5">
@@ -99,26 +101,26 @@ export default async function BlogPage() {
                   </div>
                 </div>
 
-                <h2 className="text-base font-semibold text-white group-hover:text-zinc-200 transition-colors mb-2.5 leading-snug">
+                <h2 className="text-xl font-semibold tracking-tight text-public-100 group-hover:text-field-accent transition-colors mb-2.5 leading-snug">
                   {art.title}
                 </h2>
 
-                <p className="text-xs text-zinc-400 leading-relaxed mb-6 font-normal">
+                <p className="text-sm text-public-400 leading-relaxed mb-6 font-normal">
                   {art.excerpt}
                 </p>
               </div>
 
               <div>
-                <div className="text-[11px] text-zinc-500 mb-3 flex items-center gap-2">
+                <div className="text-xs text-public-400 mb-3 flex items-center gap-2">
                   <span className="w-5 h-5 rounded-full bg-white text-black font-bold text-[9px] flex items-center justify-center">
                     NZ
                   </span>
-                  <span>Written by <strong className="text-zinc-300 font-medium">Nanda Zhafran (@nnavyy)</strong></span>
+                  <span>Written by <strong className="text-public-300 font-medium">Nanda Zhafran (@nnavyy)</strong></span>
                 </div>
 
-                <div className="pt-3 border-t border-white/[0.06] flex items-center justify-between text-xs text-zinc-500">
+                <div className="pt-3 border-t border-field-line flex items-center justify-between text-xs text-public-500">
                   <span>{art.date}</span>
-                  <span className="inline-flex items-center gap-1 text-white font-medium group-hover:translate-x-1 transition-transform">
+                  <span className="inline-flex items-center gap-1 text-public-100 font-medium group-hover:translate-x-1 transition-transform">
                     <span>Read Article</span>
                     <ArrowRight className="w-3.5 h-3.5" />
                   </span>

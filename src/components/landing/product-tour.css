@@ -1,0 +1,91 @@
+.field-tour {
+  --tour-surface: #e9eeff;
+  --tour-ink: var(--fw-text);
+  --tour-muted: var(--fw-muted);
+  --tour-line: var(--fw-border);
+  color: var(--tour-ink);
+}
+
+.tour-rail { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); }
+.tour-shoulder { position: relative; min-height: 54px; overflow: hidden; border-radius: 16px 0 0; background: linear-gradient(var(--tour-surface), var(--tour-surface)) left bottom / max(0px, 100% - 80px) 100% no-repeat; }
+.tour-shoulder svg { position: absolute; inset: 0 0 0 auto; width: min(100%, 84px); height: 100%; fill: var(--tour-surface); }
+.tour-shoulder-end { transform: scaleX(-1); }
+.tour-picker { display: flex; align-items: center; justify-content: center; gap: .15rem; padding: .1rem .16rem .52rem; color: var(--tour-muted); }
+.tour-picker button { display: inline-flex; align-items: center; justify-content: center; gap: .38rem; flex: none; min-height: 2.65rem; padding: .47rem .55rem; border: 1px solid transparent; border-radius: 8px; font-size: .78rem; font-weight: 600; }
+.tour-picker button svg { flex: none; }
+.tour-picker button:hover { background: var(--fw-elevated); color: var(--tour-ink); }
+.tour-picker [aria-pressed="true"] { border-color: #cbd5fd; color: var(--fw-accent); background: var(--fw-accent-soft); }
+.tour-picker .tour-play { width: 2.65rem; padding-inline: .55rem; }
+.tour-play:disabled { opacity: .45; }
+
+.tour-stage { background: var(--tour-surface); padding: clamp(.85rem, 2.3vw, 1.75rem); border-radius: 0 0 16px 16px; }
+.tour-window { width: 100%; background: var(--fw-surface); border-radius: 12px; box-shadow: 0 14px 30px rgb(34 53 112 / 12%); }
+.tour-window-header { display: flex; align-items: center; justify-content: space-between; gap: .5rem; padding: .85rem 1rem; border-bottom: 1px solid var(--tour-line); color: var(--tour-muted); font-size: .73rem; }
+.tour-window-header span:first-child { color: var(--tour-ink); font-weight: 700; }
+.tour-window-header span:last-child { text-align: end; }
+.tour-panel { min-height: 17.6rem; padding: clamp(.74rem, 1.9vw, 1.45rem); }
+.tour-matches { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: clamp(.7rem, 1.8vw, 1.25rem); }
+.tour-roles { display: grid; align-content: start; gap: .45rem; }
+.tour-roles button { min-height: 3.5rem; display: flex; align-items: center; justify-content: space-between; gap: .4rem; padding: .55rem .7rem; text-align: start; border: 1px solid var(--tour-line); border-radius: 8px; color: var(--tour-ink); }
+.tour-roles button:hover { background: var(--fw-elevated); }
+.tour-roles button[aria-pressed="true"] { border-color: #9aaaf4; background: #f1f4ff; }
+.tour-roles strong, .tour-roles small { display: block; overflow-wrap: anywhere; }
+.tour-roles strong { font-size: .84rem; font-weight: 650; }
+.tour-roles small { margin-top: .16rem; color: var(--tour-muted); font-size: .73rem; }
+.tour-roles svg { flex: none; color: var(--fw-accent); }
+
+.tour-match-glance { display: grid; align-content: start; align-self: start; padding: clamp(.75rem, 1.85vw, 1.3rem); border: 1px solid var(--tour-line); border-radius: 9px; background: #f7f9fd; }
+.tour-match-glance h3 { margin-bottom: .75rem; color: var(--tour-ink); font-size: .97rem; font-weight: 700; letter-spacing: -.02em; overflow-wrap: anywhere; }
+.tour-score { display: flex; align-items: baseline; justify-content: space-between; gap: .4rem; }
+.tour-score strong { color: var(--fw-lime); font: 700 clamp(1.5rem, 2.75vw, 2.5rem)/1 var(--fw-display); letter-spacing: -.04em; }
+.tour-score small { color: var(--tour-muted); font-size: .74rem; }
+.tour-match-meter { width: 100%; height: .35rem; margin-top: .55rem; appearance: none; border: 0; border-radius: 4px; overflow: hidden; background: var(--fw-match-soft); color: var(--fw-lime); }
+.tour-match-meter::-webkit-progress-bar { background: var(--fw-match-soft); }
+.tour-match-meter::-webkit-progress-value { background: var(--fw-lime); }
+.tour-match-meter::-moz-progress-bar { background: var(--fw-lime); }
+.tour-match-details { display: grid; gap: .25rem; margin-block: .85rem .36rem; font-size: .75rem; line-height: 1.45; color: var(--tour-muted); }
+.tour-save { display: inline-flex; align-items: center; justify-self: start; gap: .42rem; min-height: 2.05rem; color: var(--fw-accent); font-size: .82rem; font-weight: 650; }
+.tour-save:hover { text-decoration: underline; text-underline-offset: .22em; }
+
+.tour-profile, .tour-activity { width: 100%; }
+.tour-profile h3, .tour-activity h3 { font: 700 clamp(1.2rem, 2.3vw, 1.75rem)/1.17 var(--fw-display); letter-spacing: -.03em; }
+.tour-sample-copy { margin-block: .8rem; padding: .85rem; border: 1px solid var(--tour-line); border-radius: 8px; color: var(--tour-ink); background: #f5f7fc; font-size: .86rem; line-height: 1.55; }
+.tour-profile ul { display: flex; flex-wrap: wrap; gap: .55rem .9rem; }
+.tour-profile li, .tour-inline, .tour-draft-note { display: flex; align-items: center; gap: .4rem; font-size: .81rem; }
+.tour-profile li svg, .tour-draft-note svg { flex: none; color: var(--fw-accent); }
+.tour-inline { min-height: 2.6rem; margin-top: .75rem; color: var(--fw-accent); font-weight: 650; }
+.tour-inline:hover { text-decoration: underline; }
+
+.tour-activity-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .55rem; }
+.tour-period { display: flex; gap: .12rem; padding: .15rem; border: 1px solid var(--tour-line); border-radius: 8px; }
+.tour-period button { min-height: 2rem; border-radius: 5px; padding: .24rem .55rem; font-size: .71rem; color: var(--tour-muted); }
+.tour-period [aria-pressed="true"] { color: var(--fw-accent); background: var(--fw-accent-soft); font-weight: 650; }
+.tour-chart-totals { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .32rem; margin-block: .8rem; }
+.tour-chart-totals > div { padding-inline-start: .5rem; border-inline-start: 1px solid #b3c1e2; }
+.tour-chart-totals dt { font-size: .68rem; color: var(--tour-muted); }
+.tour-chart-totals dd { font: 700 clamp(1.45rem, 3vw, 2.2rem)/1.1 var(--fw-display); font-variant-numeric: tabular-nums; }
+.tour-chart-totals dd > span { display: inline-block; }
+.tour-chart { height: clamp(4.7rem, 8vw, 6.65rem); padding-inline: .35rem; display: flex; align-items: end; gap: clamp(.25rem, 1.05vw, .75rem); border-bottom: 1px solid #b6c3db; background: repeating-linear-gradient(to top, transparent 0 calc(25% - 1px), var(--tour-line) 0 25%); }
+.tour-chart > span { flex: 1 1 0; background: #8d9df6; border-radius: 4px 4px 0 0; transform-origin: bottom; }
+.tour-chart > span:last-child { background: var(--fw-accent); }
+.tour-chart-axis { display: flex; justify-content: space-between; margin-top: .32rem; color: var(--tour-muted); font-size: .68rem; }
+.tour-caption { margin-top: .85rem; display: flex; justify-content: space-between; align-items: center; gap: .6rem .8rem; }
+.tour-caption p { color: var(--tour-muted); font-size: .78rem; line-height: 1.5; }
+.tour-caption button { display: inline-flex; align-items: center; justify-content: center; gap: .4rem; flex: none; padding: .4rem .6rem; min-height: 2.55rem; background: var(--fw-surface); color: var(--fw-accent); border: 1px solid #b8c5fa; border-radius: 8px; font-size: .79rem; font-weight: 650; }
+.tour-caption button:hover { border-color: var(--fw-accent); }
+
+@media (max-width: 710px) {
+  .tour-rail { display: block; }
+  .tour-shoulder { display: none; }
+  .tour-picker { flex-wrap: wrap; justify-content: flex-start; padding: 0 0 .57rem; }
+  .tour-stage { border-radius: 12px; }
+}
+@media (max-width: 535px) {
+  .tour-picker { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)) 2.65rem; }
+  .tour-picker button { justify-content: flex-start; padding-inline: .44rem; }
+  .tour-picker .tour-play { grid-row: 1 / span 2; grid-column: 3; justify-content: center; justify-self: end; align-self: center; }
+  .tour-matches { grid-template-columns: minmax(0, 1fr); }
+  .tour-roles button { min-height: 3.25rem; }
+  .tour-panel { min-height: 13rem; }
+  .tour-caption { align-items: flex-start; flex-direction: column; }
+}

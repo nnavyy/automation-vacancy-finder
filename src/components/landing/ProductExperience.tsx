@@ -1,44 +1,137 @@
 "use client";
-import { useEffect, useState, type RefObject } from "react";
-import Link from "next/link";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { ArrowUpRight, ArrowRight, Check, FileText, Search, Pause, Play, Bookmark, ChevronRight } from "lucide-react";
 
-export default function ProductExperience({ ru, onOpen, opener }: { ru: boolean; onOpen: () => void; opener: RefObject<HTMLButtonElement | null> }): React.JSX.Element {
+import { useEffect, useRef, useState, type RefObject } from "react";
+import { AnimatePresence, motion, useInView } from "framer-motion";
+import { ArrowDownRight, ArrowRight, ArrowUpRight, BarChart3, Bookmark, Check, ChevronRight, FileText, Pause, Play, Search, SlidersHorizontal } from "lucide-react";
+import { BRAND_NAME } from "@/lib/brand";
+import { useLandingMotion } from "./useLandingMotion";
+import "./product-tour.css";
+
+export const LANDING_ROLES = [
+  { title: "Frontend Developer", company: "Pixel Studio", score: 94, stack: "React · TypeScript", salary: "180 000–240 000 ₽" },
+  { title: "Full Stack Engineer", company: "Northstar Labs", score: 90, stack: "Node.js · React", salary: "200 000–260 000 ₽" },
+  { title: "Product Engineer", company: "Signal Works", score: 86, stack: "TypeScript · PostgreSQL", salary: "185 000–230 000 ₽" },
+];
+
+const ACTIVITY = {
+  week: { saved: 8, applied: 3, bars: [2, 3, 4, 2, 5, 3, 5] },
+  month: { saved: 19, applied: 11, bars: [4, 7, 10, 5, 8, 13, 9, 12, 10, 8] },
+};
+
+function TourActivity({ ru }: { ru: boolean }) {
   const copy = (r: string, e: string) => ru ? r : e;
-  const reduce = useReducedMotion();
-  const [step, setStep] = useState(0);
-  const [playing, setPlaying] = useState(true);
-  const [role, setRole] = useState(0);
-  const [saved, setSaved] = useState(false);
-  const titles = ["Frontend Developer", "Full Stack Engineer", "Product Engineer"];
-  const steps = [copy("Ваш профиль", "Your profile"), copy("Подходящие вакансии", "Matching roles"), copy("Готовый отклик", "Your application")];
-  useEffect(() => {
-    if (!playing || reduce) return;
-    const timer = setInterval(() => setStep(s => (s + 1) % 3), 6000);
-    return () => clearInterval(timer);
-  }, [playing, reduce]);
-  const chooseStep = (s: number) => { setStep(s); setPlaying(false); };
-  return <section className="product-experience mx-auto max-w-7xl px-5 pb-20 pt-12 sm:px-8 sm:pt-16">
-    <div className="grid items-end gap-6 pb-10 lg:grid-cols-[1.5fr_1fr] lg:gap-20">
-      <motion.h1 initial={false} animate={{y:0}} className="max-w-3xl text-[clamp(2.5rem,5.5vw,5rem)] font-medium leading-[1.04] tracking-[-0.045em]">{copy("Меньше поиска.","Less searching.")}<br/><span className="text-[#b7c9bf]">{copy("Ближе к вашей работе.","Closer to your next role.")}</span></motion.h1>
-      <div className="pb-1"><p className="max-w-md text-base leading-7 text-zinc-400">{copy("Вакансии HeadHunter, которые подходят вашему опыту. Сравните условия, подготовьте письмо и решите, куда откликнуться.","HeadHunter roles that fit your experience. Compare the details, prepare a letter, and decide where to apply.")}</p><div className="mt-6 flex items-center gap-6"><Link href="/register" className="inline-flex items-center gap-3 rounded-md bg-[#d6e9de] px-5 py-3 text-sm font-semibold text-[#13251c] transition-colors hover:bg-white active:scale-[0.98]">{copy("Начать бесплатно","Start free")}<ArrowUpRight size={16}/></Link><Link href="/demo" className="inline-flex items-center gap-2 text-sm text-zinc-300 hover:text-white">{copy("Открыть демо","Explore demo")}<ArrowRight size={16}/></Link></div></div>
+  const [period, setPeriod] = useState<keyof typeof ACTIVITY>("week");
+  const data = ACTIVITY[period];
+  const matches = data.bars.reduce((sum, value) => sum + value, 0);
+  const motionAllowed = useLandingMotion();
+
+  return <div className="tour-activity">
+    <div className="tour-activity-header">
+      <h3>{copy("Активность поиска", "Search activity")}</h3>
+      <div className="tour-period" aria-label={copy("Период", "Time range")}>
+        <button type="button" aria-pressed={period === "week"} onClick={() => setPeriod("week")}>{copy("7 дней", "7 days")}</button>
+        <button type="button" aria-pressed={period === "month"} onClick={() => setPeriod("month")}>{copy("30 дней", "30 days")}</button>
+      </div>
     </div>
-    <div id="preview" className="scroll-mt-24 overflow-hidden rounded-xl border border-white/15 bg-[#101714] shadow-[0_30px_100px_-40px_#000]">
-      <div className="flex items-center justify-between gap-3 border-b border-white/10 px-5 py-4 text-xs"><span className="font-medium tracking-wide text-zinc-200">JOB COPILOT</span><span className="text-zinc-500">{copy("Интерактивный пример", "Interactive example")}</span></div>
-      <div className="grid lg:grid-cols-[260px_1fr]">
-        <aside className="hidden border-r border-white/10 bg-[#0c120f] p-7 lg:block"><FileText size={24} className="text-[#9cb6a6]"/><p className="mt-5 text-lg">{copy("Ваш опыт задаёт направление", "Your experience sets the direction")}</p><p className="mt-3 text-sm leading-6 text-zinc-500">{copy("Один профиль для поиска, оценки и сопроводительных писем.","One profile for search, match explanations, and cover letters.")}</p><div className="mt-10 space-y-5 text-xs text-zinc-400"><div className="flex justify-between"><span>{copy("Специализация","Role")}</span><span className="text-zinc-200">Frontend</span></div><div className="flex justify-between"><span>{copy("Опыт","Experience")}</span><span className="text-zinc-200">3+ {copy("года","years")}</span></div><div className="flex justify-between"><span>{copy("Формат","Workplace")}</span><span className="text-zinc-200">{copy("Удалённо","Remote")}</span></div></div><div className="mt-8 border-t border-white/10 pt-5 text-xs leading-5 text-zinc-600">{copy("Данные вымышлены. Реальные отклики не отправляются.","Illustrative data. No real applications are sent.")}</div></aside>
-        <div className="min-h-[410px] overflow-hidden bg-[radial-gradient(ellipse_at_top_right,#20342a55,transparent_70%)] p-5 sm:p-8">
-          <AnimatePresence mode="wait" initial={false}><motion.div key={step} initial={{opacity:0,x:reduce?0:16}} animate={{opacity:1,x:0}} exit={{opacity:0,x:reduce?0:-16}} transition={{type:"spring",bounce:0,duration:0.35}}>
-            {step===0 ? <div><div className="mb-6 flex items-center gap-3 text-sm text-zinc-400"><Search size={17}/>{copy("Что ищем?","What are you looking for?")}</div><div className="max-w-xl rounded-lg border border-white/15 bg-[#1b2520] p-6 text-lg leading-8">{copy("Frontend-разработчик. React и TypeScript. Удалённая работа, от 180 000 ₽.","Frontend developer. React and TypeScript. Remote, from 180,000 ₽.")}</div><div className="mt-7 grid gap-4 sm:grid-cols-3">{[copy("React / TypeScript","React / TypeScript"),copy("От 180 000 ₽","From 180,000 ₽"),copy("Удалённый формат","Remote workplace")].map((text,i)=><motion.div key={text} initial={reduce?false:{y:12}} animate={{y:0}} transition={{delay:i*0.1}} className="border-l border-[#6b8b79] pl-4"><Check size={15} className="mb-3 text-[#a2c5b0]"/><p className="text-sm text-zinc-300">{text}</p></motion.div>)}</div><button onClick={()=>chooseStep(1)} className="mt-8 flex items-center gap-3 text-sm text-[#c2dece] hover:text-white">{copy("Показать подборку","Show matches")}<ArrowRight size={16}/></button></div>
-            : step===1 ? <div className="grid gap-6 sm:grid-cols-[1fr_1fr]"><div><h2 className="mb-5 text-lg">{copy("Есть что рассмотреть","Worth a closer look")}</h2>{titles.map((title,i)=><button key={title} onClick={()=>{setRole(i);setSaved(false);setPlaying(false);}} aria-pressed={role===i} className={`mb-3 flex w-full items-center justify-between gap-3 rounded-lg border p-4 text-left text-sm transition-colors ${role===i?"border-[#8dab98]/60 bg-[#23362b]":"border-white/10 hover:bg-white/5"}`}><span>{title}<span className="mt-2 block text-xs text-zinc-500">{copy("Пример компании","Example company")}</span></span><ChevronRight size={16}/></button>)}</div><div className="rounded-lg bg-[#dae6df] p-6 text-[#1b2c22]"><p className="text-xs uppercase tracking-widest">{copy("Совпадение","Match")}</p><p className="mt-3 text-5xl font-medium tracking-tight">{94-role*4}<span className="text-xl">%</span></p><h3 className="mt-6 font-medium">{titles[role]}</h3><p className="mt-3 text-sm leading-6 text-[#52675a]">{copy("Подходит стек и формат работы. Уточните требования к опыту перед откликом.","Your stack and workplace preference fit. Clarify experience requirements before applying.")}</p><button aria-pressed={saved} onClick={()=>{setSaved(!saved);setPlaying(false);}} className="mt-5 flex items-center gap-2 text-sm font-medium"><Bookmark size={16} fill={saved?"currentColor":"none"}/>{saved?copy("Сохранено","Saved"):copy("Сохранить","Save role")}</button></div></div>
-            : <div className="grid gap-6 sm:grid-cols-[1fr_200px]"><div><h2 className="text-lg">{copy("Начните разговор по делу","Start with something relevant")}</h2><div className="mt-5 rounded-lg border border-white/10 bg-[#18231d] p-6 text-sm leading-7 text-zinc-300">{copy("Здравствуйте! Меня заинтересовала ваша вакансия Frontend Developer. Последние три года я разрабатываю интерфейсы на React и TypeScript. Буду рад обсудить задачи вашей команды.","Hello! I’m interested in your Frontend Developer role. I’ve spent the last three years building interfaces with React and TypeScript. I’d welcome a conversation about your team’s work.")}</div><p className="mt-4 text-xs text-zinc-500">{copy("Черновик: проверьте факты и добавьте свой голос.","Draft: check the facts and make it your own.")}</p></div><div className="flex flex-col justify-center border-l border-white/10 pl-6"><FileText size={26} className="mb-5 text-[#9fbeab]"/><p className="text-sm leading-6 text-zinc-400">{copy("Вы выбираете вакансию. Вы решаете, когда отправлять.","You choose the role. You decide when to send.")}</p><button ref={opener} onClick={()=>{setPlaying(false);onOpen();}} aria-label={copy("Открыть интерактивный просмотр","Open interactive preview")} className="mt-5 inline-flex items-center gap-2 text-sm text-white">{copy("Попробовать","Try it")}<ArrowUpRight size={16}/></button></div></div>}
-          </motion.div></AnimatePresence>
-          {step!==2&&<button ref={opener} onClick={()=>{setPlaying(false);onOpen();}} aria-label={copy("Открыть интерактивный просмотр","Open interactive preview")} className="mt-5 text-xs text-zinc-500 underline decoration-zinc-700 underline-offset-4 hover:text-white">{copy("Открыть подробный просмотр","Open detailed preview")}</button>}
+    <dl className="tour-chart-totals" aria-live="polite">
+      {[[copy("Совпадения", "Matches"), matches], [copy("Сохранено", "Saved"), data.saved], [copy("Отклики", "Applications"), data.applied]].map(([label, amount]) => (
+        <div key={label}><dt>{label}</dt><dd><motion.span key={amount} initial={motionAllowed ? { y: 7, opacity: .4 } : false} animate={{ y: 0, opacity: 1 }}>{amount}</motion.span></dd></div>
+      ))}
+    </dl>
+    <div key={period} className="tour-chart" role="img" aria-label={copy(`Совпадения по периодам: ${data.bars.join(", ")}`, `Matches by interval: ${data.bars.join(", ")}`)}>
+      {data.bars.map((value, index) => <motion.span key={index} aria-hidden="true" initial={motionAllowed ? { scaleY: .18 } : false} animate={{ scaleY: 1 }} transition={{ type: "spring", stiffness: 125, damping: 18, delay: index * .025 }} style={{ height: `${value / Math.max(...data.bars) * 100}%` }} />)}
+    </div>
+    <div className="tour-chart-axis" aria-hidden="true">
+      <span>{period === "week" ? copy("7 дней назад", "7 days ago") : copy("30 дней назад", "30 days ago")}</span>
+      <span>{copy("Сегодня", "Today")}</span>
+    </div>
+  </div>;
+}
+
+export default function ProductExperience({ ru, onOpen, opener }: { ru: boolean; onOpen: () => void; opener: RefObject<HTMLButtonElement | null> }) {
+  const copy = (r: string, e: string) => ru ? r : e;
+  const motionAllowed = useLandingMotion();
+  const frame = useRef<HTMLDivElement>(null);
+  const inView = useInView(frame, { amount: .3 });
+  const [step, setStep] = useState(0);
+  const [playing, setPlaying] = useState(false);
+  const [role, setRole] = useState(0);
+  const [savedRoles, setSavedRoles] = useState<number[]>([]);
+  const selected = LANDING_ROLES[role];
+  const saved = savedRoles.includes(role);
+  const steps = [
+    { label: copy("Вакансии", "Matches"), icon: Search, description: copy("Сравните подходящие роли и причины совпадения.", "Compare promising roles and see why each one fits.") },
+    { label: copy("Профиль", "Profile"), icon: SlidersHorizontal, description: copy("Задайте условия поиска и навыки, которые хотите использовать.", "Set your preferences and the skills you want to use.") },
+    { label: copy("Письмо", "Cover letter"), icon: FileText, description: copy("Подготовьте черновик письма под выбранную вакансию.", "Prepare a cover-letter draft for the role you select.") },
+    { label: copy("Аналитика", "Analytics"), icon: BarChart3, description: copy("Посмотрите, как меняется поиск за 7 или 30 дней.", "Compare search activity across 7 and 30 days.") },
+  ];
+  const active = steps[step];
+  const autoplay = playing && motionAllowed && inView;
+
+  useEffect(() => {
+    if (!autoplay) return;
+    const timer = window.setInterval(() => setStep((current) => (current + 1) % 4), 6500);
+    return () => window.clearInterval(timer);
+  }, [autoplay]);
+
+  function selectStep(index: number) {
+    setStep(index);
+    setPlaying(false);
+  }
+
+  return (
+    <div ref={frame} className="field-tour">
+      <div className="tour-rail">
+        <div className="tour-shoulder" aria-hidden="true"><svg viewBox="0 0 108 64" preserveAspectRatio="none"><path d="M0 0H15C50 0 44 64 108 64H0Z" /></svg></div>
+        <div className="tour-picker" role="group" aria-label={copy("Функции в демо", "Demo features")}>
+          {steps.map(({ label, icon: Icon }, index) => <button type="button" key={label} aria-pressed={step === index} onClick={() => selectStep(index)}><Icon size={17} aria-hidden="true" />{label}</button>)}
+          <button type="button" className="tour-play" disabled={!motionAllowed} aria-label={playing && motionAllowed ? copy("Приостановить обзор", "Pause walkthrough") : copy("Продолжить обзор", "Play walkthrough")} onClick={() => setPlaying(!playing)}>{playing && motionAllowed ? <Pause size={16} /> : <Play size={16} />}</button>
+        </div>
+        <div className="tour-shoulder tour-shoulder-end" aria-hidden="true"><svg viewBox="0 0 108 64" preserveAspectRatio="none"><path d="M0 0H15C50 0 44 64 108 64H0Z" /></svg></div>
+      </div>
+
+      <div className="tour-stage" onFocus={() => setPlaying(false)}>
+        <div className="tour-window">
+          <div className="tour-window-header"><span>{BRAND_NAME}</span><span>{copy("Демонстрационные данные", "Sample data")}</span></div>
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div key={step} className="tour-panel" initial={motionAllowed ? { x: 12, opacity: .55 } : false} animate={{ x: 0, opacity: 1 }} exit={motionAllowed ? { x: -8, opacity: .55 } : undefined} transition={{ duration: .25 }}>
+              {step === 0 && <div className="tour-matches">
+                <div className="tour-roles">
+                  {LANDING_ROLES.map((item, index) => <button key={item.title} type="button" onClick={() => setRole(index)} aria-pressed={role === index}>
+                    <span><strong>{item.title}</strong><small>{item.company} · {copy("Удалённо", "Remote")}</small></span><ChevronRight size={16} aria-hidden="true" />
+                  </button>)}
+                </div>
+                <div className="tour-match-glance">
+                  <h3>{selected.title}</h3>
+                  <div className="tour-score" aria-hidden="true"><small>{copy("Совпадение", "Match score")}</small><strong>{selected.score}%</strong></div>
+                  <progress className="tour-match-meter" value={selected.score} max={100} aria-label={copy("Совпадение", "Match score")} />
+                  <div className="tour-match-details"><span>{selected.stack}</span><span>{selected.salary}</span></div>
+                  <button type="button" aria-pressed={saved} onClick={() => setSavedRoles(saved ? savedRoles.filter((index) => index !== role) : [...savedRoles, role])} className="tour-save"><Bookmark size={16} fill={saved ? "currentColor" : "none"} />{saved ? copy("Сохранено", "Saved") : copy("Сохранить", "Save role")}</button>
+                </div>
+              </div>}
+
+              {step === 1 && <div className="tour-profile">
+                <h3>{copy("Что вы ищете?", "What are you looking for?")}</h3>
+                <p className="tour-sample-copy">{copy("Frontend-разработчик. React и TypeScript. Удалённая работа, от 180 000 ₽.", "Frontend developer. React and TypeScript. Remote, from 180,000 ₽.")}</p>
+                <ul>{["React / TypeScript", copy("От 180 000 ₽", "From 180,000 ₽"), copy("Удалённая работа", "Remote work")].map((item) => <li key={item}><Check size={16} aria-hidden="true" />{item}</li>)}</ul>
+                <button type="button" className="tour-inline" onClick={() => selectStep(0)}>{copy("Показать совпадения", "Show matches")}<ArrowRight size={16} /></button>
+              </div>}
+
+              {step === 2 && <div className="tour-profile">
+                <h3>{copy("Черновик для отклика", "Application draft")}</h3>
+                <p className="tour-sample-copy">{copy(`Здравствуйте! Меня заинтересовала ваша вакансия ${selected.title}. Мой опыт включает ${selected.stack}. Буду рад обсудить задачи команды.`, `Hello! I’m interested in the ${selected.title} role. My experience includes ${selected.stack}. I’d welcome a conversation about your team’s work.`)}</p>
+                <p className="tour-draft-note"><ArrowDownRight size={17} />{copy("Проверьте факты и добавьте свой голос перед отправкой.", "Check the facts and make the draft your own before sending.")}</p>
+              </div>}
+
+              {step === 3 && <TourActivity ru={ru} />}
+            </motion.div>
+          </AnimatePresence>
+        </div>
+        <div className="tour-caption">
+          <p>{active.description}</p>
+          <button type="button" ref={opener} onClick={() => { setPlaying(false); onOpen(); }} aria-label={copy("Открыть интерактивный просмотр", "Open interactive preview")}>{copy("Попробовать", "Try it")}<ArrowUpRight size={17} /></button>
         </div>
       </div>
-      <div className="flex items-center border-t border-white/10 bg-[#0d1410] px-3 sm:px-6"><div className="flex flex-1 overflow-x-auto">{steps.map((label,i)=><button key={label} onClick={()=>chooseStep(i)} aria-pressed={step===i} className={`relative shrink-0 px-3 py-5 text-xs sm:px-5 sm:text-sm ${step===i?"text-[#d2e7da]":"text-zinc-500 hover:text-white"}`}><span className="mr-2 font-mono text-[10px] opacity-50">0{i+1}</span>{label}{step===i&&<motion.span layoutId="experience-step" className="absolute inset-x-3 bottom-0 h-px bg-[#b7d7c4]" transition={{type:"spring",bounce:0,duration:0.3}}/>}</button>)}</div><button disabled={!!reduce} aria-label={playing?copy("Приостановить обзор","Pause walkthrough"):copy("Продолжить обзор","Play walkthrough")} onClick={()=>setPlaying(!playing)} className="ml-2 p-3 text-zinc-400 disabled:opacity-30">{playing&&!reduce?<Pause size={16}/>:<Play size={16}/>}</button></div>
     </div>
-    <div className="mt-7 flex flex-wrap justify-between gap-4 text-xs text-zinc-500"><p>{copy("Поиск, письма и аналитика бесплатны.","Search, letters, and Analytics are free.")}</p><p>HeadHunter <span className="mx-3 text-zinc-700">/</span> Telegram <span className="mx-3 text-zinc-700">/</span> Company Intel</p></div>
-  </section>;
+  );
 }

@@ -41,3 +41,7 @@ Proprietary software. Copyright © 2026 HH Job Copilot. All rights reserved.
 Unauthorized copying, modification, redistribution, or commercial reproduction is strictly prohibited.
 
 Legacy plans, capture scripts, duplicate screenshot exports, and self-hosting drafts are retained locally but excluded from current Git tracking and Vercel uploads. Public assets used by the app remain tracked. Existing Git history is retained.
+
+## Search indexing
+
+See [Sitemap and Google Search Console](SEO_SITEMAP.md) for the public sitemap, deployment checks, and submission instructions.
