@@ -1,14 +1,17 @@
+import type { Metadata } from "next";
 import LandingHeader from "@/components/landing/LandingHeader";
 import LandingFooter from "@/components/landing/LandingFooter";
 import AboutClient from "@/components/about/AboutClient";
 import { auth } from "@/lib/auth";
 import { BRAND_NAME } from "@/lib/brand";
 import { LanguageProvider } from "@/lib/i18n";
+import { siteOrigin } from "@/lib/site-url";
 
-export const metadata = {
-  title: `About | ${BRAND_NAME}`,
+export const metadata: Metadata = {
+  title: `О проекте | ${BRAND_NAME}`,
   description:
-    "Full-Stack Engineer & Automation Specialist. Creator of HH Job Copilot.",
+    "Как HH Job Copilot помогает искать вакансии на HeadHunter, оценивать совпадения с профилем и получать уведомления в Telegram.",
+  alternates: { canonical: new URL("/about", siteOrigin) },
 };
 
 export default async function AboutPage() {

@@ -3,11 +3,14 @@ import LandingFooter from "@/components/landing/LandingFooter";
 import LandingHeader from "@/components/landing/LandingHeader";
 import CompareArticle from "@/components/public/CompareArticle";
 import { auth } from "@/lib/auth";
+import { BRAND_NAME } from "@/lib/brand";
 import { LanguageProvider } from "@/lib/i18n";
+import { siteOrigin } from "@/lib/site-url";
 
 export const metadata: Metadata = {
-  title: "Compare job-search tools | HH Job Copilot",
-  description: "Compare HH Job Copilot, HeadHunter, Teal, and Huntr by how they help you find, review, and track job opportunities.",
+  title: `Сравнение инструментов для поиска работы | ${BRAND_NAME}`,
+  description: "Сравните HH Job Copilot, HeadHunter, Teal и Huntr по поиску вакансий, оценке предложений и отслеживанию откликов.",
+  alternates: { canonical: new URL("/compare", siteOrigin) },
 };
 
 export default async function ComparePage(): Promise<React.JSX.Element> {

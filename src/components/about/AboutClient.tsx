@@ -77,6 +77,7 @@ const aboutCopy = {
     purpose: "Built around a HeadHunter search",
     mission: "The app pulls vacancies from HeadHunter. It uses your profile to evaluate matches, keeps a shortlist of roles you save, and prepares cover-letter drafts for your review. You can connect Telegram for vacancy alerts.",
     compare: "Compare job search tools",
+    architecture: "How the job search pipeline works",
     engineering: "How the app works",
     privacy: "Read the privacy notice",
     archive: "Product archive",
@@ -95,6 +96,7 @@ const aboutCopy = {
     purpose: "Поиск работы на HeadHunter",
     mission: "Приложение собирает вакансии с HeadHunter, оценивает их по вашему профилю, сохраняет интересные позиции и готовит черновики сопроводительных писем для проверки. Для уведомлений о вакансиях можно подключить Telegram.",
     compare: "Сравнить сервисы поиска работы",
+    architecture: "Как устроен поиск вакансий",
     engineering: "Как работает приложение",
     privacy: "Читать политику конфиденциальности",
     archive: "Архив интерфейсов",
@@ -163,9 +165,14 @@ export default function AboutClient(): React.JSX.Element {
       <section className="my-10 max-w-3xl">
         <h2 className="text-2xl font-semibold tracking-tight">{labels.purpose}</h2>
         <p className="mt-3 max-w-[68ch] text-sm leading-6 text-field-muted">{labels.mission}</p>
-        <Link href="/compare" className="mt-2 inline-flex min-h-10 items-center gap-1.5 text-sm font-semibold text-field-accent hover:underline">
-          {labels.compare}<ArrowUpRight size={15} aria-hidden="true" />
-        </Link>
+        <div className="mt-2 flex flex-wrap gap-x-5">
+          <Link href="/compare" className="inline-flex min-h-10 items-center gap-1.5 text-sm font-semibold text-field-accent hover:underline">
+            {labels.compare}<ArrowUpRight size={15} aria-hidden="true" />
+          </Link>
+          <Link href="/architecture" className="inline-flex min-h-10 items-center gap-1.5 text-sm font-semibold text-field-accent hover:underline">
+            {labels.architecture}<ArrowUpRight size={15} aria-hidden="true" />
+          </Link>
+        </div>
       </section>
 
       <section className="border-t border-field-line pt-8">

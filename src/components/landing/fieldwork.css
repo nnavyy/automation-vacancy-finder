@@ -62,7 +62,15 @@
 .field-activity-heading time { display: block; margin-top: .25rem; font-size: .75rem; }
 .field-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; overflow: hidden; padding: 1px; border-radius: 14px; background: var(--fw-border); }
 .field-metric { position: relative; padding: clamp(1.2rem, 3vw, 2.25rem); background: var(--background); }
-.field-metric-rule { position: absolute; inset: 0 0 auto; height: 2px; background: var(--fw-accent); transform-origin: left; }
+.field-metric::before { content: ""; position: absolute; inset: 0 0 auto; height: 2px; background: var(--fw-accent); transform-origin: left; }
+@media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view()) {
+    .field-metric::before { animation: field-metric-enter linear both; animation-timeline: view(); animation-range: entry 0% cover 25%; }
+  }
+}
+@keyframes field-metric-enter {
+  from { transform: scaleX(0); }
+}
 .field-metric dt { font-size: .87rem; font-weight: 650; }
 .field-metric dd strong { display: block; margin-block: .65rem .7rem; color: var(--fw-accent); font: 650 clamp(2.5rem, 5vw, 4.9rem)/1 var(--fw-display); font-variant-numeric: tabular-nums; letter-spacing: -.04em; overflow-wrap: anywhere; }
 .field-metric dd span { display: block; color: var(--fw-muted); font-size: .83rem; line-height: 1.55; }

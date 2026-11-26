@@ -19,6 +19,8 @@ export default function LandingFooter({ localized = false }: { localized?: boole
           <Link href="/guide" className="hover:text-public-100">{copy("User guide", "Руководство")}</Link>
           <Link href="/compare" className="hover:text-public-100">{copy("Compare", "Сравнение")}</Link>
           <Link href="/about" className="hover:text-public-100">{copy("About", "О проекте")}</Link>
+          <Link href="/blog" className="hover:text-public-100">{copy("Blog", "Блог")}</Link>
+          <Link href="/architecture" className="hover:text-public-100">{copy("Architecture", "Архитектура")}</Link>
           <a href="https://t.me/wonkiiy" className="hover:text-public-100">{copy("Contact", "Поддержка")}</a>
           <Link href="/legal/privacy" className="hover:text-public-100">{copy("Privacy", "Конфиденциальность")}</Link>
           <Link href="/legal/terms" className="hover:text-public-100">{copy("Terms", "Условия")}</Link>

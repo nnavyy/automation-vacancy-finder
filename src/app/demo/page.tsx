@@ -254,7 +254,7 @@ export default function DemoPage() {
   });
 
   return (
-    <div className="h-screen max-h-screen bg-[#09090b] text-zinc-100 font-sans flex flex-col overflow-hidden antialiased selection:bg-emerald-500 selection:text-black">
+    <div lang="en" className="h-screen max-h-screen bg-[#09090b] text-zinc-100 font-sans flex flex-col overflow-hidden antialiased selection:bg-emerald-500 selection:text-black">
       {/* Top Demo Notification Header Bar with Generous Padding */}
       <header className="bg-[#0e0e12] border-b border-white/[0.08] px-6 py-3.5 flex flex-wrap items-center justify-between gap-4 text-xs shrink-0 z-40">
         <div className="flex items-center gap-2.5 text-zinc-300">

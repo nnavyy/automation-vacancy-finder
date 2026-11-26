@@ -1,9 +1,7 @@
 "use client";
 
-import { motion } from "framer-motion";
 import { useSyncExternalStore } from "react";
 import { useLanguage } from "@/lib/i18n";
-import { useLandingMotion } from "./useLandingMotion";
 
 export interface LandingActivitySnapshot {
   indexedVacancies: number;
@@ -18,7 +16,6 @@ const serverHydrated = () => false;
 
 export default function LandingActivityPanel({ snapshot }: { snapshot?: LandingActivitySnapshot | null }) {
   const { language } = useLanguage();
-  const motionAllowed = useLandingMotion();
   const hydrated = useSyncExternalStore(subscribeToHydration, clientHydrated, serverHydrated);
   // The streamed panel can hydrate after the landing has restored its saved language.
   const ru = !hydrated || language === "ru";
@@ -43,11 +40,8 @@ export default function LandingActivityPanel({ snapshot }: { snapshot?: LandingA
       </div>
       {metrics ? (
         <dl className="field-metrics">
-          {metrics.map(({ value, label, detail }, index) => <div key={label} className="field-metric">
-            <dt>
-              {motionAllowed && <motion.span className="field-metric-rule" aria-hidden="true" initial={{ scaleX: 0 }} whileInView={{ scaleX: 1 }} viewport={{ once: true, amount: 1 }} transition={{ duration: .55, delay: index * .12 }} />}
-              {label}
-            </dt>
+          {metrics.map(({ value, label, detail }) => <div key={label} className="field-metric">
+            <dt>{label}</dt>
             <dd><strong>{value.toLocaleString(locale)}</strong><span>{detail}</span></dd>
           </div>)}
         </dl>

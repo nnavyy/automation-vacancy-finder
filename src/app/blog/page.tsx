@@ -1,4 +1,5 @@
 import React from "react";
+import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft, Clock, ArrowRight } from "lucide-react";
 import LandingHeader from "@/components/landing/LandingHeader";
@@ -6,11 +7,14 @@ import LandingFooter from "@/components/landing/LandingFooter";
 import "@/components/public/public.css";
 import { auth } from "@/lib/auth";
 import type { BlogPostSlug } from "@/lib/blog-slugs";
+import { BRAND_NAME } from "@/lib/brand";
+import { siteOrigin } from "@/lib/site-url";
 
-export const metadata = {
-  title: "Engineering Blog - HH Job Copilot",
+export const metadata: Metadata = {
+  title: `Engineering blog | ${BRAND_NAME}`,
   description:
-    "Technical articles and deep-dives on job search automation, HeadHunter RSS protocols, AI evaluation models, and PostgreSQL concurrency.",
+    "Engineering notes on HeadHunter vacancy discovery, job fit scoring, PostgreSQL storage, and recruiter research.",
+  alternates: { canonical: new URL("/blog", siteOrigin) },
 };
 
 export default async function BlogPage() {
@@ -20,21 +24,21 @@ export default async function BlogPage() {
   const articles = [
     {
       id: "rss-vs-rest",
-      title: "Automating HeadHunter Job Scraping Without Rate Limits: Why RSS Beats REST",
+      title: "Using HeadHunter RSS for Vacancy Discovery",
       date: "October 16, 2026",
       readTime: "6 min read",
       category: "Architecture",
       excerpt:
-        "HeadHunter's standard REST API imposes strict client-credential requirements, IP throttling, and employer-level verification. Discover how composite RSS feed queries provide reliable, rate-limit immune vacancy discovery.",
+        "How HH Job Copilot builds vacancy searches from profile filters, reads HeadHunter RSS, and handles temporary fetch errors.",
     },
     {
       id: "100-vacancy-guard",
-      title: "The 100-Vacancy Guard: Preventing PostgreSQL Table Bloat with Compound Indexing",
+      title: "Keeping the Vacancy Queue Bounded with PostgreSQL",
       date: "October 12, 2026",
       readTime: "5 min read",
       category: "Database",
       excerpt:
-        "Why unlimited vacancy scraping degrades database performance. An analysis of our 100-vacancy concurrency cap, automated 404 liveness purging, and [userId, hhId] compound indexing strategies.",
+        "How the collector makes room for fresh vacancies, recognizes listings that have gone offline, and deduplicates records per user.",
     },
     {
       id: "fast-tier-ai-scoring",
@@ -43,21 +47,21 @@ export default async function BlogPage() {
       readTime: "8 min read",
       category: "AI & ML",
       excerpt:
-        "Traditional ATS filters fail on synonyms and nuance. By routing preliminary vacancy evaluations to sub-400ms fast-tier models (Groq Llama 3.3 and Gemini Flash), we score hundreds of vacancies with deep semantic understanding.",
+        "How keyword filters and language models work together to evaluate vacancies against a candidate profile.",
     },
     {
       id: "recruiter-osint-intelligence",
-      title: "Bypassing the 300+ Applicant Queue: Engineering Recruiter OSINT Dossiers",
+      title: "Engineering Recruiter Research for Targeted Outreach",
       date: "October 03, 2026",
       readTime: "7 min read",
       category: "Outreach",
       excerpt:
-        "How automated corporate domain resolution and executive email heuristics enable direct candidate outreach to engineering leads and tech recruiters before listings are flooded.",
+        "How Company Intel looks for public hiring contacts and why candidates should verify the evidence before sending an introduction.",
     },
   ] satisfies { id: BlogPostSlug; title: string; date: string; readTime: string; category: string; excerpt: string }[];
 
   return (
-    <div className="fw-public-theme min-h-screen bg-public-950 text-public-100 antialiased">
+    <div lang="en" className="fw-public-theme min-h-screen bg-public-950 text-public-100 antialiased">
       <LandingHeader userEmail={userEmail} />
 
       <main className="pt-10 sm:pt-16 pb-20 max-w-6xl mx-auto px-5 sm:px-8">
@@ -78,8 +82,11 @@ export default async function BlogPage() {
             Articles &amp; Architecture Notes
           </h1>
           <p className="text-base text-public-400 leading-relaxed">
-            In-depth documentation, benchmark studies, and design rationale behind our autonomous vacancy finder and AI scoring pipelines.
+            Design decisions behind vacancy collection, AI scoring, and recruiter research.
           </p>
+          <Link href="/architecture" className="mt-4 inline-flex min-h-10 items-center gap-2 text-sm font-semibold text-field-accent hover:underline">
+            Follow a vacancy through the pipeline <ArrowRight className="size-4" aria-hidden="true" />
+          </Link>
         </header>
 
         {/* Article Cards Grid */}

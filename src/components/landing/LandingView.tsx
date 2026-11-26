@@ -2,7 +2,6 @@
 
 import { useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { MotionConfig } from "framer-motion";
 import { ArrowDown, ArrowRight, ArrowUpRight, BarChart3, Bookmark, Building2, Check, ChevronRight, FileText, Menu, Search, Send, X } from "lucide-react";
 import { BRAND_NAME } from "@/lib/brand";
 import { LanguageProvider, useLanguage } from "@/lib/i18n";
@@ -18,7 +17,7 @@ interface LandingViewProps {
 export default function LandingView({ userEmail, activity }: LandingViewProps) {
   return (
     <LanguageProvider>
-      <MotionConfig reducedMotion="user"><LandingContent userEmail={userEmail} activity={activity} /></MotionConfig>
+      <LandingContent userEmail={userEmail} activity={activity} />
     </LanguageProvider>
   );
 }
@@ -77,7 +76,7 @@ function LandingContent({ userEmail, activity }: LandingViewProps) {
         }
       }}>
         <div className="field-wrap field-header-row">
-          <Link href="/landing" className="field-brand"><BrandLogo size={34} />{BRAND_NAME}</Link>
+          <Link prefetch={false} href="/" className="field-brand"><BrandLogo size={34} />{BRAND_NAME}</Link>
           <nav aria-label={copy("Основная навигация", "Main navigation")} className="field-desktop-nav">
             {navigation.map(([href, label]) => <a key={href} href={href}>{label}</a>)}
           </nav>
@@ -86,7 +85,7 @@ function LandingContent({ userEmail, activity }: LandingViewProps) {
               <button type="button" aria-label="Русский" aria-pressed={ru} onClick={() => setLanguage("ru")}>RU</button>
               <button type="button" aria-label="English" aria-pressed={!ru} onClick={() => setLanguage("en")}>EN</button>
             </div>
-            <Link href={accountHref} className="field-header-signin">{accountLabel}<ArrowUpRight size={15} /></Link>
+            <Link prefetch={false} href={accountHref} className="field-header-signin">{accountLabel}<ArrowUpRight size={15} /></Link>
             <button ref={menuToggle} type="button" aria-label={menu ? copy("Закрыть меню", "Close navigation") : copy("Открыть меню", "Open navigation")} aria-expanded={menu} aria-controls={menu ? "field-mobile-navigation" : undefined} onClick={() => setMenu(!menu)} className="field-mobile-toggle">
               {menu ? <X size={22} /> : <Menu size={22} />}
             </button>
@@ -94,7 +93,7 @@ function LandingContent({ userEmail, activity }: LandingViewProps) {
         </div>
         {menu && <nav id="field-mobile-navigation" aria-label={copy("Мобильное меню", "Mobile navigation")} className="field-mobile-nav">
           {navigation.map(([href, label]) => <a key={href} href={href} onClick={() => setMenu(false)}>{label}<ArrowDown size={14} /></a>)}
-          <Link href={accountHref}>{accountLabel}<ArrowUpRight size={15} /></Link>
+          <Link prefetch={false} href={accountHref}>{accountLabel}<ArrowUpRight size={15} /></Link>
         </nav>}
       </header>
 
@@ -104,8 +103,8 @@ function LandingContent({ userEmail, activity }: LandingViewProps) {
             <h1 id="landing-title">{copy("Меньше поиска.", "Less searching.")} <em>{copy("Ближе к вашей работе.", "Closer to your next role.")}</em></h1>
             <p>{copy("Подбирайте вакансии HeadHunter под свой опыт, сравнивайте условия и решайте, куда откликнуться.", "Find HeadHunter roles that fit your experience, compare the details and decide where to apply.")}</p>
             <div className="field-actions">
-              <Link href={startHref} className="field-button">{startLabel}<ArrowUpRight size={18} /></Link>
-              <Link href="/demo" className="field-button field-button-quiet">{copy("Открыть демо", "Explore demo")}<ArrowRight size={18} /></Link>
+              <Link prefetch={false} href={startHref} className="field-button">{startLabel}<ArrowUpRight size={18} /></Link>
+              <Link prefetch={false} href="/demo" className="field-button field-button-quiet">{copy("Открыть демо", "Explore demo")}<ArrowRight size={18} /></Link>
             </div>
           </div>
           <section id="preview" className="field-hero-product" aria-label={copy("Обзор продукта", "Product tour")}>
@@ -154,7 +153,7 @@ function LandingContent({ userEmail, activity }: LandingViewProps) {
               <h3>{title}</h3>
               <p className="field-price">{price}<span>{copy("/ месяц", "/ month")}</span></p>
               <ul>{items.map((text) => <li key={text}><Check size={16} aria-hidden="true" />{text}</li>)}</ul>
-              <Link href={href} className={index ? "field-button" : "field-button field-button-quiet"}>{label}<ArrowUpRight size={17} /></Link>
+              <Link prefetch={false} href={href} className={index ? "field-button" : "field-button field-button-quiet"}>{label}<ArrowUpRight size={17} /></Link>
               {index === 1 && <p className="field-plan-note">{copy("Напишите @wonkiiy для оформления или уточнения перевода через Telegram Wallet. Доступ активируется вручную. Стоимость Stars в долларах может отличаться.", "Contact @wonkiiy for access or a Telegram Wallet transfer. Access is activated manually. The USD cost of Stars varies.")}</p>}
             </article>)}
           </div>
@@ -170,14 +169,16 @@ function LandingContent({ userEmail, activity }: LandingViewProps) {
 
       <footer className="field-footer">
         <div className="field-wrap field-footer-row">
-          <div><Link href="/landing" className="field-brand"><BrandLogo size={30} />{BRAND_NAME}</Link><p>© {new Date().getFullYear()} {BRAND_NAME}</p></div>
+          <div><Link prefetch={false} href="/" className="field-brand"><BrandLogo size={30} />{BRAND_NAME}</Link><p>© {new Date().getFullYear()} {BRAND_NAME}</p></div>
           <nav aria-label={copy("Помощь и информация", "Help and information")}>
-            <Link href="/guide">{copy("Как пользоваться", "User guide")}</Link><Link href="/about">{copy("О проекте", "About")}</Link>
-            <Link href="/compare">{copy("Сравнение", "Compare")}</Link>
-            <a href="https://t.me/wonkiiy">{copy("Поддержка", "Support")}</a><Link href="/legal/privacy">{copy("Конфиденциальность", "Privacy")}</Link>
-            <Link href="/legal/terms">{copy("Условия использования", "Terms")}</Link>
+            <Link prefetch={false} href="/guide">{copy("Как пользоваться", "User guide")}</Link><Link prefetch={false} href="/about">{copy("О проекте", "About")}</Link>
+            <Link prefetch={false} href="/compare">{copy("Сравнение", "Compare")}</Link>
+            <Link prefetch={false} href="/blog">{copy("Блог", "Blog")}</Link>
+            <Link prefetch={false} href="/architecture">{copy("Архитектура", "Architecture")}</Link>
+            <a href="https://t.me/wonkiiy">{copy("Поддержка", "Support")}</a><Link prefetch={false} href="/legal/privacy">{copy("Конфиденциальность", "Privacy")}</Link>
+            <Link prefetch={false} href="/legal/terms">{copy("Условия использования", "Terms")}</Link>
           </nav>
-          <Link href={startHref} className="field-button field-button-quiet">{startLabel}<ArrowUpRight size={16} /></Link>
+          <Link prefetch={false} href={startHref} className="field-button field-button-quiet">{startLabel}<ArrowUpRight size={16} /></Link>
         </div>
       </footer>
 
@@ -194,7 +195,7 @@ function LandingContent({ userEmail, activity }: LandingViewProps) {
           </div>
           <div className="field-dialog-detail"><h3>{role.title}</h3><p>{copy("Ваш опыт совпадает с основным стеком. Уточните уровень ответственности и процесс найма перед откликом.", "Your experience matches the core stack. Clarify responsibilities and the hiring process before applying.")}</p>
             <button type="button" onClick={() => setSaved(!saved)} aria-pressed={saved} className="field-button"><Bookmark size={17} fill={saved ? "currentColor" : "none"} />{saved ? copy("Сохранено в примере", "Saved in preview") : copy("Сохранить вакансию", "Save role")}</button>
-            <Link href="/demo" className="field-text-link">{copy("Открыть полное демо", "Open full demo")}<ArrowUpRight size={16} /></Link>
+            <Link prefetch={false} href="/demo" className="field-text-link">{copy("Открыть полное демо", "Open full demo")}<ArrowUpRight size={16} /></Link>
           </div>
         </div>
       </dialog>

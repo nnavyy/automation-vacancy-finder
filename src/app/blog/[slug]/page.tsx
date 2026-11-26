@@ -8,6 +8,7 @@ import LandingFooter from "@/components/landing/LandingFooter";
 import "@/components/public/public.css";
 import { auth } from "@/lib/auth";
 import type { BlogPostSlug } from "@/lib/blog-slugs";
+import { BRAND_NAME } from "@/lib/brand";
 import { siteOrigin } from "@/lib/site-url";
 
 interface BlogPost {
@@ -25,44 +26,26 @@ interface BlogPost {
 
 const BLOG_POSTS = {
   "rss-vs-rest": {
-    title: "Automating HeadHunter Job Scraping Without Rate Limits: Why RSS Beats REST",
+    title: "Using HeadHunter RSS for Vacancy Discovery",
     date: "October 16, 2026",
     readTime: "6 min read",
     category: "Architecture",
     summary:
-      "HeadHunter's standard REST API imposes strict client-credential requirements, IP throttling, and employer-level verification. Discover how composite RSS feed queries provide reliable, rate-limit immune vacancy discovery.",
+      "How HH Job Copilot builds vacancy searches from profile filters, reads HeadHunter RSS, and handles temporary fetch errors.",
     content: [
       {
-        sectionTitle: "The HeadHunter REST API Bottleneck",
+        sectionTitle: "RSS and REST in the HeadHunter Workflow",
         paragraphs: [
-          "Developers attempting to automate job discovery on HeadHunter (hh.ru) typically start with the official REST API (/vacancies endpoint). Within hours, they run into aggressive rate limits: HTTP 429 Too Many Requests, mandatory OAuth 2.0 application verification, and daily IP call caps that throttle rapid batch scanning.",
-          "Furthermore, employer-level token verification requires official business registrations in the CIS region, creating an impassable barrier for individual software engineers looking to automate their own job hunts.",
+          "HeadHunter offers a REST API and an RSS feed for vacancy discovery. API access and authentication requirements depend on the operation, so developers should consult HeadHunter's documentation for the endpoint they intend to use.",
+          "Our vacancy worker uses the public search feed as an input. The feed provides a starting list of vacancies to match against a search profile.",
         ],
       },
       {
-        sectionTitle: "The Hidden Power of Composite RSS Feeds",
+        sectionTitle: "Turning Profile Filters into Search Queries",
         paragraphs: [
-          "HeadHunter maintains public RSS endpoints (hh.ru/rss/vacancies) designed for syndication readers. These feeds accept standard query parameters (text, search_field, experience, salary, only_with_salary) without requiring authorization headers or API bearer tokens.",
-          "By decomposing target titles into composite keyword matrices (e.g., 'React Full Stack' OR 'Next.js Architect' OR 'Frontend Lead') and polling through a jittered delay pool (800ms ± 30%), the copilot scrapes 30+ postings per cycle without triggering anti-bot firewalls.",
+          "The worker queries HeadHunter's vacancy feed using role keywords and profile filters such as experience or compensation.",
+          "The worker limits pagination and backs off if HeadHunter responds with a rate limit or temporary service error. The number of results depends on the query and on what's available when it runs.",
         ],
-        codeSnippet: `// Example Jittered RSS Polling Routine
-const QUERY_DELAY_MS = 800;
-
-export async function fetchCompositeRss(query: string): Promise<string> {
-  const jitter = (Math.random() * 0.6 + 0.7); // 0.7x to 1.3x variation
-  await sleep(Math.floor(QUERY_DELAY_MS * jitter));
-
-  const url = \`https://hh.ru/rss/vacancies?text=\${encodeURIComponent(query)}&search_field=name\`;
-  const res = await fetch(url, {
-    headers: {
-      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-      "Accept": "application/rss+xml, application/xml"
-    }
-  });
-
-  if (!res.ok) throw new Error(\`RSS Fetch Failed: HTTP \${res.status}\`);
-  return res.text();
-}`,
       },
       {
         sectionTitle: "Handling Cyrillic Text Normalization",
@@ -74,36 +57,28 @@ export async function fetchCompositeRss(query: string): Promise<string> {
     ],
   },
   "100-vacancy-guard": {
-    title: "The 100-Vacancy Guard: Preventing PostgreSQL Table Bloat with Compound Indexing",
+    title: "Keeping the Vacancy Queue Bounded with PostgreSQL",
     date: "October 12, 2026",
     readTime: "5 min read",
     category: "Database",
     summary:
-      "Why unlimited vacancy scraping degrades database performance. An analysis of our 100-vacancy concurrency cap, automated 404 liveness purging, and [userId, hhId] compound indexing strategies.",
+      "How the collector makes room for fresh vacancies, recognizes listings that have gone offline, and deduplicates records per user.",
     content: [
       {
         sectionTitle: "The Problem with Unchecked Scraping",
         paragraphs: [
-          "In initial prototypes, background daemons scraped hundreds of vacancies every day without retention limits. Within two weeks, the local PostgreSQL database swelled to over 40,000 rows. Query response times for full-text filtering degraded from 12ms to over 380ms.",
-          "Worse, 70% of those stored listings were already archived or deleted on hh.ru, cluttering the user interface with ghost openings.",
+          "Repeated collections can accumulate listings over time, even after the employer archives an opening. That makes the dashboard harder to scan and adds database work.",
+          "The collector tracks vacancy status so an unavailable or deprioritized listing can leave the active queue.",
         ],
       },
       {
-        sectionTitle: "Enforcing the 100-Vacancy Concurrency Cap",
+        sectionTitle: "Keeping the Active Queue at Its Configured Limit",
         paragraphs: [
-          "We instituted a hard ceiling: MAX_VACANCIES_PER_USER = 100. Before committing any newly scraped posting to the database, the collection pipeline verifies the count of active (non-closed and non-ignored) vacancies.",
-          "If the user already has 100 active vacancies, the ingestion skips saving lower-priority listings until older ones are acted upon, archived, or purged by the liveness daemon.",
+          "When the active queue reaches its configured limit, the collector can deprioritize lower-scoring listings the candidate has not acted on to make room for new opportunities.",
+          "If the queue stays full, the collector skips new records and can continue updating vacancies it already knows about.",
         ],
-        codeSnippet: `// 100-Vacancy Guard Enforcement
-const activeCount = await prisma.vacancy.count({
-  where: {
-    userId,
-    status: { notIn: ["closed", "ignored"] }
-  }
-});
-
-if (activeCount >= 100) {
-  console.log(\`[Pipeline] User \${userId} reached active cap of 100 vacancies. Skipping.\`);
+        codeSnippet: `// After trying to make room for fresh listings:
+if (!existing && activeVacancyCount >= MAX_VACANCIES_PER_USER) {
   return;
 }`,
       },
@@ -111,7 +86,7 @@ if (activeCount >= 100) {
         sectionTitle: "Compound Indexing for Instant Lookups",
         paragraphs: [
           "To guarantee idempotent inserts across parallel background workers, we implemented a compound unique index: @@unique([userId, hhId]).",
-          "This ensures that duplicate discoveries across different composite RSS queries are rejected at the database engine level with zero application-side mutex locking.",
+          "The unique key keeps repeated discoveries for the same user from creating duplicate vacancy records.",
         ],
       },
     ],
@@ -122,7 +97,7 @@ if (activeCount >= 100) {
     readTime: "8 min read",
     category: "AI & ML",
     summary:
-      "Traditional ATS filters fail on synonyms and nuance. By routing preliminary vacancy evaluations to sub-400ms fast-tier models (Groq Llama 3.3 and Gemini Flash), we score hundreds of vacancies with deep semantic understanding.",
+      "How keyword filters and language models work together to evaluate vacancies against a candidate profile.",
     content: [
       {
         sectionTitle: "Why Traditional Keyword Matchers Fail",
@@ -135,32 +110,32 @@ if (activeCount >= 100) {
         sectionTitle: "Two-Tier AI Model Architecture",
         paragraphs: [
           "Rather than sending all text to expensive, high-latency models (like Claude Sonnet 3.7 or GPT-4o), our pipeline implements a two-tier router:",
-          "Tier 1 (Fast-Tier): Uses Groq Llama 3.3 70B or Gemini 2.5 Flash to compute 0-100 compatibility scores, identify red flags, and extract missing skills in under 350ms per vacancy.",
+          "Tier 1 (Fast-Tier): The model returns a match score on a 0–100 scale, flags potential concerns, and identifies missing skills. Response time depends on the provider and the input.",
           "Tier 2 (High-Reasoning): Only triggered when the candidate clicks 'Draft Cover Letter' or requests 'Recruiter Dossier Intelligence'. This reserves heavy compute strictly for user-demanded high-value outputs.",
         ],
       },
     ],
   },
   "recruiter-osint-intelligence": {
-    title: "Bypassing the 300+ Applicant Queue: Engineering Recruiter OSINT Dossiers",
+    title: "Engineering Recruiter Research for Targeted Outreach",
     date: "October 03, 2026",
     readTime: "7 min read",
     category: "Outreach",
     summary:
-      "How automated corporate domain resolution and executive email heuristics enable direct candidate outreach to engineering leads and tech recruiters before listings are flooded.",
+      "How Company Intel looks for public hiring contacts and why candidates should verify the evidence before sending an introduction.",
     content: [
       {
-        sectionTitle: "The '300 Applicants in 2 Hours' Problem",
+        sectionTitle: "Why Context Helps with Outreach",
         paragraphs: [
-          "On major job boards like HeadHunter, high-paying remote React and Python positions receive between 200 and 500 applicants within the first 120 minutes of publication.",
-          "Standard applications submitted through the web button sit buried at the bottom of the recruiter's ATS inbox, with less than an 8% open rate.",
+          "Popular listings can attract many applicants, and the person who owns the hiring process is not always named in the vacancy.",
+          "Candidates can use company research to decide whether a relevant public contact is available. The employer's stated application instructions still apply.",
         ],
       },
       {
         sectionTitle: "Automated Entity Resolution & Direct Outreach",
         paragraphs: [
           "The Company Intel engine parses the employer's legal and trade names, extracts their primary digital domain, and queries Bing Web and OSINT endpoints to identify the specific Lead Tech Recruiter or Engineering Manager responsible for the department.",
-          "By generating polite, concise, and technically grounded direct emails, candidates achieve response rates exceeding 42% compared to standard button applications.",
+          "The candidate should confirm the contact and review the introduction before sending it. The available contact evidence depends on what the company publishes.",
         ],
       },
     ],
@@ -180,7 +155,7 @@ export async function generateMetadata({ params }: BlogRouteProps): Promise<Meta
   if (!isBlogPostSlug(slug)) notFound();
   const post = BLOG_POSTS[slug];
   return {
-    title: `${post.title} | HH Job Copilot`,
+    title: `${post.title} | ${BRAND_NAME}`,
     description: post.summary,
     alternates: { canonical: new URL(`/blog/${slug}`, siteOrigin) },
   };
@@ -195,7 +170,7 @@ export default async function BlogPostPage({ params }: BlogRouteProps) {
   const userEmail = session?.user?.email;
 
   return (
-    <div className="fw-public-theme min-h-screen bg-public-950 text-public-100 antialiased">
+    <div lang="en" className="fw-public-theme min-h-screen bg-public-950 text-public-100 antialiased">
       <LandingHeader userEmail={userEmail} />
 
       <main className="pt-10 sm:pt-16 pb-20 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">

@@ -54,11 +54,11 @@ const STAGES: StageItem[] = [
     markerColor: "bg-rose-500",
     headline: "Your crawler catches it first",
     narrative:
-      "Target search terms get decomposed into boolean RSS queries with randomized delays. Instead of dealing with hh.ru's restricted employer API and OAuth keys - which require a registered Russian business entity and hits rate limits after a few dozen calls - the worker pulls raw XML directly, normalizes Cyrillic encodings, and parses net salary figures.",
+      "The vacancy worker builds RSS queries from the search profile. It reads HeadHunter's vacancy feed, normalizes the text, and parses the available compensation figures.",
     bullets: [
-      "Rate-limit immune RSS 2.0 XML polling",
+      "Bounded RSS polling with retry backoff",
       "Unicode NFC and mixed-Cyrillic character normalization",
-      "Net salary parser with 13% NDFL Russian tax calculation",
+      "Salary normalization for comparison with profile filters",
     ],
     card: {
       channel: "#feed-ingestion",
@@ -67,7 +67,7 @@ const STAGES: StageItem[] = [
       badgeSender: "hh-copilot APP",
       eventTitle: "New feed parsed: React & Next.js",
       endpointMethod: "GET",
-      endpointUrl: "https://hh.ru/rss/vacancies?text=React+Next.js&search_field=name",
+      endpointUrl: "https://hh.ru/search/vacancy/rss?text=React+Next.js&search_field=name",
       stats: [
         { label: "Status", value: "200 OK", isSuccess: true },
         { label: "Items Ingested", value: "34 vacancies" },
@@ -100,7 +100,7 @@ const STAGES: StageItem[] = [
     markerColor: "bg-amber-500",
     headline: "Kill ghost postings and verify the salary floor",
     narrative:
-      "Over 20% of postings on job boards are outdated ghosts or missing basic compensation details. A fast HTTP HEAD request checks if the posting is still active on hh.ru, while deterministic regex rules throw out unpaid internships, citizenship restrictions, and low pay. If a vacancy fails these checks, it gets dropped immediately before burning any LLM tokens.",
+      "Collection can include listings that have since closed or that fall outside the search profile. A liveness check and deterministic rules filter unavailable or unsuitable listings before AI scoring.",
     bullets: [
       "HTTP HEAD liveness probe to purge 404s",
       "Salary floor verification (>= 180,000 RUR)",
@@ -145,9 +145,9 @@ export function validateVacancyRules(rawText: string, salary: SalaryInfo) {
     id: "scoring",
     timestamp: "00:01.240",
     markerColor: "bg-emerald-500",
-    headline: "Score compatibility in 380ms with fast-tier LLMs",
+    headline: "Score compatibility with fast-tier language models",
     narrative:
-      "Sending full job posts to massive reasoning models is too slow and burns money fast. We route structured vacancy schemas through Groq running Llama 3.3 70B instead. It evaluates tech stack synergy, architecture fit, and seniority in under 400 milliseconds, returning strict JSON.",
+      "The scoring step sends structured vacancy and profile context to the selected AI provider. The result describes fit across the technology stack, role, and seniority. Latency varies with the provider and request.",
     bullets: [
       "Groq Llama 3.3 70B inference pool",
       "Strict JSON schema validation via OpenAI-compatible endpoints",
@@ -192,9 +192,9 @@ export function validateVacancyRules(rawText: string, salary: SalaryInfo) {
     id: "osint",
     timestamp: "00:01.680",
     markerColor: "bg-sky-500",
-    headline: "Dig up the recruiter and bypass the 300-resume pile",
+    headline: "Research hiring contacts before reaching out",
     narrative:
-      "Submitting an application through the main job portal means your resume sits behind 300 other candidates. The OSINT worker inspects corporate domains and recruiter signatures from vacancy footers to find direct Telegram handles and verified work emails. You reach the hiring lead before the posting gets flooded.",
+      "Company Intel checks publicly available hiring references and organization information. It can surface contact leads for candidates to verify and help draft an introduction.",
     bullets: [
       "Corporate DNS verification and domain mapping",
       "Direct Telegram handle matching from job descriptions",
@@ -237,13 +237,13 @@ GitHub: https://github.com/nnavyy`,
     id: "delivery",
     timestamp: "00:02.150",
     markerColor: "bg-violet-500",
-    headline: "Instant Telegram alert and local database sync",
+    headline: "Save the vacancy and prepare a Telegram alert",
     narrative:
-      "A rich card lands in your Telegram chat with the company name, compensation, AI score, and a direct application link. Simultaneously, the vacancy gets committed to your local PostgreSQL database under a compound index to prevent duplicate entries and table bloat.",
+      "For users who connect Telegram, an alert can include the company, compensation, fit score, and application link. The vacancy is stored with a unique key per user and HeadHunter vacancy ID.",
     bullets: [
-      "Instant push notification to your private Telegram bot",
+      "Telegram alert for connected users",
       "Idempotent compound index: @@unique([userId, hhId])",
-      "Strict 100-vacancy cap keeps local search queries fast",
+      "Configured limit for the active vacancy queue",
     ],
     card: {
       channel: "#telegram-dispatch",
@@ -256,7 +256,7 @@ GitHub: https://github.com/nnavyy`,
       stats: [
         { label: "Delivery", value: "Delivered (Telegram)", isSuccess: true },
         { label: "DB Transaction", value: "Committed (Prisma)" },
-        { label: "Active Queue", value: "48 / 100 Vacancies" },
+        { label: "Active Queue", value: "48 vacancies" },
         { label: "End-to-End Latency", value: "2,150 ms" },
       ],
       detailTitle: "Delivered Notification",
@@ -301,27 +301,27 @@ const FAQ_ITEMS: FaqItem[] = [
   {
     question: "Why parse public RSS feeds instead of using HeadHunter's official REST API?",
     answer:
-      "HeadHunter's official REST API (/vacancies endpoint) requires a verified employer account with a registered Russian legal entity (OGRN/INN). Furthermore, individual developer tokens are subject to aggressive rate limits (HTTP 429) after several dozen requests. By pulling public RSS 2.0 XML endpoints with randomized jitter spreads (800ms ± 30%), the copilot parses fresh listings without OAuth overhead, token expiration, or IP bans.",
+      "The collection worker reads HeadHunter's public vacancy feed as one input for profile-based search. REST API authentication and limits depend on the endpoint. The app backs off when HeadHunter returns a rate limit or temporary service error.",
   },
   {
-    question: "Will HeadHunter ban my IP address for running automated queries?",
+    question: "How does the collector handle rate limits?",
     answer:
-      "No. The crawler rotates realistic browser User-Agent headers, introduces randomized delays between requests, and runs in bounded batch cycles (typically every 1 to 2 hours). It mimics standard RSS reader behavior rather than aggressive web scraping.",
+      "The collector limits pagination and uses bounded retries with backoff. Availability and service limits are controlled by HeadHunter.",
   },
   {
-    question: "How does the fast-tier AI evaluation keep inference latency under 400ms?",
+    question: "How does fast-tier AI evaluation work?",
     answer:
-      "We pre-process and normalize raw vacancy text, stripping boilerplate corporate legalities and non-technical noise. The cleaned payload is routed to Groq running Llama 3.3 70B (with Gemini 2.5 Flash as a fallback) using strict JSON Schema enforcement. This guarantees structured scoring outputs in 300 - 400ms without expensive reasoning loops.",
+      "The app normalizes vacancy text and sends a structured evaluation request to the configured provider. The response time varies with the provider and the size of the input.",
   },
   {
     question: "How does recruiter OSINT resolution work without LinkedIn access?",
     answer:
-      "In the CIS tech market, hiring managers and recruiters frequently list their direct Telegram handles (@username) or corporate email domains directly in vacancy descriptions. The OSINT worker runs domain DNS lookups and regex pattern heuristics to match hiring leads, generating a 1-click introduction message so you can bypass the 300+ applicant queue.",
+      "Company Intel looks for published contacts and relevant organization information. Where there is enough evidence, the app can draft an introduction for candidate review.",
   },
   {
-    question: "Why is there a strict 100-vacancy cap in the PostgreSQL database?",
+    question: "How does the collector keep the active vacancy queue manageable?",
     answer:
-      "Commercial job scrapers let tables grow into tens of thousands of dead listings, slowing down queries and ballooning database size. Our 100-Vacancy Guard automatically purges listings that return HTTP 404 (archived by employers) and caps the active queue at 100 of the highest-synergy postings. This maintains sub-12ms full-text search speeds and zero disk bloat.",
+      "The collector tracks when postings close and can park lower-scoring vacancies the candidate has not acted on. It uses a configured active-queue limit to control how many new records can enter.",
   },
   {
     question: "Is HH Job Copilot a hosted platform or self-hosted?",
@@ -357,7 +357,7 @@ export default function ArchitecturePage() {
   };
 
   return (
-    <div className="fw-public-theme min-h-screen bg-public-950 text-public-100 antialiased">
+    <div lang="en" className="fw-public-theme min-h-screen bg-public-950 text-public-100 antialiased">
       <LandingHeader />
 
       <main className="pt-10 sm:pt-16 pb-20 w-full max-w-6xl mx-auto px-5 sm:px-8">
@@ -389,7 +389,7 @@ export default function ArchitecturePage() {
           </h1>
 
           <p className="text-base sm:text-lg text-public-400 leading-relaxed font-normal">
-            From a raw public RSS feed to a verified high-synergy lead in your personal Telegram bot in under 2.5 seconds. Here is what happens under the hood.
+            Follow a vacancy from HeadHunter through profile filtering, AI scoring, and Telegram delivery. The timeline uses example data and timings.
           </p>
 
           {/* Quick Anchor Bar */}
@@ -456,11 +456,12 @@ export default function ArchitecturePage() {
               <div className="flex items-center justify-between text-xs font-semibold text-rose-700">
                 <span>HeadHunter Official REST API</span>
                 <span className="font-mono text-[10px] px-2 py-0.5 rounded bg-rose-50 border border-rose-500/30">
-                  Rate-Limit Risk
+                  API
                 </span>
               </div>
               <p className="text-xs text-public-400 leading-relaxed">
-                Requires Russian registered legal entity (OGRN/INN) for employer tokens. Client IP triggers HTTP 429 Too Many Requests after ~50 automated vacancy queries.
+                Authentication and rate limits depend on the endpoint. See the{" "}
+                <a href="https://api.hh.ru/openapi/en/redoc" className="text-field-accent underline">official HeadHunter API documentation</a>.
               </p>
             </div>
 
@@ -468,11 +469,11 @@ export default function ArchitecturePage() {
               <div className="flex items-center justify-between text-xs font-semibold text-emerald-700">
                 <span>Composite RSS 2.0 Syndication Engine</span>
                 <span className="font-mono text-[10px] px-2 py-0.5 rounded bg-emerald-50 border border-emerald-500/30">
-                  Immune &middot; 312ms Avg
+                  Feed
                 </span>
               </div>
               <p className="text-xs text-public-400 leading-relaxed">
-                Zero authentication barriers. Polled with randomized jitter (800ms ± 30%) and rotating User-Agents. Infinite batch scanning without rate limit throttling.
+                The collection worker reads the feed in bounded pages and backs off on rate-limit or temporary service errors.
               </p>
             </div>
           </div>

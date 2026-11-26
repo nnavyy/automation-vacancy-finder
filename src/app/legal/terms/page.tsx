@@ -1,16 +1,18 @@
 import Link from "next/link";
 import { BRAND_NAME } from "@/lib/brand";
+import { siteOrigin } from "@/lib/site-url";
 
 export const metadata = {
   title: `Terms of Service — ${BRAND_NAME}`,
   description: `Terms of Service governing the use of ${BRAND_NAME}.`,
+  alternates: { canonical: new URL("/legal/terms", siteOrigin) },
 };
 
 export default function TermsPage() {
   const updated = "October 2026";
 
   return (
-    <main className="min-h-screen bg-zinc-950 text-zinc-300">
+    <main lang="en" className="min-h-screen bg-zinc-950 text-zinc-300">
       <div className="max-w-3xl mx-auto px-6 py-16">
 
         {/* Header */}

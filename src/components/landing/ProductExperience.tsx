@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState, type RefObject } from "react";
-import { AnimatePresence, motion, useInView } from "framer-motion";
 import { ArrowDownRight, ArrowRight, ArrowUpRight, BarChart3, Bookmark, Check, ChevronRight, FileText, Pause, Play, Search, SlidersHorizontal } from "lucide-react";
 import { BRAND_NAME } from "@/lib/brand";
 import { useLandingMotion } from "./useLandingMotion";
@@ -23,7 +22,7 @@ function TourActivity({ ru }: { ru: boolean }) {
   const [period, setPeriod] = useState<keyof typeof ACTIVITY>("week");
   const data = ACTIVITY[period];
   const matches = data.bars.reduce((sum, value) => sum + value, 0);
-  const motionAllowed = useLandingMotion();
+  const maxBar = Math.max(...data.bars);
 
   return <div className="tour-activity">
     <div className="tour-activity-header">
@@ -35,11 +34,11 @@ function TourActivity({ ru }: { ru: boolean }) {
     </div>
     <dl className="tour-chart-totals" aria-live="polite">
       {[[copy("Совпадения", "Matches"), matches], [copy("Сохранено", "Saved"), data.saved], [copy("Отклики", "Applications"), data.applied]].map(([label, amount]) => (
-        <div key={label}><dt>{label}</dt><dd><motion.span key={amount} initial={motionAllowed ? { y: 7, opacity: .4 } : false} animate={{ y: 0, opacity: 1 }}>{amount}</motion.span></dd></div>
+        <div key={label}><dt>{label}</dt><dd><span key={amount}>{amount}</span></dd></div>
       ))}
     </dl>
     <div key={period} className="tour-chart" role="img" aria-label={copy(`Совпадения по периодам: ${data.bars.join(", ")}`, `Matches by interval: ${data.bars.join(", ")}`)}>
-      {data.bars.map((value, index) => <motion.span key={index} aria-hidden="true" initial={motionAllowed ? { scaleY: .18 } : false} animate={{ scaleY: 1 }} transition={{ type: "spring", stiffness: 125, damping: 18, delay: index * .025 }} style={{ height: `${value / Math.max(...data.bars) * 100}%` }} />)}
+      {data.bars.map((value, index) => <span key={index} aria-hidden="true" style={{ height: `${value / maxBar * 100}%`, animationDelay: `${index * 25}ms` }} />)}
     </div>
     <div className="tour-chart-axis" aria-hidden="true">
       <span>{period === "week" ? copy("7 дней назад", "7 days ago") : copy("30 дней назад", "30 days ago")}</span>
@@ -52,8 +51,8 @@ export default function ProductExperience({ ru, onOpen, opener }: { ru: boolean;
   const copy = (r: string, e: string) => ru ? r : e;
   const motionAllowed = useLandingMotion();
   const frame = useRef<HTMLDivElement>(null);
-  const inView = useInView(frame, { amount: .3 });
-  const [step, setStep] = useState(0);
+  const [activeStep, setActiveStep] = useState<number | null>(null);
+  const step = activeStep ?? 0;
   const [playing, setPlaying] = useState(false);
   const [role, setRole] = useState(0);
   const [savedRoles, setSavedRoles] = useState<number[]>([]);
@@ -66,16 +65,41 @@ export default function ProductExperience({ ru, onOpen, opener }: { ru: boolean;
     { label: copy("Аналитика", "Analytics"), icon: BarChart3, description: copy("Посмотрите, как меняется поиск за 7 или 30 дней.", "Compare search activity across 7 and 30 days.") },
   ];
   const active = steps[step];
-  const autoplay = playing && motionAllowed && inView;
 
   useEffect(() => {
-    if (!autoplay) return;
-    const timer = window.setInterval(() => setStep((current) => (current + 1) % 4), 6500);
-    return () => window.clearInterval(timer);
-  }, [autoplay]);
+    const element = frame.current;
+    if (!playing || !motionAllowed || !element) return;
+
+    let timer: number | undefined;
+    const stop = () => {
+      if (timer === undefined) return;
+      window.clearInterval(timer);
+      timer = undefined;
+    };
+    const start = () => {
+      if (timer !== undefined) return;
+      timer = window.setInterval(() => setActiveStep((current) => ((current ?? 0) + 1) % 4), 6500);
+    };
+
+    if (typeof IntersectionObserver === "undefined") {
+      start();
+      return stop;
+    }
+
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry?.isIntersecting && entry.intersectionRatio >= .3) start();
+      else stop();
+    }, { threshold: .3 });
+    observer.observe(element);
+    return () => {
+      observer.disconnect();
+      observer.takeRecords();
+      stop();
+    };
+  }, [playing, motionAllowed]);
 
   function selectStep(index: number) {
-    setStep(index);
+    setActiveStep(index);
     setPlaying(false);
   }
 
@@ -93,39 +117,37 @@ export default function ProductExperience({ ru, onOpen, opener }: { ru: boolean;
       <div className="tour-stage" onFocus={() => setPlaying(false)}>
         <div className="tour-window">
           <div className="tour-window-header"><span>{BRAND_NAME}</span><span>{copy("Демонстрационные данные", "Sample data")}</span></div>
-          <AnimatePresence mode="wait" initial={false}>
-            <motion.div key={step} className="tour-panel" initial={motionAllowed ? { x: 12, opacity: .55 } : false} animate={{ x: 0, opacity: 1 }} exit={motionAllowed ? { x: -8, opacity: .55 } : undefined} transition={{ duration: .25 }}>
-              {step === 0 && <div className="tour-matches">
-                <div className="tour-roles">
-                  {LANDING_ROLES.map((item, index) => <button key={item.title} type="button" onClick={() => setRole(index)} aria-pressed={role === index}>
-                    <span><strong>{item.title}</strong><small>{item.company} · {copy("Удалённо", "Remote")}</small></span><ChevronRight size={16} aria-hidden="true" />
-                  </button>)}
-                </div>
-                <div className="tour-match-glance">
-                  <h3>{selected.title}</h3>
-                  <div className="tour-score" aria-hidden="true"><small>{copy("Совпадение", "Match score")}</small><strong>{selected.score}%</strong></div>
-                  <progress className="tour-match-meter" value={selected.score} max={100} aria-label={copy("Совпадение", "Match score")} />
-                  <div className="tour-match-details"><span>{selected.stack}</span><span>{selected.salary}</span></div>
-                  <button type="button" aria-pressed={saved} onClick={() => setSavedRoles(saved ? savedRoles.filter((index) => index !== role) : [...savedRoles, role])} className="tour-save"><Bookmark size={16} fill={saved ? "currentColor" : "none"} />{saved ? copy("Сохранено", "Saved") : copy("Сохранить", "Save role")}</button>
-                </div>
-              </div>}
+          <div key={step} className="tour-panel" data-animate={activeStep !== null}>
+            {step === 0 && <div className="tour-matches">
+              <div className="tour-roles">
+                {LANDING_ROLES.map((item, index) => <button key={item.title} type="button" onClick={() => setRole(index)} aria-pressed={role === index}>
+                  <span><strong>{item.title}</strong><small>{item.company} · {copy("Удалённо", "Remote")}</small></span><ChevronRight size={16} aria-hidden="true" />
+                </button>)}
+              </div>
+              <div className="tour-match-glance">
+                <h3>{selected.title}</h3>
+                <div className="tour-score" aria-hidden="true"><small>{copy("Совпадение", "Match score")}</small><strong>{selected.score}%</strong></div>
+                <progress className="tour-match-meter" value={selected.score} max={100} aria-label={copy("Совпадение", "Match score")} />
+                <div className="tour-match-details"><span>{selected.stack}</span><span>{selected.salary}</span></div>
+                <button type="button" aria-pressed={saved} onClick={() => setSavedRoles(saved ? savedRoles.filter((index) => index !== role) : [...savedRoles, role])} className="tour-save"><Bookmark size={16} fill={saved ? "currentColor" : "none"} />{saved ? copy("Сохранено", "Saved") : copy("Сохранить", "Save role")}</button>
+              </div>
+            </div>}
 
-              {step === 1 && <div className="tour-profile">
-                <h3>{copy("Что вы ищете?", "What are you looking for?")}</h3>
-                <p className="tour-sample-copy">{copy("Frontend-разработчик. React и TypeScript. Удалённая работа, от 180 000 ₽.", "Frontend developer. React and TypeScript. Remote, from 180,000 ₽.")}</p>
-                <ul>{["React / TypeScript", copy("От 180 000 ₽", "From 180,000 ₽"), copy("Удалённая работа", "Remote work")].map((item) => <li key={item}><Check size={16} aria-hidden="true" />{item}</li>)}</ul>
-                <button type="button" className="tour-inline" onClick={() => selectStep(0)}>{copy("Показать совпадения", "Show matches")}<ArrowRight size={16} /></button>
-              </div>}
+            {step === 1 && <div className="tour-profile">
+              <h3>{copy("Что вы ищете?", "What are you looking for?")}</h3>
+              <p className="tour-sample-copy">{copy("Frontend-разработчик. React и TypeScript. Удалённая работа, от 180 000 ₽.", "Frontend developer. React and TypeScript. Remote, from 180,000 ₽.")}</p>
+              <ul>{["React / TypeScript", copy("От 180 000 ₽", "From 180,000 ₽"), copy("Удалённая работа", "Remote work")].map((item) => <li key={item}><Check size={16} aria-hidden="true" />{item}</li>)}</ul>
+              <button type="button" className="tour-inline" onClick={() => selectStep(0)}>{copy("Показать совпадения", "Show matches")}<ArrowRight size={16} /></button>
+            </div>}
 
-              {step === 2 && <div className="tour-profile">
-                <h3>{copy("Черновик для отклика", "Application draft")}</h3>
-                <p className="tour-sample-copy">{copy(`Здравствуйте! Меня заинтересовала ваша вакансия ${selected.title}. Мой опыт включает ${selected.stack}. Буду рад обсудить задачи команды.`, `Hello! I’m interested in the ${selected.title} role. My experience includes ${selected.stack}. I’d welcome a conversation about your team’s work.`)}</p>
-                <p className="tour-draft-note"><ArrowDownRight size={17} />{copy("Проверьте факты и добавьте свой голос перед отправкой.", "Check the facts and make the draft your own before sending.")}</p>
-              </div>}
+            {step === 2 && <div className="tour-profile">
+              <h3>{copy("Черновик для отклика", "Application draft")}</h3>
+              <p className="tour-sample-copy">{copy(`Здравствуйте! Меня заинтересовала ваша вакансия ${selected.title}. Мой опыт включает ${selected.stack}. Буду рад обсудить задачи команды.`, `Hello! I’m interested in the ${selected.title} role. My experience includes ${selected.stack}. I’d welcome a conversation about your team’s work.`)}</p>
+              <p className="tour-draft-note"><ArrowDownRight size={17} />{copy("Проверьте факты и добавьте свой голос перед отправкой.", "Check the facts and make the draft your own before sending.")}</p>
+            </div>}
 
-              {step === 3 && <TourActivity ru={ru} />}
-            </motion.div>
-          </AnimatePresence>
+            {step === 3 && <TourActivity ru={ru} />}
+          </div>
         </div>
         <div className="tour-caption">
           <p>{active.description}</p>

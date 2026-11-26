@@ -74,6 +74,24 @@
 .tour-caption button { display: inline-flex; align-items: center; justify-content: center; gap: .4rem; flex: none; padding: .4rem .6rem; min-height: 2.55rem; background: var(--fw-surface); color: var(--fw-accent); border: 1px solid #b8c5fa; border-radius: 8px; font-size: .79rem; font-weight: 650; }
 .tour-caption button:hover { border-color: var(--fw-accent); }
 
+@media (prefers-reduced-motion: no-preference) {
+  .tour-panel[data-animate="true"] { animation: tour-panel-enter .25s ease-out; }
+  .tour-chart-totals dd > span { animation: tour-stat-enter .2s ease-out; }
+  .tour-chart > span { animation: tour-bar-enter .32s cubic-bezier(.2, .75, .3, 1) both; }
+}
+
+@keyframes tour-panel-enter {
+  from { transform: translateX(12px); opacity: .55; }
+}
+
+@keyframes tour-stat-enter {
+  from { transform: translateY(7px); opacity: .4; }
+}
+
+@keyframes tour-bar-enter {
+  from { transform: scaleY(.18); }
+}
+
 @media (max-width: 710px) {
   .tour-rail { display: block; }
   .tour-shoulder { display: none; }
